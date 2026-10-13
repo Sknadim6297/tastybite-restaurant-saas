@@ -4,6 +4,7 @@ namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\RestaurantAuditLog;
+use App\Services\LoginSecurityAuditService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,12 +18,14 @@ use Illuminate\View\View;
 
 class AuthController extends Controller
 {
+    public const LOGIN_ATTEMPTS_PER_MINUTE = 5;
+
     public function showLogin(): View
     {
         return view('super-admin.auth.login');
     }
 
-    public function login(Request $request): RedirectResponse
+    public function login(Request $request, LoginSecurityAuditService $securityAudit): RedirectResponse
     {
         $validator = Validator::make($request->all(), [
             'email' => ['required', 'email', 'max:255'],
@@ -39,6 +42,7 @@ class AuthController extends Controller
         $credentials['email'] = Str::lower($credentials['email']);
 
         if (! Auth::guard('super_admin')->attempt($credentials)) {
+            $securityAudit->recordFailure('super_admin', $credentials['email']);
             return redirect()->route('super-admin.login')
                 ->withErrors(['email' => 'These credentials do not match our records.'])
                 ->withInput($request->only('email'));

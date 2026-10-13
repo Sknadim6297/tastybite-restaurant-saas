@@ -8,7 +8,6 @@ use App\Models\RestaurantAuditLog;
 use App\Models\SuperAdmin;
 use App\Models\User;
 use App\Services\OwnerPasswordSetupService;
-use App\Services\SuperAdminNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,7 +20,6 @@ class RestaurantOwnerController extends Controller
 {
     public function __construct(
         protected OwnerPasswordSetupService $passwordSetupService,
-        protected SuperAdminNotificationService $notifications,
     ) {}
 
     public function index(Request $request): View
@@ -83,61 +81,6 @@ class RestaurantOwnerController extends Controller
             'sort' => $sort,
             'direction' => $direction,
         ]);
-    }
-
-    public function create(): View
-    {
-        return view('super-admin.restaurant-owners.create', [
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name', 'status']),
-        ]);
-    }
-
-    public function store(Request $request): RedirectResponse
-    {
-        $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
-        $validated = $request->validate([
-            'restaurant_id' => ['required', 'integer', 'exists:restaurants,id'],
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'status' => ['required', Rule::in(['active', 'inactive'])],
-        ]);
-
-        $actor = Auth::guard('super_admin')->user();
-
-        $owner = DB::transaction(function () use ($validated, $actor): User {
-            $owner = User::create([
-                'restaurant_id' => $validated['restaurant_id'],
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'password' => Str::random(64),
-                'role' => 'owner',
-                'status' => $validated['status'],
-            ]);
-
-            $this->recordAudit($actor, 'owner_created', $owner, [
-                'restaurant_id' => $owner->restaurant_id,
-                'name' => $owner->name,
-                'email' => $owner->email,
-                'status' => $owner->status,
-            ]);
-
-            return $owner;
-        });
-
-        $result = $this->passwordSetupService->send($owner);
-        $restaurant = Restaurant::query()->findOrFail($owner->restaurant_id);
-        $this->notifications->businessEvent(
-            'owner_created',
-            'restaurant-owner-created:'.$owner->id,
-            'Restaurant owner created',
-            'An owner account was created for '.$restaurant->name.'.',
-            route('super-admin.restaurant-owners.show', $owner),
-        );
-        $this->recordPasswordResetAudit($actor, $owner, $result['result']);
-
-        return redirect()->route('super-admin.restaurant-owners.show', $owner)
-            ->with('status', 'Owner account created. '.$result['message'])
-            ->with('toast_type', $result['toast']);
     }
 
     public function show(User $user): View

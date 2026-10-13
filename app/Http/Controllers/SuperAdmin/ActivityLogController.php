@@ -24,6 +24,7 @@ class ActivityLogController extends Controller
         'platform_settings' => 'Settings',
         'super_admin' => 'Authentication',
         'announcement' => 'Announcements',
+        'support_access_request' => 'Support Access',
     ];
 
     public function index(Request $request): View
@@ -123,7 +124,7 @@ class ActivityLogController extends Controller
     private function redact(array $details): array
     {
         foreach ($details as $key => $value) {
-            if (preg_match('/password|token|secret|credential|api.?key|proof.?path|remember/i', (string) $key)) {
+            if (preg_match('/password|token|secret|credential|api.?key|proof.?path|remember|account.?fingerprint/i', (string) $key)) {
                 $details[$key] = '[redacted]';
             } elseif (is_array($value)) {
                 $details[$key] = $this->redact($value);
@@ -142,6 +143,7 @@ class ActivityLogController extends Controller
             'restaurant_subscription' => $log->target_id ? route('super-admin.subscriptions.show', $log->target_id) : null,
             'subscription_payment' => $log->target_id ? route('super-admin.payments.show', $log->target_id) : null,
             'announcement' => $log->target_id ? route('super-admin.announcements.show', $log->target_id) : null,
+            'support_access_request' => $log->target_id ? route('super-admin.support-access.show', $log->target_id) : null,
             default => null,
         };
     }

@@ -55,6 +55,6 @@
     </div>
 
     @if ($announcements->hasPages())
-        <div class="page-tools" style="margin-top:16px; justify-content:flex-end;">{{ $announcements->links() }}</div>
+        <div class="page-tools pagination-tools">{{ $announcements->links() }}</div>
     @endif
 @endsection

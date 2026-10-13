@@ -27,9 +27,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('restaurant_approval_history');
-        Schema::table('restaurants', function (Blueprint $table): void {
-            $table->dropColumn('approval_status');
-        });
+        throw new RuntimeException('Restaurant approval decisions are retained and cannot be rolled back.');
     }
 };

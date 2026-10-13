@@ -44,7 +44,7 @@
         </div>
         <div class="panel-card">
             <div class="form-grid">
-                <form method="POST" action="{{ route('super-admin.restaurant-approvals.decide', $restaurant) }}" class="form-stack">
+                <form method="POST" action="{{ route('super-admin.restaurant-approvals.decide', $restaurant) }}" class="form-stack" data-loading-form>
                     @csrf
                     @method('PUT')
                     <input type="hidden" name="decision" value="approved">
@@ -52,10 +52,10 @@
                     <label for="approval_reason">Optional note</label>
                     <textarea id="approval_reason" name="reason" rows="2" maxlength="2000">{{ old('reason') }}</textarea>
                     @error('decision')<span class="field-error">{{ $message }}</span>@enderror
-                    <button class="button button-primary" type="submit" data-loading-form>Approve</button>
+                    <button class="button button-primary" type="submit">Approve</button>
                 </form>
 
-                <form method="POST" action="{{ route('super-admin.restaurant-approvals.decide', $restaurant) }}" class="form-stack">
+                <form method="POST" action="{{ route('super-admin.restaurant-approvals.decide', $restaurant) }}" class="form-stack" data-loading-form>
                     @csrf
                     @method('PUT')
                     <input type="hidden" name="decision" value="information_requested">
@@ -63,10 +63,10 @@
                     <label for="information_reason">Note for the owner</label>
                     <textarea id="information_reason" name="reason" rows="2" maxlength="2000" required>{{ old('reason') }}</textarea>
                     @error('reason')<span class="field-error">{{ $message }}</span>@enderror
-                    <button class="button button-secondary" type="submit" data-loading-form>Request information</button>
+                    <button class="button button-secondary" type="submit">Request information</button>
                 </form>
 
-                <form method="POST" action="{{ route('super-admin.restaurant-approvals.decide', $restaurant) }}" class="form-stack">
+                <form method="POST" action="{{ route('super-admin.restaurant-approvals.decide', $restaurant) }}" class="form-stack" data-loading-form data-confirm="Reject {{ $restaurant->name }}? Operational access will remain blocked." data-confirm-title="Reject restaurant?" data-confirm-action="Reject">
                     @csrf
                     @method('PUT')
                     <input type="hidden" name="decision" value="rejected">
@@ -74,18 +74,18 @@
                     <label for="rejection_reason">Reason for rejection</label>
                     <textarea id="rejection_reason" name="reason" rows="2" maxlength="2000" required>{{ old('reason') }}</textarea>
                     @error('reason')<span class="field-error">{{ $message }}</span>@enderror
-                    <button class="button button-danger" type="submit" data-loading-form data-confirm="Reject {{ $restaurant->name }}? Operational access will remain blocked." data-confirm-title="Reject restaurant?" data-confirm-action="Reject">Reject</button>
+                    <button class="button button-danger" type="submit">Reject</button>
                 </form>
 
                 @if ($restaurant->approval_status === 'information_requested')
-                    <form method="POST" action="{{ route('super-admin.restaurant-approvals.decide', $restaurant) }}" class="form-stack">
+                    <form method="POST" action="{{ route('super-admin.restaurant-approvals.decide', $restaurant) }}" class="form-stack" data-loading-form>
                         @csrf
                         @method('PUT')
                         <input type="hidden" name="decision" value="pending">
                         <h3>Return to review queue</h3>
                         <label for="queue_reason">Internal review note</label>
                         <textarea id="queue_reason" name="reason" rows="2" maxlength="2000" required>{{ old('reason') }}</textarea>
-                        <button class="button button-secondary" type="submit" data-loading-form>Return to pending</button>
+                        <button class="button button-secondary" type="submit">Return to pending</button>
                     </form>
                 @endif
             </div>

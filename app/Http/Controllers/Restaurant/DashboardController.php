@@ -29,13 +29,19 @@ class DashboardController extends Controller
             $daysRemaining = max(0, (int) $now->startOfDay()->diffInDays($expiryLocal->startOfDay(), false));
         }
 
+        $approvalStatus = $restaurant->approval_status;
+        $approvalNotice = $approvalStatus !== 'approved'
+            ? $restaurant->approvalHistory()->first()
+            : null;
+
         return view('restaurant.dashboard', [
             'user' => $user,
             'restaurant' => $restaurant,
             'subscription' => $subscription,
             'subscriptionStatus' => $subscriptionStatus,
             'daysRemaining' => $daysRemaining,
-            'approvalNotice' => $restaurant->approvalHistory()->first(),
+            'approvalStatus' => $approvalStatus,
+            'approvalNotice' => $approvalNotice,
         ]);
     }
 

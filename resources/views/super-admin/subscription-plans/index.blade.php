@@ -58,5 +58,5 @@
             </tbody>
         </table>
     </div>
-    @if ($plans->hasPages())<div class="page-tools pagination-tools">{{ $plans->links() }}</div>@endif
+    <div class="page-tools pagination-tools">{{ $plans->links() }}</div>
 @endsection

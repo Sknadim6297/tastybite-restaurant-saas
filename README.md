@@ -65,6 +65,20 @@ New platform events create idempotent in-app notifications for active Super Admi
 
 Settings are stored in the additive platform-settings migration. Logo and favicon uploads are kept on the private local storage disk and are served only through authenticated Super Admin routes. Manual-payment settings can disable new manual entries or constrain available methods; approval and refund operations remain auditable. Password and profile changes are recorded in the append-only activity log, and password changes invalidate other sessions on their next protected request.
 
+## Platform administration modules
+
+Restaurant approvals are available at `/super-admin/restaurant-approvals`. Super Admin provisioning can leave a restaurant pending review; pending, information-requested, and rejected restaurants cannot access operational routes. Existing restaurant rows default to approved when the approval migration is applied. The current provisioning workflow collects no verification documents, and it has no public restaurant-registration route.
+
+Announcements are managed at `/super-admin/announcements` and shown to owners at `/restaurant/announcements`. They support draft, publish, archive, all-active-owner or selected-restaurant audiences, expiry, and per-restaurant read state. Delivery is in-app only; publishing does not send email.
+
+Platform analytics are available at `/super-admin/analytics` with date and real/demo/all scopes. Amounts are derived from approved manual payment and refund records and are grouped by currency without conversion. They describe recorded amounts, not independently verified money transfers. The existing detailed Reports module remains available separately.
+
+The Security Center at `/super-admin/security-center` shows effective session and password-reset settings, account state, and recorded authentication events. Failed credential checks store a keyed account fingerprint rather than a submitted email or password; malformed and rate-limited requests are not included. System Health at `/super-admin/system-health` performs a read-only database ping and reports pending migration filenames and configured service drivers. It does not run migrations, probe external mail/cache/queue delivery, or verify scheduler execution.
+
+Support Access at `/super-admin/support-access` records requests and independent approval/denial decisions in an audit history. No impersonation or cross-guard tenant-entry mechanism is implemented; approving a request does not grant access to restaurant data.
+
+The additive schema for feature management, support tickets, invoices, restaurant approvals, announcements, and support-access requests is provided by migrations `2026_10_13_000007` through `2026_10_13_000012`. The migrations have been applied to this local development MySQL database after verifying a full backup. PHPUnit forces an isolated in-memory SQLite database and does not modify development MySQL.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

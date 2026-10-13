@@ -34,5 +34,5 @@
             </tbody>
         </table>
     </div>
-    @if($events->hasPages())<div class="page-tools pagination-tools">{{ $events->links() }}</div>@endif
+    <div class="page-tools pagination-tools">{{ $events->links() }}</div>
 @endsection

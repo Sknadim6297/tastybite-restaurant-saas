@@ -112,7 +112,7 @@
 
     @if ($restaurants->hasPages())
         <div class="page-tools" style="margin-top:16px; justify-content:flex-end;">
-            {{ $restaurants->appends(request()->query())->links() }}
+            {{ $restaurants->links() }}
         </div>
     @endif
 @endsection

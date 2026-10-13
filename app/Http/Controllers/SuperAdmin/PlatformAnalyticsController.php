@@ -4,6 +4,7 @@ namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Restaurant;
+use App\Models\RestaurantSubscriptionEvent;
 use App\Models\RestaurantSubscription;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPaymentRefund;
@@ -48,8 +49,13 @@ class PlatformAnalyticsController extends Controller
         $previousSubscriptions = (clone $subscriptions)->whereBetween('created_at', [$previousFrom->utc(), $previousTo->utc()])->count();
         $activeSubscriptions = (clone $subscriptions)->whereIn('status', ['active', 'trial'])
             ->where('starts_at', '<=', $now)->where('expires_at', '>=', $now)->count();
-        $cancelledSubscriptions = (clone $subscriptions)->where('status', 'cancelled')
-            ->whereBetween('updated_at', [$from->utc(), $to->utc()])->count();
+        $cancellationEvents = RestaurantSubscriptionEvent::query()
+            ->where('action', 'cancelled')
+            ->whereBetween('created_at', [$from->utc(), $to->utc()]);
+        if ($scope !== 'all') {
+            $cancellationEvents->whereHas('restaurant', fn (Builder $restaurant) => $this->restaurantScope($restaurant, $scope));
+        }
+        $cancelledSubscriptions = $cancellationEvents->count();
 
         $payments = $this->paymentScope(SubscriptionPayment::query(), $scope)
             ->whereIn('status', ['approved', 'refunded'])

@@ -76,4 +76,5 @@ class Restaurant extends Model
     {
         return $this->status === 'active';
     }
+
 }

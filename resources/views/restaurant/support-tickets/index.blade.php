@@ -33,5 +33,5 @@
             </tbody>
         </table>
     </div>
-    @if($tickets->hasPages())<div class="page-tools pagination-tools">{{ $tickets->links() }}</div>@endif
+    <div class="page-tools pagination-tools">{{ $tickets->links() }}</div>
 @endsection

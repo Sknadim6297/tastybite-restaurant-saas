@@ -56,6 +56,6 @@
     </div>
 
     @if ($restaurants->hasPages())
-        <div class="page-tools" style="margin-top:16px; justify-content:flex-end;">{{ $restaurants->links() }}</div>
+        <div class="page-tools pagination-tools">{{ $restaurants->links() }}</div>
     @endif
 @endsection

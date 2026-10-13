@@ -60,5 +60,5 @@
             </tbody>
         </table>
     </div>
-    @if($subscriptions->hasPages())<div class="page-tools pagination-tools">{{ $subscriptions->links() }}</div>@endif
+    <div class="page-tools pagination-tools">{{ $subscriptions->links() }}</div>
 @endsection

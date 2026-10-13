@@ -60,7 +60,7 @@ class SuperAdminRestaurantManagementTest extends TestCase
             ],
             'owner' => [
                 'name' => 'Alicia Rivera',
-                'email' => 'owner@cedarhouse.test',
+                'email' => ' OWNER@CedarHouse.TEST ',
             ],
         ]);
 
@@ -72,6 +72,8 @@ class SuperAdminRestaurantManagementTest extends TestCase
         $this->assertSame('cedar-house', $restaurant->slug);
         $this->assertSame('owner@cedarhouse.test', $owner->email);
         $this->assertSame('owner', $owner->role);
+        $this->assertSame($restaurant->id, $owner->restaurant_id);
+        $this->assertSame(1, $restaurant->owners()->count());
         $this->assertNotSame('', $owner->getRawOriginal('password'));
         $this->assertNotSame('SecureOwnerPass123!', $owner->getRawOriginal('password'));
         $this->assertDatabaseHas('restaurants', ['email' => 'hello@cedarhouse.test']);
@@ -212,6 +214,30 @@ class SuperAdminRestaurantManagementTest extends TestCase
             'password_confirmation' => 'ExpiredOwnerPassword3!',
         ])->assertSessionHasErrors(['email']);
         $this->assertTrue(Hash::check('StrongTestPass123!', $owner->fresh()->getRawOriginal('password')));
+    }
+
+    public function test_restaurant_creation_rejects_duplicate_owner_email_without_creating_another_restaurant(): void
+    {
+        $this->actingAsSuperAdmin();
+        $existingRestaurant = $this->createRestaurant('Existing House', 'existing-house');
+        $this->createUser($existingRestaurant, 'existing-owner@example.test', 'owner');
+
+        $this->post(route('super-admin.restaurants.store'), [
+            'restaurant' => [
+                'name' => 'Duplicate Owner House',
+                'slug' => 'duplicate-owner-house',
+                'email' => 'hello@duplicate-owner-house.test',
+                'status' => 'active',
+            ],
+            'owner' => [
+                'name' => 'Duplicate Email Owner',
+                'email' => ' EXISTING-OWNER@EXAMPLE.TEST ',
+            ],
+        ])->assertSessionHasErrors('owner.email');
+
+        $this->assertDatabaseMissing('restaurants', ['slug' => 'duplicate-owner-house']);
+        $this->assertSame(1, User::query()->where('email', 'existing-owner@example.test')->count());
+        $this->assertSame(1, Restaurant::query()->count());
     }
 
     public function test_log_mail_transport_is_reported_as_unavailable_without_attempting_to_log_setup_tokens(): void

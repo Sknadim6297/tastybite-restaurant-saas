@@ -29,6 +29,7 @@ class SuperAdminRestaurantOwnerManagementTest extends TestCase
         $this->get(route('super-admin.restaurant-owners.index', ['page' => 2]))
             ->assertOk()
             ->assertSee('Restaurant Owners')
+            ->assertDontSee('Add owner')
             ->assertSee('href="'.route('super-admin.restaurant-owners.index').'" class="sidebar-link is-active"', false)
             ->assertSeeInOrder(['<strong>18</strong>', '<strong>9</strong>', '<strong>9</strong>'], false);
 
@@ -43,39 +44,32 @@ class SuperAdminRestaurantOwnerManagementTest extends TestCase
             ->assertDontSee('owner8@example.test');
     }
 
-    public function test_super_admin_can_create_owner_for_existing_restaurant_and_duplicate_email_is_rejected(): void
+    public function test_standalone_owner_creation_endpoints_are_disabled_without_affecting_owner_management(): void
     {
-        config(['mail.default' => 'array']);
         $this->actingAsSuperAdmin();
         $restaurant = $this->createRestaurant('Cedar House', 'cedar-house');
+        $owner = $this->createOwner($restaurant, 'owner@example.test');
+        $ownerCount = User::query()->where('role', 'owner')->count();
+        $restaurantCount = Restaurant::query()->count();
 
-        $response = $this->post(route('super-admin.restaurant-owners.store'), [
+        $this->get('/super-admin/restaurant-owners/create')->assertNotFound();
+        $this->post('/super-admin/restaurant-owners', [
             'restaurant_id' => $restaurant->id,
-            'name' => 'Alicia Rivera',
-            'email' => 'OWNER@EXAMPLE.TEST',
+            'name' => 'Unauthorized Additional Owner',
+            'email' => 'additional@example.test',
             'status' => 'active',
-        ]);
+        ])->assertNotFound();
 
-        $owner = User::query()->where('email', 'owner@example.test')->firstOrFail();
-        $response->assertRedirect(route('super-admin.restaurant-owners.show', $owner));
-        $response->assertSessionHas('status');
-        $this->assertSame($restaurant->id, $owner->restaurant_id);
-        $this->assertSame('owner', $owner->role);
-        $this->assertFalse(Hash::check('SecureOwnerPass123!', $owner->getRawOriginal('password')));
-        $this->assertDatabaseHas('restaurant_audit_logs', [
-            'action' => 'owner_created',
-            'target_type' => 'restaurant_user',
-            'target_id' => $owner->id,
-        ]);
+        $this->get(route('super-admin.restaurant-owners.index'))
+            ->assertOk()
+            ->assertSee($owner->email)
+            ->assertDontSee('Add owner');
+        $this->get(route('super-admin.restaurant-owners.show', $owner))->assertOk();
+        $this->get(route('super-admin.restaurant-owners.edit', $owner))->assertOk();
 
-        $this->post(route('super-admin.restaurant-owners.store'), [
-            'restaurant_id' => $restaurant->id,
-            'name' => 'Duplicate Owner',
-            'email' => 'owner@example.test',
-            'status' => 'active',
-        ])->assertSessionHasErrors('email');
-
-        $this->assertSame(1, User::query()->where('email', 'owner@example.test')->count());
+        $this->assertSame($ownerCount, User::query()->where('role', 'owner')->count());
+        $this->assertSame($restaurantCount, Restaurant::query()->count());
+        $this->assertDatabaseMissing('users', ['email' => 'additional@example.test']);
     }
 
     public function test_owner_profile_edit_cannot_change_role_or_restaurant_association(): void

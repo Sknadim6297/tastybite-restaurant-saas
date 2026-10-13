@@ -7,7 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · {{ $platformSettings['platform_name'] ?? 'TastyBite' }} Super Admin</title>
     @if($platformSettings['favicon_path'] ?? null)<link rel="icon" href="{{ route('super-admin.settings.branding.show', 'favicon') }}">@endif
-    <link rel="stylesheet" href="{{ asset('assets/super-admin.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/super-admin.css') }}?v={{ filemtime(public_path('assets/super-admin.css')) }}-{{ filesize(public_path('assets/super-admin.css')) }}">
 </head>
 
 <body class="admin-page">
@@ -23,11 +23,13 @@
                     <span class="brand-name">{{ $platformName }}</span>
                 @endif
             </a>
-            <span class="sidebar-caption">PLATFORM</span>
             <nav class="sidebar-nav" aria-label="Super Admin navigation">
+                <span class="sidebar-caption">OVERVIEW</span>
                 <a href="{{ route('super-admin.dashboard') }}" class="sidebar-link @if(request()->routeIs('super-admin.dashboard')) is-active @endif">
                     <span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span>
                 </a>
+
+                <span class="sidebar-caption">ONBOARDING</span>
                 <a href="{{ route('super-admin.restaurants.index') }}" class="sidebar-link @if(request()->routeIs('super-admin.restaurants.*')) is-active @endif">
                     <span class="nav-icon" aria-hidden="true">▦</span><span>Restaurants</span>
                 </a>
@@ -37,17 +39,10 @@
                 <a href="{{ route('super-admin.restaurant-owners.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.restaurant-owners.*')])>
                     <span class="nav-icon" aria-hidden="true">♙</span><span>Restaurant Owners</span>
                 </a>
+
+                <span class="sidebar-caption">SUBSCRIPTIONS &amp; BILLING</span>
                 <a href="{{ route('super-admin.subscription-plans.index') }}" class="sidebar-link @if(request()->routeIs('super-admin.subscription-plans.*')) is-active @endif">
                     <span class="nav-icon" aria-hidden="true">◇</span><span>Subscription Plans</span>
-                </a>
-                <a href="{{ route('super-admin.features.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.features.*')])>
-                    <span class="nav-icon" aria-hidden="true">⚙</span><span>Feature Management</span>
-                </a>
-                <a href="{{ route('super-admin.support-tickets.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.support-tickets.*')])>
-                    <span class="nav-icon" aria-hidden="true">✉</span><span>Support Tickets</span>
-                </a>
-                <a href="{{ route('super-admin.announcements.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.announcements.*')])>
-                    <span class="nav-icon" aria-hidden="true">▣</span><span>Announcements</span>
                 </a>
                 <a href="{{ route('super-admin.subscriptions.index') }}" class="sidebar-link @if(request()->routeIs('super-admin.subscriptions.index', 'super-admin.subscriptions.create', 'super-admin.subscriptions.show')) is-active @endif">
                     <span class="nav-icon" aria-hidden="true">↻</span><span>Restaurant Subscriptions</span>
@@ -64,12 +59,34 @@
                 <a href="{{ route('super-admin.invoices.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.invoices.*')])>
                     <span class="nav-icon" aria-hidden="true">▧</span><span>Invoices &amp; Billing</span>
                 </a>
+
+                <span class="sidebar-caption">PLATFORM TOOLS</span>
+                <a href="{{ route('super-admin.features.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.features.*')])>
+                    <span class="nav-icon" aria-hidden="true">⚙</span><span>Feature Management</span>
+                </a>
+                <a href="{{ route('super-admin.support-tickets.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.support-tickets.*')])>
+                    <span class="nav-icon" aria-hidden="true">✉</span><span>Support Tickets</span>
+                </a>
+                <a href="{{ route('super-admin.announcements.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.announcements.*')])>
+                    <span class="nav-icon" aria-hidden="true">▣</span><span>Announcements</span>
+                </a>
+                <a href="{{ route('super-admin.support-access.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.support-access.*')])>
+                    <span class="nav-icon" aria-hidden="true">♧</span><span>Support Access</span>
+                </a>
+
+                <span class="sidebar-caption">INSIGHTS &amp; SECURITY</span>
                 <a href="{{ route('super-admin.analytics.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.analytics.*')])>
                     <span class="nav-icon" aria-hidden="true">▤</span><span>Analytics</span>
                 </a>
                 <a href="{{ route('super-admin.reports.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.reports.*')])><span class="nav-icon" aria-hidden="true">▤</span><span>Reports</span></a>
                 <a href="{{ route('super-admin.notifications.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.notifications.*')])><span class="nav-icon" aria-hidden="true">♧</span><span>Notifications</span></a>
                 <a href="{{ route('super-admin.activity-logs.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.activity-logs.*')])><span class="nav-icon" aria-hidden="true">≡</span><span>Activity Logs</span></a>
+                <a href="{{ route('super-admin.security-center.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.security-center.*')])>
+                    <span class="nav-icon" aria-hidden="true">⚿</span><span>Security Center</span>
+                </a>
+                <a href="{{ route('super-admin.system-health.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.system-health.*')])>
+                    <span class="nav-icon" aria-hidden="true">◉</span><span>System Health</span>
+                </a>
                 <a href="{{ route('super-admin.settings.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.settings.*')])><span class="nav-icon" aria-hidden="true">⚙</span><span>Settings</span></a>
                 <form method="POST" action="{{ route('super-admin.logout') }}" data-confirm="Are you sure you want to sign out?">
                     @csrf

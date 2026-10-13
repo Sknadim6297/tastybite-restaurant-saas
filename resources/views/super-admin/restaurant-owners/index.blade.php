@@ -10,9 +10,6 @@
             <h1>Restaurant Owners</h1>
             <p>Manage owner access and profiles for existing restaurants.</p>
         </div>
-        <div class="toolbar-actions">
-            <a class="button button-primary" href="{{ route('super-admin.restaurant-owners.create') }}">Add owner</a>
-        </div>
     </div>
 
     <div class="summary-row">
@@ -103,7 +100,7 @@
                         <td colspan="8">
                             <div class="empty-state">
                                 <h3>No restaurant owners found</h3>
-                                <p>Adjust your search or filters, or add an owner to an existing restaurant.</p>
+                                <p>Adjust your search or filters. New primary owners are created with their restaurant.</p>
                             </div>
                         </td>
                     </tr>

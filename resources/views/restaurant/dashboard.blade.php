@@ -13,12 +13,12 @@
         <span class="date-chip">{{ now()->format('l, j M Y') }}</span>
     </div>
 
-    @if ($restaurant->approval_status !== 'approved')
+    @if ($approvalStatus !== 'approved')
         <div class="notice-card" role="status">
             <strong>
-                @if ($restaurant->approval_status === 'pending')
+                @if ($approvalStatus === 'pending')
                     Restaurant approval is pending
-                @elseif ($restaurant->approval_status === 'information_requested')
+                @elseif ($approvalStatus === 'information_requested')
                     More information is required
                 @else
                     Restaurant approval was rejected
@@ -31,7 +31,7 @@
                     Operational features remain unavailable until the approval status is resolved.
                 @endif
             </p>
-            @if ($restaurant->approval_status === 'information_requested')
+            @if ($approvalStatus === 'information_requested')
                 <a href="{{ route('restaurant.support.index') }}">Contact platform support</a>
             @endif
         </div>

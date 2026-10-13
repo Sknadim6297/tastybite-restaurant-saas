@@ -132,6 +132,42 @@ class SuperAdminPlatformModulesTest extends TestCase
         }
     }
 
+    public function test_settings_tabs_render_the_shared_styled_controls(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->get(route('super-admin.settings.index', ['tab' => 'general']))
+            ->assertOk()
+            ->assertSee('settings-form-grid', false)
+            ->assertSee('settings-timezone-options', false)
+            ->assertSee('name="platform_name"', false);
+
+        $this->get(route('super-admin.settings.index', ['tab' => 'subscription']))
+            ->assertOk()
+            ->assertSee('settings-toggle-row', false)
+            ->assertSee('name="expiry_reminder_days[]"', false);
+
+        $this->get(route('super-admin.settings.index', ['tab' => 'payment']))
+            ->assertOk()
+            ->assertSee('settings-textarea', false)
+            ->assertSee('name="allowed_methods[]"', false);
+
+        $this->get(route('super-admin.settings.index', ['tab' => 'notifications']))
+            ->assertOk()
+            ->assertSee('settings-toggle-row', false)
+            ->assertSee('name="polling_interval"', false);
+
+        $this->get(route('super-admin.settings.index', ['tab' => 'branding']))
+            ->assertOk()
+            ->assertSee('settings-file-input', false)
+            ->assertSee('Default brand preview');
+
+        $this->get(route('super-admin.settings.index', ['tab' => 'security']))
+            ->assertOk()
+            ->assertSee('name="current_password"', false)
+            ->assertSee('name="password_confirmation"', false);
+    }
+
     public function test_sidebar_brand_keeps_default_two_tone_and_custom_name_and_logo_rendering(): void
     {
         $this->actingAsSuperAdmin();

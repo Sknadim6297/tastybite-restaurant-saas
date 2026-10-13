@@ -79,6 +79,10 @@ class RestaurantManagementController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $ownerData = (array) $request->input('owner', []);
+        $ownerData['email'] = mb_strtolower(trim((string) ($ownerData['email'] ?? '')));
+        $request->merge(['owner' => $ownerData]);
+
         $validated = $request->validate([
             'restaurant.name' => ['required', 'string', 'max:255'],
             'restaurant.slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9-]+$/', 'unique:restaurants,slug'],

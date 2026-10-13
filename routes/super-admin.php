@@ -14,9 +14,12 @@ use App\Http\Controllers\SuperAdmin\PlatformSettingsController;
 use App\Http\Controllers\SuperAdmin\RestaurantManagementController;
 use App\Http\Controllers\SuperAdmin\RestaurantApprovalController;
 use App\Http\Controllers\SuperAdmin\RestaurantOwnerController;
+use App\Http\Controllers\SuperAdmin\SecurityCenterController;
 use App\Http\Controllers\SuperAdmin\SubscriptionManagementController;
 use App\Http\Controllers\SuperAdmin\SubscriptionPlanController;
+use App\Http\Controllers\SuperAdmin\SystemHealthController;
 use App\Http\Controllers\SuperAdmin\SupportTicketController;
+use App\Http\Controllers\SuperAdmin\SupportAccessController;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -26,7 +29,7 @@ use Illuminate\Support\Str;
 RateLimiter::for('super-admin-login', function (Request $request) {
     $key = hash('sha256', Str::lower((string) $request->input('email')).'|'.$request->ip());
 
-    return Limit::perMinute(5)->by($key);
+    return Limit::perMinute(AuthController::LOGIN_ATTEMPTS_PER_MINUTE)->by($key);
 });
 
 RateLimiter::for('super-admin-password-reset', function (Request $request) {
@@ -66,6 +69,20 @@ Route::prefix('super-admin')->name('super-admin.')->middleware('super-admin.head
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/profile', [DashboardController::class, 'profile'])->name('profile');
         Route::get('/analytics', [PlatformAnalyticsController::class, 'index'])->name('analytics.index');
+        Route::get('/security-center', [SecurityCenterController::class, 'index'])->name('security-center.index');
+        Route::get('/system-health', [SystemHealthController::class, 'index'])->name('system-health.index');
+        Route::get('/support-access', [SupportAccessController::class, 'index'])->name('support-access.index');
+        Route::get('/support-access/create', [SupportAccessController::class, 'create'])->name('support-access.create');
+        Route::post('/support-access', [SupportAccessController::class, 'store'])
+            ->middleware('throttle:super-admin-subscription-management')
+            ->name('support-access.store');
+        Route::get('/support-access/{supportAccessRequest}', [SupportAccessController::class, 'show'])->name('support-access.show');
+        Route::post('/support-access/{supportAccessRequest}/decision', [SupportAccessController::class, 'decide'])
+            ->middleware('throttle:super-admin-subscription-management')
+            ->name('support-access.decide');
+        Route::post('/support-access/{supportAccessRequest}/cancel', [SupportAccessController::class, 'cancel'])
+            ->middleware('throttle:super-admin-subscription-management')
+            ->name('support-access.cancel');
         Route::get('/announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
         Route::get('/announcements/create', [AnnouncementController::class, 'create'])->name('announcements.create');
         Route::post('/announcements', [AnnouncementController::class, 'store'])->name('announcements.store');
@@ -200,10 +217,7 @@ Route::prefix('super-admin')->name('super-admin.')->middleware('super-admin.head
             ->name('restaurants.owners.reset-password');
 
         Route::get('/restaurant-owners', [RestaurantOwnerController::class, 'index'])->name('restaurant-owners.index');
-        Route::get('/restaurant-owners/create', [RestaurantOwnerController::class, 'create'])->name('restaurant-owners.create');
-        Route::post('/restaurant-owners', [RestaurantOwnerController::class, 'store'])
-            ->middleware('throttle:super-admin-owner-management')
-            ->name('restaurant-owners.store');
+        Route::post('/restaurant-owners', fn () => abort(404));
         Route::get('/restaurant-owners/{user}', [RestaurantOwnerController::class, 'show'])->name('restaurant-owners.show');
         Route::get('/restaurant-owners/{user}/edit', [RestaurantOwnerController::class, 'edit'])->name('restaurant-owners.edit');
         Route::put('/restaurant-owners/{user}', [RestaurantOwnerController::class, 'update'])

@@ -21,10 +21,11 @@ class RestaurantProvisioningService
      */
     public function provision(array $restaurantData, array $ownerData): array
     {
+        $ownerData['email'] = mb_strtolower(trim((string) ($ownerData['email'] ?? '')));
         $this->validateData($restaurantData, $ownerData);
 
         return DB::transaction(function () use ($restaurantData, $ownerData) {
-            $restaurant = Restaurant::create([
+            $restaurantAttributes = [
                 'name' => $restaurantData['name'],
                 'slug' => Str::slug($restaurantData['slug'] ?? $restaurantData['name']),
                 'email' => $restaurantData['email'],
@@ -32,7 +33,8 @@ class RestaurantProvisioningService
                 'address' => $restaurantData['address'] ?? null,
                 'status' => $restaurantData['status'] ?? 'active',
                 'approval_status' => $restaurantData['approval_status'] ?? 'approved',
-            ]);
+            ];
+            $restaurant = Restaurant::create($restaurantAttributes);
 
             $owner = User::create([
                 'restaurant_id' => $restaurant->id,

@@ -54,12 +54,12 @@
 
     <div class="page-tools" style="margin-top:20px; justify-content:flex-end;">
         @if ($announcement->status === 'draft')
-            <form method="POST" action="{{ route('super-admin.announcements.publish', $announcement) }}" data-confirm="Publish this announcement to {{ $recipientCount }} eligible restaurant(s)? No email will be sent." data-confirm-title="Publish announcement?" data-confirm-action="Publish">
+            <form method="POST" action="{{ route('super-admin.announcements.publish', $announcement) }}" data-loading-form data-confirm="Publish this announcement to {{ $recipientCount }} eligible restaurant(s)? No email will be sent." data-confirm-title="Publish announcement?" data-confirm-action="Publish">
                 @csrf
                 <button class="button button-primary" type="submit">Publish now</button>
             </form>
         @elseif ($announcement->status === 'published')
-            <form method="POST" action="{{ route('super-admin.announcements.archive', $announcement) }}" data-confirm="Archive this announcement? It will no longer be visible to restaurant owners." data-confirm-title="Archive announcement?" data-confirm-action="Archive">
+            <form method="POST" action="{{ route('super-admin.announcements.archive', $announcement) }}" data-loading-form data-confirm="Archive this announcement? It will no longer be visible to restaurant owners." data-confirm-title="Archive announcement?" data-confirm-action="Archive">
                 @csrf
                 <button class="button button-danger" type="submit">Archive</button>
             </form>

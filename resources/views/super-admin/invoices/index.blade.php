@@ -44,5 +44,5 @@
             </tbody>
         </table>
     </div>
-    @if($invoices->hasPages())<div class="page-tools pagination-tools">{{ $invoices->links() }}</div>@endif
+    <div class="page-tools pagination-tools">{{ $invoices->links() }}</div>
 @endsection

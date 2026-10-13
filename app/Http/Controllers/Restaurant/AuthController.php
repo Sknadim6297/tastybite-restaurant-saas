@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Restaurant;
 
 use App\Http\Controllers\Controller;
 use App\Models\RestaurantAuditLog;
+use App\Services\LoginSecurityAuditService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ class AuthController extends Controller
         return view('restaurant.auth.login');
     }
 
-    public function login(Request $request): RedirectResponse
+    public function login(Request $request, LoginSecurityAuditService $securityAudit): RedirectResponse
     {
         $validator = Validator::make($request->all(), [
             'email' => ['required', 'email', 'max:255'],
@@ -39,6 +40,7 @@ class AuthController extends Controller
         $credentials['email'] = Str::lower($credentials['email']);
 
         if (! Auth::guard('web')->attempt($credentials)) {
+            $securityAudit->recordFailure('restaurant', $credentials['email']);
             return redirect()->route('restaurant.login')
                 ->withErrors(['email' => 'These credentials do not match our records or your account/restaurant is inactive.'])
                 ->withInput($request->only('email'));
@@ -48,6 +50,7 @@ class AuthController extends Controller
 
         // Extra check for inactive restaurant or inactive account
         if (! $user->isActive() || ! $user->restaurant || ! $user->restaurant->isActive()) {
+            $securityAudit->recordFailure('restaurant', $credentials['email']);
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
