@@ -1,0 +1,92 @@
+@extends('layouts.super-admin')
+
+@section('title', 'Subscription · '.$subscription->restaurant->name)
+@section('section', 'Restaurant Subscriptions')
+
+@section('content')
+    @php($effectiveStatus = $subscription->effectiveStatus())
+    <div class="page-heading">
+        <div>
+            <span class="eyebrow">SUBSCRIPTION RECORD #{{ $subscription->id }}</span>
+            <h1>{{ $subscription->restaurant->name }}</h1>
+            <p>{{ $subscription->plan_name }} · {{ $subscription->plan_code }} · {{ $subscription->currency }} {{ number_format((float) $subscription->price, 2) }}</p>
+        </div>
+        <span class="status-pill status-{{ $effectiveStatus }}">{{ ucfirst($effectiveStatus) }}</span>
+    </div>
+
+    <section class="panel-card">
+        <div class="detail-grid">
+            <div class="detail-item"><span>Restaurant</span><strong>{{ $subscription->restaurant->name }} ({{ $subscription->restaurant->slug }})</strong></div>
+            <div class="detail-item"><span>Plan</span><strong>{{ $subscription->plan_name }} · {{ $subscription->plan_code }}</strong></div>
+            <div class="detail-item"><span>Billing</span><strong>{{ $subscription->currency }} {{ number_format((float) $subscription->price, 2) }} · {{ ucfirst($subscription->billing_period) }}</strong></div>
+            <div class="detail-item"><span>Type</span><strong>{{ $subscription->is_trial ? 'Trial' : 'Standard' }}</strong></div>
+            <div class="detail-item"><span>Start date</span><strong>{{ $subscription->starts_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</strong></div>
+            <div class="detail-item"><span>Expiry date</span><strong>{{ $subscription->expires_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</strong></div>
+            <div class="detail-item"><span>Assigned by</span><strong>{{ $subscription->creator?->name ?? 'Platform admin account unavailable' }}</strong></div>
+            <div class="detail-item"><span>Renewal of</span><strong>{{ $subscription->renewal_of_id ? '#'.$subscription->renewal_of_id : 'Initial assignment' }}</strong></div>
+        </div>
+    </section>
+
+    <div class="section-heading"><div><h2>Subscription actions</h2><p>Every lifecycle change is stored as a separate history event.</p></div></div>
+    <section class="subscription-action-grid">
+        @if(in_array($effectiveStatus, ['active', 'trial', 'expired'], true))
+            <form method="POST" action="{{ route('super-admin.subscriptions.renew', $subscription) }}" class="panel-card form-stack" data-loading-form>
+                @csrf
+                <h3>Renew subscription</h3>
+                <p class="field-hint">A new historical subscription period is created. Leave expiry empty to use the saved plan duration.</p>
+                <div class="form-field"><label for="renew-expiry-date">Expiry override (optional)</label><input id="renew-expiry-date" name="expiry_date" type="date" value="{{ old('expiry_date') }}">@error('expiry_date')<span class="field-error">{{ $message }}</span>@enderror</div>
+                @error('subscription')<span class="field-error">{{ $message }}</span>@enderror
+                <button class="button button-primary" type="submit">Renew</button>
+            </form>
+        @endif
+
+        @if(in_array($effectiveStatus, ['active', 'trial'], true))
+            <form method="POST" action="{{ route('super-admin.subscriptions.extend', $subscription) }}" class="panel-card form-stack" data-loading-form>
+                @csrf
+                <h3>Extend expiry</h3>
+                <p class="field-hint">Extending preserves this subscription record and appends a before/after event.</p>
+                <div class="form-field"><label for="extend-expiry-date">New expiry date</label><input id="extend-expiry-date" name="expiry_date" type="date" required min="{{ now(config('app.timezone'))->addDay()->format('Y-m-d') }}" value="{{ old('expiry_date') }}">@error('expires_at')<span class="field-error">{{ $message }}</span>@enderror</div>
+                <button class="button button-secondary" type="submit">Extend expiry</button>
+            </form>
+        @endif
+
+        <div class="panel-card form-stack">
+            <h3>Subscription status</h3>
+            @if($subscription->status === 'suspended' && $subscription->expires_at->gte(now(config('app.timezone'))))
+                <form method="POST" action="{{ route('super-admin.subscriptions.status', $subscription) }}" data-loading-form data-confirm="Reactivate this subscription? Restaurant operational access will be restored while its term remains valid." data-confirm-title="Reactivate subscription?" data-confirm-action="Reactivate">
+                    @csrf<input type="hidden" name="status" value="active"><button class="button button-primary" type="submit">Reactivate</button>
+                </form>
+            @elseif(in_array($subscription->status, ['active', 'trial'], true))
+                <form method="POST" action="{{ route('super-admin.subscriptions.status', $subscription) }}" class="action-stack" data-loading-form data-confirm="Suspend this subscription? The restaurant will lose operational access immediately." data-confirm-title="Suspend subscription?" data-confirm-action="Suspend">
+                    @csrf<input type="hidden" name="status" value="suspended"><button class="button button-danger" type="submit">Suspend</button>
+                </form>
+                <form method="POST" action="{{ route('super-admin.subscriptions.status', $subscription) }}" data-loading-form data-confirm="Cancel this subscription? The restaurant will lose operational access and this action cannot be undone." data-confirm-title="Cancel subscription?" data-confirm-action="Cancel subscription">
+                    @csrf<input type="hidden" name="status" value="cancelled"><button class="button button-secondary" type="submit">Cancel subscription</button>
+                </form>
+            @else
+                <p class="field-hint">No status change is available for this historical subscription record.</p>
+            @endif
+            @error('status')<span class="field-error">{{ $message }}</span>@enderror
+        </div>
+    </section>
+
+    <div class="section-heading"><div><h2>History</h2><p>Append-only audit entries for this subscription.</p></div><a class="button button-secondary" href="{{ route('super-admin.subscriptions.history') }}">All history</a></div>
+    <div class="table-shell">
+        <table class="data-table">
+            <thead><tr><th>Event</th><th>Actor</th><th>Previous</th><th>New</th><th>Recorded</th></tr></thead>
+            <tbody>
+                @forelse($subscription->events as $event)
+                    <tr>
+                        <td>{{ ucfirst(str_replace('_', ' ', $event->action)) }}</td>
+                        <td>{{ $event->actor?->name ?? 'Platform admin account unavailable' }}</td>
+                        <td>{{ $event->previous_status ? ucfirst($event->previous_status) : '—' }}</td>
+                        <td>{{ $event->new_status ? ucfirst($event->new_status) : '—' }}</td>
+                        <td>{{ $event->created_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5"><div class="empty-state"><h3>No events recorded</h3><p>Subscription changes will appear here.</p></div></td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+@endsection
