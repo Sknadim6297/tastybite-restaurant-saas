@@ -9,8 +9,11 @@ use App\Models\SuperAdmin;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Transport\ArrayTransport;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
+use Symfony\Component\Mime\Email;
 use Tests\TestCase;
 
 class RestaurantAuthenticationTest extends TestCase
@@ -93,6 +96,94 @@ class RestaurantAuthenticationTest extends TestCase
 
         $this->assertNotSame(self::PASSWORD, $owner->getRawOriginal('password'));
         $this->assertTrue(Hash::check(self::PASSWORD, $owner->getRawOriginal('password')));
+    }
+
+    public function test_owner_can_request_reset_set_password_once_and_log_in_using_the_local_reset_url(): void
+    {
+        config(['mail.default' => 'array']);
+        $restaurant = Restaurant::create([
+            'name' => 'Bella Vista',
+            'slug' => 'bella-vista',
+            'email' => 'hello@bellavista.test',
+            'status' => 'active',
+        ]);
+        $owner = User::create([
+            'restaurant_id' => $restaurant->id,
+            'name' => 'Owner One',
+            'email' => 'owner@bellavista.test',
+            'role' => 'owner',
+            'status' => 'active',
+            'password' => Hash::make(self::PASSWORD),
+        ]);
+
+        $this->post(route('restaurant.password.email'), ['email' => strtoupper($owner->email)])
+            ->assertRedirect(route('restaurant.password.request'))
+            ->assertSessionHas('status');
+
+        $transport = app('mail.manager')->mailer()->getSymfonyTransport();
+        $this->assertInstanceOf(ArrayTransport::class, $transport);
+        $this->assertCount(1, $transport->messages());
+        $email = $transport->messages()->last()->getOriginalMessage();
+        $this->assertInstanceOf(Email::class, $email);
+        $html = html_entity_decode($email->getHtmlBody(), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $this->assertSame(1, preg_match('~href="([^"]*restaurant/reset-password/[^"]+)"~', $html, $matches));
+        $resetUrl = html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $this->assertSame(parse_url(config('app.url'), PHP_URL_HOST), parse_url($resetUrl, PHP_URL_HOST));
+        $this->assertSame('/restaurant/reset-password/'.basename((string) parse_url($resetUrl, PHP_URL_PATH)), parse_url($resetUrl, PHP_URL_PATH));
+        $token = basename((string) parse_url($resetUrl, PHP_URL_PATH));
+        $this->assertSame(60, config('auth.passwords.users.expire'));
+
+        $newPassword = 'ResetOwnerPassword7!';
+        $resetData = [
+            'token' => $token,
+            'email' => $owner->email,
+            'password' => $newPassword,
+            'password_confirmation' => $newPassword,
+        ];
+        $this->post(route('restaurant.password.update'), $resetData)
+            ->assertRedirect(route('restaurant.login'));
+
+        $this->post(route('restaurant.password.update'), $resetData)
+            ->assertSessionHasErrors(['email']);
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $owner->email]);
+
+        $this->post(route('restaurant.login.submit'), [
+            'email' => $owner->email,
+            'password' => $newPassword,
+        ])->assertRedirect(route('restaurant.dashboard'));
+        $this->assertAuthenticatedAs($owner->fresh(), 'web');
+    }
+
+    public function test_public_reset_response_is_generic_when_failover_contains_a_log_mailer(): void
+    {
+        $owner = User::create([
+            'restaurant_id' => Restaurant::create([
+                'name' => 'Bella Vista',
+                'slug' => 'bella-vista',
+                'email' => 'hello@bellavista.test',
+                'status' => 'active',
+            ])->id,
+            'name' => 'Owner One',
+            'email' => 'owner@bellavista.test',
+            'role' => 'owner',
+            'status' => 'active',
+            'password' => Hash::make(self::PASSWORD),
+        ]);
+        config([
+            'mail.default' => 'failover',
+            'mail.mailers.failover' => [
+                'transport' => 'failover',
+                'mailers' => ['smtp', 'log'],
+            ],
+        ]);
+        Notification::fake();
+
+        $this->post(route('restaurant.password.email'), ['email' => $owner->email])
+            ->assertRedirect(route('restaurant.password.request'))
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $owner->email]);
+        Notification::assertNothingSent();
     }
 
     public function test_restaurant_login_is_rate_limited(): void

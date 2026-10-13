@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Restaurant;
 use App\Http\Controllers\Controller;
 use App\Models\RestaurantAuditLog;
 use App\Services\LoginSecurityAuditService;
+use App\Services\OwnerPasswordSetupService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -99,7 +100,7 @@ class AuthController extends Controller
         return view('restaurant.auth.forgot-password');
     }
 
-    public function sendResetLink(Request $request): RedirectResponse
+    public function sendResetLink(Request $request, OwnerPasswordSetupService $passwordSetupService): RedirectResponse
     {
         $validator = Validator::make($request->all(), [
             'email' => ['required', 'email', 'max:255'],
@@ -111,19 +112,11 @@ class AuthController extends Controller
                 ->withInput($request->only('email'));
         }
 
-        if (config('mail.default') === 'log') {
-            return redirect()->route('restaurant.password.request')->withErrors([
-                'email' => 'Password reset delivery is not configured. Please contact platform support.',
-            ]);
-        }
-
-        Password::broker('users')->sendResetLink([
-            'email' => Str::lower($validator->validated()['email']),
-        ]);
+        $passwordSetupService->sendForEmail($validator->validated()['email']);
 
         return redirect()->route('restaurant.password.request')->with(
             'status',
-            'If an active restaurant account matches that email, password reset instructions will be sent.'
+            'Your request has been received. If an eligible account matches, reset instructions may be sent. Contact support if they do not arrive.'
         );
     }
 
