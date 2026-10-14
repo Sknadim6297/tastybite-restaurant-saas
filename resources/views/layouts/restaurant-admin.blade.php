@@ -7,7 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · TastyBite Restaurant</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="{{ asset('assets/super-admin.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/super-admin.css') }}?v={{ filemtime(public_path('assets/super-admin.css')) }}">
 </head>
 
 <body class="admin-page">
@@ -90,7 +90,7 @@
     </dialog>
 
     @include('components.super-admin.toasts')
-    <script src="{{ asset('assets/super-admin.js') }}" defer></script>
+    <script src="{{ asset('assets/super-admin.js') }}?v={{ filemtime(public_path('assets/super-admin.js')) }}" defer></script>
 </body>
 
 </html>

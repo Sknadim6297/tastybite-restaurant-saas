@@ -27,14 +27,14 @@ function holdEscape(value) {
 // Clock
 const dateEl = document.getElementById("currentDate");
 const timeEl = document.getElementById("currentTime");
-const timeZone = dateEl?.dataset.timezone || "UTC";
+const timeZone = "Asia/Kolkata";
 const dateFormatter = dateEl ? new Intl.DateTimeFormat("en-IN", {
     timeZone,
     day: "2-digit",
     month: "short",
     year: "numeric"
 }) : null;
-const timeFormatter = timeEl ? new Intl.DateTimeFormat("en-IN", {
+const timeFormatter = timeEl ? new Intl.DateTimeFormat("en-US", {
     timeZone,
     hour: "2-digit",
     minute: "2-digit",
@@ -73,15 +73,161 @@ document.querySelectorAll(".category-btn").forEach(button => {
 
 // Menu search
 const menuSearch = document.getElementById("menuSearch");
+const searchClear = document.querySelector("[data-search-clear]");
+const noMatchingProducts = document.getElementById("noMatchingProducts");
+const posLayout = document.getElementById("posLayout");
+const billingPanel = document.getElementById("billingPanel");
+const nextBilling = document.getElementById("nextBilling");
+const nextBillingCount = document.getElementById("nextBillingCount");
+const billingBack = document.getElementById("billingBack");
+const billingClose = document.getElementById("billingClose");
+
+function setBillingOpen(isOpen) {
+    if (!posLayout || !billingPanel || !nextBilling) {
+        return;
+    }
+
+    posLayout.classList.toggle("is-billing-open", isOpen);
+    document.body.classList.toggle("pos-billing-open", isOpen);
+    billingPanel.setAttribute("aria-hidden", String(!isOpen));
+    billingPanel.inert = !isOpen;
+    nextBilling.setAttribute("aria-expanded", String(isOpen));
+    if (isOpen) {
+        billingClose?.focus();
+    } else {
+        nextBilling.focus();
+    }
+}
+
+if (nextBilling) {
+    nextBilling.addEventListener("click", () => setBillingOpen(true));
+}
+
+if (billingBack) {
+    billingBack.addEventListener("click", () => setBillingOpen(false));
+}
+
+if (billingClose) {
+    billingClose.addEventListener("click", () => setBillingOpen(false));
+}
+
+if (billingPanel) {
+    billingPanel.addEventListener("click", event => {
+        if (event.target === billingPanel) {
+            setBillingOpen(false);
+        }
+    });
+}
+
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && billingPanel && !billingPanel.inert) {
+        setBillingOpen(false);
+    }
+});
+
+const paymentNotice = document.getElementById("paymentNotice");
+const paymentMethodNotices = {
+    Cash: "Cash selected. Payment is not recorded or processed by this POS.",
+    Card: "Card selected. Use your existing payment terminal; no card details are collected here.",
+    UPI: "UPI selected. Use your existing UPI workflow; no payment is processed by this POS."
+};
+
+document.querySelectorAll("[data-payment-method]").forEach(button => {
+    button.addEventListener("click", () => {
+        document.querySelectorAll("[data-payment-method]").forEach(method => {
+            const isSelected = method === button;
+            method.classList.toggle("active", isSelected);
+            method.setAttribute("aria-pressed", String(isSelected));
+        });
+
+        if (paymentNotice) {
+            const method = button.dataset.paymentMethod || "Cash";
+            const noticeText = paymentNotice.querySelector("span");
+            if (noticeText) {
+                noticeText.textContent = paymentMethodNotices[method] || paymentMethodNotices.Cash;
+            }
+        }
+    });
+});
+
+function updateCartItemCount() {
+    if (!nextBillingCount) {
+        return;
+    }
+
+    const itemCount = [...cart.values()].reduce((total, item) => total + item.qty, 0);
+    nextBillingCount.textContent = String(itemCount);
+    nextBillingCount.setAttribute("aria-label", `${itemCount} ${itemCount === 1 ? "item" : "items"}`);
+}
 
 if (menuSearch) {
-    menuSearch.addEventListener("input", filterMenu);
+    menuSearch.addEventListener("input", () => {
+        if (searchClear) {
+            searchClear.hidden = menuSearch.value.length === 0;
+        }
+        filterMenu();
+    });
+}
+
+if (menuSearch && searchClear) {
+    searchClear.addEventListener("click", () => {
+        menuSearch.value = "";
+        searchClear.hidden = true;
+        filterMenu();
+        menuSearch.focus();
+    });
+}
+
+const categoryScroller = document.getElementById("categoryScroller");
+const categoryTrack = document.getElementById("categoryList");
+
+if (categoryScroller && categoryTrack) {
+    const updateCategoryArrows = () => {
+        const max = categoryTrack.scrollWidth - categoryTrack.clientWidth;
+        categoryScroller.classList.toggle("can-scroll-left", categoryTrack.scrollLeft > 4);
+        categoryScroller.classList.toggle("can-scroll-right", categoryTrack.scrollLeft < max - 4);
+    };
+
+    categoryScroller.querySelectorAll("[data-cat-scroll]").forEach((arrow) => {
+        arrow.addEventListener("click", () => {
+            categoryTrack.scrollBy({
+                left: Number(arrow.dataset.catScroll) * categoryTrack.clientWidth * 0.8,
+                behavior: "smooth",
+            });
+        });
+    });
+
+    categoryTrack.addEventListener("wheel", (event) => {
+        if (Math.abs(event.deltaY) > Math.abs(event.deltaX) && categoryTrack.scrollWidth > categoryTrack.clientWidth) {
+            event.preventDefault();
+            categoryTrack.scrollLeft += event.deltaY;
+        }
+    }, { passive: false });
+
+    categoryTrack.addEventListener("scroll", updateCategoryArrows, { passive: true });
+    window.addEventListener("resize", updateCategoryArrows);
+    if ("ResizeObserver" in window) {
+        new ResizeObserver(updateCategoryArrows).observe(categoryTrack);
+    }
+    document.querySelectorAll(".category-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+            button.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+        });
+    });
+    updateCategoryArrows();
+}
+
+const searchSubmit = document.querySelector("[data-search-focus]");
+if (menuSearch && searchSubmit) {
+    searchSubmit.addEventListener("click", () => {
+        filterMenu();
+        menuSearch.focus();
+    });
 }
 
 function filterMenu() {
-    const search = (
-        document.getElementById("menuSearch")?.value || ""
-    ).toLowerCase();
+    const search = (menuSearch?.value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+    let visibleCount = 0;
 
     document.querySelectorAll(".food-card").forEach(card => {
         const matchesCategory =
@@ -91,13 +237,18 @@ function filterMenu() {
         const searchableText = [
             card.dataset.name || "",
             card.dataset.categoryName || ""
-        ].join(" ").toLowerCase();
+        ].join(" ").toLocaleLowerCase();
         const matchesSearch =
             searchableText.includes(search);
 
-        card.style.display =
-            matchesCategory && matchesSearch ? "" : "none";
+        const isVisible = matchesCategory && matchesSearch;
+        card.hidden = !isVisible;
+        visibleCount += Number(isVisible);
     });
+
+    if (noMatchingProducts) {
+        noMatchingProducts.hidden = visibleCount !== 0;
+    }
 }
 
 // Add food to cart
@@ -144,6 +295,7 @@ function removeItem(name) {
 
 // Render cart
 function renderCart() {
+    updateCartItemCount();
     const container = document.getElementById("cartItems");
     if (!container) return;
 

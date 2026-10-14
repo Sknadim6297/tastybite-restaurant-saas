@@ -14,8 +14,8 @@
             <div class="detail-item"><span>Restaurant</span><strong>{{ $log->restaurant?->name ?? 'Not associated' }}</strong></div>
             <div class="detail-item"><span>IP address</span><strong>{{ $log->ip_address ?? 'Not recorded' }}</strong></div>
         </div>
-        <div class="section-heading"><div><h2>Recorded details</h2><p>Sensitive credential-like values are redacted.</p></div></div>
-        <pre class="audit-json">{{ json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}</pre>
+        <div class="section-heading"><div><h2>Recorded details</h2><p>Sensitive credential-like fields are omitted.</p></div></div>
+        @include('super-admin.activity-logs._details', ['details' => $details])
         @if($relatedUrl)<a class="button button-secondary" href="{{ $relatedUrl }}">Open related record</a>@endif
     </section>
 @endsection

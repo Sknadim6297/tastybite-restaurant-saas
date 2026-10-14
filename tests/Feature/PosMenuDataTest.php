@@ -124,8 +124,26 @@ class PosMenuDataTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Bluebird Bistro')
+            ->assertSee('Bluebird Manager')
+            ->assertSee('Owner')
             ->assertSee('Chicken Dum Biryani')
+            ->assertSee('food-status', false)
             ->assertSee('Biryani')
+            ->assertSee('data-search-clear', false)
+            ->assertSee('No matching products')
+            ->assertSee('id="currentDate"', false)
+            ->assertSee('id="currentTime"', false)
+            ->assertDontSee('notification-dot', false)
+            ->assertDontSee('No new notifications.', false)
             ->assertDontSee('Cold Coffee');
+
+        $script = file_get_contents(public_path('assets/script.js'));
+        $this->assertIsString($script);
+        $this->assertStringContainsString('const timeZone = "Asia/Kolkata";', $script);
+        $this->assertStringContainsString('.trim().replace(/\\s+/g, " ").toLocaleLowerCase()', $script);
+        $this->assertStringContainsString('card.hidden = !isVisible;', $script);
+        $this->assertStringContainsString('noMatchingProducts.hidden = visibleCount !== 0;', $script);
+        $this->assertSame(1, substr_count($script, 'setInterval(updateClock, 1000)'));
+        $this->assertStringContainsString('hour12: true', $script);
     }
 }

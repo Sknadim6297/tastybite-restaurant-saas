@@ -150,7 +150,7 @@
     </dialog>
 
     @include('components.super-admin.toasts')
-    <script src="{{ asset('assets/super-admin.js') }}" defer></script>
+    <script src="{{ asset('assets/super-admin.js') }}?v={{ filemtime(public_path('assets/super-admin.js')) }}" defer></script>
 </body>
 
 </html>

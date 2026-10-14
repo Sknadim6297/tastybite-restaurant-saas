@@ -140,6 +140,8 @@ Route::prefix('super-admin')->name('super-admin.')->middleware('super-admin.head
 
         Route::get('/payments', [PaymentManagementController::class, 'index'])->name('payments.index');
         Route::get('/payments/create', [PaymentManagementController::class, 'create'])->name('payments.create');
+        Route::get('/payments/restaurants/{restaurant}/subscriptions', [PaymentManagementController::class, 'restaurantSubscriptions'])
+            ->name('payments.restaurants.subscriptions');
         Route::post('/payments', [PaymentManagementController::class, 'store'])
             ->middleware('throttle:super-admin-subscription-management')
             ->name('payments.store');

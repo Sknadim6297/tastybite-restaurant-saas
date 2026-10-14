@@ -46,7 +46,6 @@ class SubscriptionManagementController extends Controller
             'restaurant_id' => ['required', 'integer', 'exists:restaurants,id'],
             'subscription_plan_id' => ['required', 'integer', 'exists:subscription_plans,id'],
             'starts_at' => ['required', 'date_format:Y-m-d'],
-            'expiry_date' => ['nullable', 'date_format:Y-m-d'],
             'trial' => ['sometimes', 'boolean'],
         ]);
 
@@ -57,15 +56,11 @@ class SubscriptionManagementController extends Controller
         }
         $plan = SubscriptionPlan::query()->findOrFail($validated['subscription_plan_id']);
         $startsAt = CarbonImmutable::createFromFormat('!Y-m-d', $validated['starts_at'], config('app.timezone'));
-        $manualExpiry = filled($validated['expiry_date'] ?? null)
-            ? CarbonImmutable::createFromFormat('!Y-m-d', $validated['expiry_date'], config('app.timezone'))
-            : null;
 
         $subscription = $this->subscriptions->assign(
             $restaurant,
             $plan,
             $startsAt,
-            $manualExpiry,
             (bool) ($validated['trial'] ?? false),
             $actor,
         );
@@ -88,14 +83,7 @@ class SubscriptionManagementController extends Controller
 
     public function renew(Request $request, RestaurantSubscription $restaurantSubscription): RedirectResponse
     {
-        $validated = $request->validate([
-            'expiry_date' => ['nullable', 'date_format:Y-m-d'],
-        ]);
-        $manualExpiry = filled($validated['expiry_date'] ?? null)
-            ? CarbonImmutable::createFromFormat('!Y-m-d', $validated['expiry_date'], config('app.timezone'))
-            : null;
-
-        $renewal = $this->subscriptions->renew($restaurantSubscription, $manualExpiry, $this->actor());
+        $renewal = $this->subscriptions->renew($restaurantSubscription, $this->actor());
 
         return redirect()->route('super-admin.subscriptions.show', $renewal)
             ->with('status', 'Subscription renewed. The previous subscription remains in history.');
@@ -134,19 +122,31 @@ class SubscriptionManagementController extends Controller
     public function history(Request $request): View
     {
         $query = RestaurantSubscriptionEvent::query()->with(['restaurant', 'actor', 'subscription']);
+        $validated = $request->validate([
+            'restaurant_id' => ['nullable', 'integer'],
+        ]);
+        $restaurantId = $validated['restaurant_id'] ?? '';
+
+        if ($restaurantId !== '') {
+            $query->where('restaurant_id', $restaurantId);
+        }
 
         if ($request->filled('search')) {
             $search = trim($request->string('search')->toString());
-            $query->whereHas('restaurant', fn ($builder) => $builder
-                ->where('name', 'like', "%{$search}%")
-                ->orWhere('slug', 'like', "%{$search}%"))
-                ->orWhere('action', 'like', "%{$search}%");
+            $query->where(function ($builder) use ($search): void {
+                $builder->whereHas('restaurant', fn ($restaurant) => $restaurant
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('slug', 'like', "%{$search}%"))
+                    ->orWhere('action', 'like', "%{$search}%");
+            });
         }
 
         $events = $query->latest('created_at')->paginate(20)->withQueryString();
 
         return view('super-admin.subscriptions.history', [
             'events' => $events,
+            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurantId' => $restaurantId,
             'search' => $request->input('search', ''),
         ]);
     }

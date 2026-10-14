@@ -14,16 +14,15 @@
     </div>
 
     <div class="page-tools">
-        <form method="GET" action="{{ route('super-admin.subscription-plans.index') }}" class="toolbar-actions">
+        <form method="GET" action="{{ route('super-admin.subscription-plans.index') }}" class="toolbar-actions" data-auto-filter>
             <input class="toolbar-search" type="search" name="search" value="{{ $search }}" placeholder="Search plan name or code">
             <select class="toolbar-search" name="status" aria-label="Filter by status">
                 <option value="">All statuses</option>
                 <option value="active" @selected($statusFilter === 'active')>Active</option>
                 <option value="inactive" @selected($statusFilter === 'inactive')>Inactive</option>
             </select>
-            <button class="button button-secondary" type="submit">Filter</button>
         </form>
-        <a class="button button-secondary" href="{{ route('super-admin.subscription-plans.index') }}">Reset</a>
+        <a class="button button-secondary" href="{{ route('super-admin.subscription-plans.index') }}" data-auto-filter-reset>Reset</a>
     </div>
 
     <div class="table-shell">

@@ -1,19 +1,19 @@
 @extends('layouts.super-admin')
 
-@section('title', 'Payment #'.$payment->id)
+@section('title', 'Payment '.$payment->formatted_id)
 @section('section', 'Payments')
 
 @section('content')
-    <div class="page-heading"><div><span class="eyebrow">PAYMENT RECORD #{{ $payment->id }} @if($payment->isDemo()) · DEMO ONLY — NOT ACTUAL MONEY @endif</span><h1>{{ $payment->restaurant->name }}</h1><p>{{ $payment->plan_name }} · {{ $payment->currency }} {{ number_format((float) $payment->amount, 2) }}</p></div><span class="status-pill status-{{ $payment->status }}">{{ ucfirst($payment->status) }}</span></div>
+    <div class="page-heading"><div><span class="eyebrow">PAYMENT RECORD {{ $payment->formatted_id ?? '—' }} @if($payment->isDemo()) · DEMO ONLY — NOT ACTUAL MONEY @endif</span><h1>{{ $payment->restaurant?->name ?? '—' }}</h1><p>{{ $payment->plan_name ?: ($payment->subscription?->plan_name ?: ($payment->plan?->name ?? '—')) }} · {{ $payment->currency && $payment->amount !== null ? $payment->currency.' '.number_format((float) $payment->amount, 2) : '—' }}</p></div>@if($payment->status)<span class="status-pill status-{{ $payment->status }}">{{ ucfirst($payment->status) }}</span>@else<span class="status-pill">—</span>@endif</div>
 
     <section class="panel-card"><div class="detail-grid">
-        <div class="detail-item"><span>Payment ID</span><strong>#{{ $payment->id }}</strong></div>
-        <div class="detail-item"><span>Restaurant / Owner</span><strong>{{ $payment->restaurant->name }} · {{ $payment->restaurant->owners->first()?->name ?? 'No owner listed' }} · {{ ucfirst($payment->restaurant->status) }}</strong></div>
-        <div class="detail-item"><span>Restaurant contact</span><strong>{{ $payment->restaurant->email ?: 'No email' }} · {{ $payment->restaurant->phone ?: 'No phone' }}</strong></div>
-        <div class="detail-item"><span>Plan</span><strong>{{ $payment->plan_name }} ({{ $payment->plan_code }})</strong></div>
-        <div class="detail-item"><span>Amount / Method</span><strong>{{ $payment->currency }} {{ number_format((float) $payment->amount, 2) }} · {{ ucfirst(str_replace('_', ' ', $payment->payment_method)) }}</strong></div>
+        <div class="detail-item"><span>Payment ID</span><strong>{{ $payment->formatted_id ?? '—' }}</strong></div>
+        <div class="detail-item"><span>Restaurant / Owner</span><strong>{{ $payment->restaurant?->name ?? '—' }} · {{ $payment->restaurant?->owners->first()?->name ?? 'No owner listed' }} · {{ $payment->restaurant?->status ? ucfirst($payment->restaurant->status) : '—' }}</strong></div>
+        <div class="detail-item"><span>Restaurant contact</span><strong>{{ $payment->restaurant?->email ?: '—' }} · {{ $payment->restaurant?->phone ?: '—' }}</strong></div>
+        <div class="detail-item"><span>Plan</span><strong>{{ $payment->plan_name ?: ($payment->subscription?->plan_name ?: ($payment->plan?->name ?? '—')) }}{{ $payment->plan_code ? ' ('.$payment->plan_code.')' : '' }}</strong></div>
+        <div class="detail-item"><span>Amount / Method</span><strong>{{ $payment->currency && $payment->amount !== null ? $payment->currency.' '.number_format((float) $payment->amount, 2) : '—' }} · {{ $payment->payment_method_label ?? '—' }}</strong></div>
         <div class="detail-item"><span>Transaction reference</span><strong>{{ $payment->transaction_reference ?: 'Not provided' }}</strong></div>
-        <div class="detail-item"><span>Payment date</span><strong>{{ $payment->paid_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</strong></div>
+        <div class="detail-item"><span>Payment date</span><strong>{{ $payment->paid_at?->timezone(config('app.timezone'))->format('M j, Y H:i T') ?? '—' }}</strong></div>
         <div class="detail-item"><span>Recorded by</span><strong>{{ $payment->creator?->name ?? 'Unavailable' }}</strong></div>
         <div class="detail-item"><span>Approval / Rejection</span><strong>@if($payment->approver)Approved by {{ $payment->approver->name }} · {{ $payment->approved_at?->timezone(config('app.timezone'))->format('M j, Y H:i') }}@elseif($payment->rejector)Rejected by {{ $payment->rejector->name }} · {{ $payment->rejected_at?->timezone(config('app.timezone'))->format('M j, Y H:i') }}@else Pending review @endif</strong></div>
         @if($payment->rejection_reason)<div class="detail-item detail-item-wide"><span>Rejection reason</span><strong>{{ $payment->rejection_reason }}</strong></div>@endif
@@ -24,11 +24,15 @@
     </div></section>
 
     @if($payment->status === 'pending')
-        <div class="section-heading"><div><h2>Review payment</h2><p>Approval creates or renews the restaurant subscription atomically.</p></div></div>
+        <div class="section-heading"><div><h2>Review payment</h2><p>Approval records this payment and its receipt only; it does not create, renew, reactivate, or extend subscription access.</p></div></div>
         <section class="payment-actions panel-card">
-            <form method="POST" action="{{ route('super-admin.payments.approve', $payment) }}" data-loading-form data-confirm="Approve this payment and create or renew its subscription period?" data-confirm-title="Approve payment?" data-confirm-action="Approve">
-                @csrf<button class="button button-primary" type="submit">Approve and activate subscription</button>
-            </form>
+            @if($payment->subscription)
+                <form method="POST" action="{{ route('super-admin.payments.approve', $payment) }}" data-loading-form data-confirm="Approve this payment and issue its payment receipt? Subscription access and dates will not change." data-confirm-title="Approve payment?" data-confirm-action="Approve">
+                    @csrf<button class="button button-primary" type="submit">Approve payment</button>
+                </form>
+            @else
+                <div class="notice-card"><strong>This payment is not linked to an existing subscription.</strong><p>It cannot be approved. Record a new payment and select the restaurant’s existing subscription.</p><a class="button button-secondary" href="{{ route('super-admin.payments.create') }}">Record payment against subscription</a></div>
+            @endif
             <form method="POST" action="{{ route('super-admin.payments.reject', $payment) }}" class="form-stack" data-loading-form data-confirm="Reject this pending payment? This will not change the restaurant subscription." data-confirm-title="Reject payment?" data-confirm-action="Reject">
                 @csrf<div class="form-field"><label for="reason">Rejection reason</label><textarea id="reason" name="reason" rows="3" required minlength="3" maxlength="2000">{{ old('reason') }}</textarea>@error('reason')<span class="field-error">{{ $message }}</span>@enderror</div>
                 <button class="button button-danger" type="submit">Reject payment</button>

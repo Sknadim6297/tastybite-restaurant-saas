@@ -131,7 +131,10 @@ class InvoiceController extends Controller
             'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id'],
             'status' => ['nullable', 'in:pending,approved,rejected,refunded'],
             'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'date_to' => array_merge(
+                ['nullable', 'date'],
+                $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
+            ),
             'scope' => ['nullable', Rule::in(['all', 'real', 'demo'])],
         ]);
     }

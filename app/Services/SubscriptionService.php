@@ -20,12 +20,11 @@ class SubscriptionService
         Restaurant $restaurant,
         SubscriptionPlan $plan,
         CarbonImmutable $startsAt,
-        ?CarbonImmutable $manualExpiry,
         bool $trial,
         SuperAdmin $actor,
         array $eventDetails = [],
     ): RestaurantSubscription {
-        return DB::transaction(function () use ($restaurant, $plan, $startsAt, $manualExpiry, $trial, $actor, $eventDetails): RestaurantSubscription {
+        return DB::transaction(function () use ($restaurant, $plan, $startsAt, $trial, $actor, $eventDetails): RestaurantSubscription {
             $restaurant = Restaurant::query()->lockForUpdate()->findOrFail($restaurant->id);
             $plan = SubscriptionPlan::query()->lockForUpdate()->findOrFail($plan->id);
 
@@ -42,13 +41,11 @@ class SubscriptionService
             }
 
             $startsAt = $startsAt->startOfDay();
-            $expiresAt = $manualExpiry
-                ? $manualExpiry->endOfDay()
-                : $this->planExpiry($plan->duration_months, $plan->duration_days, $startsAt, $plan->trial_duration_days, $trial);
+            $expiresAt = $this->planExpiry($plan->duration_months, $plan->duration_days, $startsAt, $plan->trial_duration_days, $trial);
 
             $this->assertExpiryAfterStart($startsAt, $expiresAt);
             if ($expiresAt->lt(CarbonImmutable::now(config('app.timezone')))) {
-                throw ValidationException::withMessages(['expiry_date' => 'A new subscription cannot already be expired.']);
+                throw ValidationException::withMessages(['starts_at' => 'The selected start date and plan duration would already be expired.']);
             }
             $this->assertNoOverlap($restaurant, $startsAt->utc(), $expiresAt->utc());
 
@@ -70,7 +67,6 @@ class SubscriptionService
             ]);
 
             $this->recordEvent($subscription, $actor, 'assigned', null, $subscription->status, [
-                'manual_expiry' => $manualExpiry !== null,
                 'price' => $subscription->price,
                 'currency' => $subscription->currency,
             ] + $eventDetails);
@@ -84,11 +80,10 @@ class SubscriptionService
 
     public function renew(
         RestaurantSubscription $subscription,
-        ?CarbonImmutable $manualExpiry,
         SuperAdmin $actor,
         array $eventDetails = [],
     ): RestaurantSubscription {
-        return DB::transaction(function () use ($subscription, $manualExpiry, $actor, $eventDetails): RestaurantSubscription {
+        return DB::transaction(function () use ($subscription, $actor, $eventDetails): RestaurantSubscription {
             $restaurant = Restaurant::query()->lockForUpdate()->findOrFail($subscription->restaurant_id);
             $previous = RestaurantSubscription::query()
                 ->where('restaurant_id', $restaurant->id)
@@ -104,9 +99,7 @@ class SubscriptionService
             $startsAt = $previousExpiryLocal->gte($now)
                 ? $previousExpiryLocal->startOfDay()->addDay()
                 : $now->startOfDay();
-            $expiresAt = $manualExpiry
-                ? $manualExpiry->endOfDay()
-                : $this->planExpiry($previous->duration_months, $previous->duration_days, $startsAt);
+            $expiresAt = $this->planExpiry($previous->duration_months, $previous->duration_days, $startsAt);
 
             $this->assertExpiryAfterStart($startsAt, $expiresAt);
             $this->assertNoOverlap($restaurant, $startsAt->utc(), $expiresAt->utc(), $previous->id);
@@ -133,7 +126,6 @@ class SubscriptionService
                 'renewed_from_id' => $previous->id,
                 'price' => $renewal->price,
                 'currency' => $renewal->currency,
-                'manual_expiry' => $manualExpiry !== null,
             ] + $eventDetails);
             $this->notifyActivation($renewal, true);
 

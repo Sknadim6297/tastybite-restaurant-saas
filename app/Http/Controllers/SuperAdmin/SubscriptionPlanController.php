@@ -138,10 +138,10 @@ class SubscriptionPlanController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'price' => ['required', 'numeric', 'min:0', 'max:99999999.99', 'decimal:0,2'],
             'billing_period' => ['required', Rule::in(['monthly', 'quarterly', 'yearly', 'custom'])],
-            'duration_months' => ['nullable', 'integer', 'min:1', 'max:120'],
-            'duration_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'duration_months' => [Rule::excludeIf(($input['billing_period'] ?? null) !== 'custom'), 'nullable', 'integer', 'min:1', 'max:120'],
+            'duration_days' => [Rule::excludeIf(($input['billing_period'] ?? null) !== 'custom'), 'nullable', 'integer', 'min:1', 'max:3650'],
             'trial_available' => ['required', 'boolean'],
-            'trial_duration_days' => ['nullable', 'integer', 'min:1', 'max:365'],
+            'trial_duration_days' => [Rule::excludeIf(! filter_var($input['trial_available'] ?? false, FILTER_VALIDATE_BOOLEAN)), 'nullable', 'integer', 'min:1', 'max:365'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ]);
 

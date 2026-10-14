@@ -22,7 +22,10 @@ class PlatformAnalyticsController extends Controller
     {
         $filters = $request->validate([
             'date_from' => ['nullable', 'date_format:Y-m-d'],
-            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'date_to' => array_merge(
+                ['nullable', 'date_format:Y-m-d'],
+                $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
+            ),
             'scope' => ['nullable', Rule::in(['real', 'demo', 'all'])],
         ]);
         $timezone = config('app.timezone');

@@ -68,7 +68,7 @@
                         <td>{{ str_replace('_', ' ', $log->action) }}</td>
                         <td>{{ $log->actor?->name ?? ($log->actor_type === 'restaurant_owner' ? 'Owner sign-in' : ucfirst($log->actor_type)) }}</td>
                         <td>{{ $log->created_at?->format('M j, Y H:i') ?? '—' }}</td>
-                        <td>{{ is_array($log->details) && $log->details !== [] ? json_encode($log->details) : '—' }}</td>
+                        <td>@include('super-admin.activity-logs._details', ['details' => $log->getRawOriginal('details')])</td>
                     </tr>
                 @empty
                     <tr><td colspan="4"><div class="empty-state"><h3>No owner activity yet</h3><p>Account changes and future successful logins will appear here.</p></div></td></tr>

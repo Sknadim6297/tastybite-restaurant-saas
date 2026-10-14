@@ -5,12 +5,11 @@
 
 @section('content')
     @php($selectedIcon = old('icon', $category->icon))
-    @php($categoryImageUrl = $category->image_url)
     <div class="page-heading">
         <div><span class="eyebrow">MENU MANAGEMENT</span><h1>{{ $category->exists ? 'Edit category' : 'Add category' }}</h1><p>Category changes apply only to {{ $restaurant->name }}.</p></div>
     </div>
 
-    <form method="POST" action="{{ $category->exists ? route('restaurant.menu.categories.update', $category) : route('restaurant.menu.categories.store') }}" enctype="multipart/form-data" class="panel-card form-stack">
+    <form method="POST" action="{{ $category->exists ? route('restaurant.menu.categories.update', $category) : route('restaurant.menu.categories.store') }}" class="panel-card form-stack">
         @csrf
         @if($category->exists) @method('PUT') @endif
 
@@ -35,6 +34,7 @@
                     class="category-icon-option"
                     type="button"
                     data-category-icon-choice=""
+                    data-icon-class="grid"
                     data-category-icon-label="default no icon"
                     aria-pressed="{{ $selectedIcon ? 'false' : 'true' }}"
                 >
@@ -46,37 +46,20 @@
                         class="category-icon-option"
                         type="button"
                         data-category-icon-choice="{{ $icon }}"
+                        data-icon-class="{{ \App\Models\RestaurantMenuCategory::iconClassFor($icon) }}"
                         data-category-icon-label="{{ strtolower($label.' '.$icon) }}"
                         aria-pressed="{{ $selectedIcon === $icon ? 'true' : 'false' }}"
                     >
-                        <i class="bi bi-{{ $icon }}" aria-hidden="true"></i>
+                        <i class="bi bi-{{ \App\Models\RestaurantMenuCategory::iconClassFor($icon) }}" aria-hidden="true"></i>
                         <span>{{ $label }}</span>
                     </button>
                 @endforeach
             </div>
             <div class="category-icon-preview" data-category-icon-preview>
-                <span>Selected icon</span>
-                <i class="bi bi-{{ $selectedIcon ?: 'grid' }}" aria-hidden="true"></i>
+                <span data-category-icon-preview-label>Selected: {{ \App\Models\RestaurantMenuCategory::ICONS[$selectedIcon] ?? 'Default' }}</span>
+                <i class="bi bi-{{ \App\Models\RestaurantMenuCategory::iconClassFor($selectedIcon) }}" aria-hidden="true"></i>
             </div>
             @error('icon')<span class="field-error">{{ $message }}</span>@enderror
-        </div>
-
-        <div class="form-field">
-            <label for="category-image">Category image <span class="field-hint-inline">(optional; JPG, PNG, or WebP, up to 5 MB)</span></label>
-            <input id="category-image" name="image" type="file" accept="image/jpeg,image/png,image/webp" data-category-image-input>
-            @error('image')<span class="field-error">{{ $message }}</span>@enderror
-            <div class="category-image-preview" data-category-image-preview-container @if(!$category->image_path) hidden @endif>
-                <img
-                    src="{{ $categoryImageUrl }}"
-                    alt="{{ $category->name }}"
-                    data-category-image-preview
-                    @if(!$category->image_path) hidden @endif
-                >
-                @if($category->image_path)
-                    <label><input type="checkbox" name="remove_image" value="1" @checked((bool) old('remove_image'))> Remove current image</label>
-                @endif
-            </div>
-            @error('remove_image')<span class="field-error">{{ $message }}</span>@enderror
         </div>
 
         <div class="form-field">

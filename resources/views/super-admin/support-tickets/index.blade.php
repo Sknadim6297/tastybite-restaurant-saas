@@ -15,7 +15,7 @@
     </section>
 
     <div class="page-tools ticket-filter-tools">
-        <form method="GET" action="{{ route('super-admin.support-tickets.index') }}" class="toolbar-actions">
+        <form method="GET" action="{{ route('super-admin.support-tickets.index') }}" class="toolbar-actions" data-auto-filter>
             <input class="toolbar-search" type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Ticket, subject, or restaurant">
             <select class="toolbar-search" name="status" aria-label="Filter by status">
                 <option value="">All statuses</option>
@@ -41,9 +41,8 @@
                     <option value="{{ $admin->id }}" @selected((string) ($filters['assigned_admin_id'] ?? '') === (string) $admin->id)>{{ $admin->name }}</option>
                 @endforeach
             </select>
-            <button class="button button-secondary" type="submit">Apply filters</button>
         </form>
-        <a class="button button-secondary" href="{{ route('super-admin.support-tickets.index') }}">Reset</a>
+        <a class="button button-secondary" href="{{ route('super-admin.support-tickets.index') }}" data-auto-filter-reset>Reset</a>
     </div>
 
     <div class="table-shell">

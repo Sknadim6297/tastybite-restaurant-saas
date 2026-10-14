@@ -10,15 +10,14 @@
     </div>
 
     <div class="page-tools invoice-filter-tools">
-        <form method="GET" action="{{ route('super-admin.invoices.index') }}" class="toolbar-actions">
+        <form method="GET" action="{{ route('super-admin.invoices.index') }}" class="toolbar-actions" data-auto-filter>
             <input class="toolbar-search" type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Invoice, restaurant, owner, or reference">
             <select class="toolbar-search" name="restaurant_id" aria-label="Filter by restaurant"><option value="">All restaurants</option>@foreach($restaurants as $restaurant)<option value="{{ $restaurant->id }}" @selected((string) ($filters['restaurant_id'] ?? '') === (string) $restaurant->id)>{{ $restaurant->name }}</option>@endforeach</select>
             <select class="toolbar-search" name="status" aria-label="Filter by payment status"><option value="">All payment statuses</option>@foreach(['pending', 'approved', 'rejected', 'refunded'] as $status)<option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ ucfirst($status) }}</option>@endforeach</select>
             <select class="toolbar-search" name="scope" aria-label="Filter demo records"><option value="all" @selected(($filters['scope'] ?? 'all') === 'all')>All records</option><option value="real" @selected(($filters['scope'] ?? '') === 'real')>Real records</option><option value="demo" @selected(($filters['scope'] ?? '') === 'demo')>Demo records</option></select>
             <input class="toolbar-search" type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}" aria-label="Issue date from">
             <input class="toolbar-search" type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}" aria-label="Issue date to">
-            <button class="button button-secondary" type="submit">Apply filters</button>
-            <a class="button button-secondary" href="{{ route('super-admin.invoices.index') }}">Reset</a>
+            <a class="button button-secondary" href="{{ route('super-admin.invoices.index') }}" data-auto-filter-reset>Reset</a>
         </form>
     </div>
 

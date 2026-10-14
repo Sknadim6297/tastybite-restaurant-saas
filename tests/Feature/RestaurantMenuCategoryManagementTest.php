@@ -111,6 +111,28 @@ class RestaurantMenuCategoryManagementTest extends TestCase
             ->assertSee('bi bi-grid', false);
     }
 
+    public function test_category_icon_picker_has_a_visible_mapped_icon_for_every_category_type(): void
+    {
+        $this->assertSame(
+            [],
+            array_diff(
+                array_keys(RestaurantMenuCategory::ICONS),
+                array_keys(RestaurantMenuCategory::ICON_CLASSES),
+            ),
+        );
+
+        $this->get(route('restaurant.menu.categories.create'))
+            ->assertOk()
+            ->assertSee('data-category-icon-choice=""', false)
+            ->assertSee('data-icon-class="grid"', false)
+            ->assertSee('Biryani / Rice')
+            ->assertSee('Mutton / Meat')
+            ->assertSee('Grill / BBQ')
+            ->assertSee('Ice Cream')
+            ->assertSee('Kids Menu')
+            ->assertSee('data-category-icon-preview-label', false);
+    }
+
     public function test_create_and_edit_forms_render_for_the_authenticated_owner(): void
     {
         $this->get(route('restaurant.menu.categories.create'))
@@ -152,7 +174,7 @@ class RestaurantMenuCategoryManagementTest extends TestCase
         ]);
     }
 
-    public function test_owner_can_create_category_with_icon_and_tenant_scoped_image(): void
+    public function test_owner_can_create_category_with_icon_without_uploading_a_category_image(): void
     {
         $this->post(route('restaurant.menu.categories.store'), [
             'name' => 'Seafood',
@@ -166,11 +188,11 @@ class RestaurantMenuCategoryManagementTest extends TestCase
         $category = RestaurantMenuCategory::query()->where('name', 'Seafood')->firstOrFail();
         $this->assertSame($this->restaurant->id, $category->restaurant_id);
         $this->assertSame('fish', $category->icon);
-        $this->assertStringStartsWith('restaurant-menu-categories/'.$this->restaurant->id.'/', $category->image_path);
-        Storage::disk('public')->assertExists($category->image_path);
+        $this->assertNull($category->image_path);
+        Storage::disk('public')->assertDirectoryEmpty('restaurant-menu-categories/'.$this->restaurant->id);
     }
 
-    public function test_owner_can_replace_and_remove_a_category_image(): void
+    public function test_editing_category_preserves_an_existing_legacy_image(): void
     {
         $category = $this->createCategory($this->restaurant, 'Seasonal');
         $oldPath = UploadedFile::fake()->image('old.jpg')->store(
@@ -184,29 +206,15 @@ class RestaurantMenuCategoryManagementTest extends TestCase
             'icon' => 'flower1',
             'is_active' => '1',
             'sort_order' => '0',
-            'image' => UploadedFile::fake()->image('new.webp'),
         ])->assertRedirect(route('restaurant.menu.categories.index'));
 
         $category->refresh();
-        $newPath = $category->image_path;
         $this->assertSame('flower1', $category->icon);
-        $this->assertNotSame($oldPath, $newPath);
-        Storage::disk('public')->assertMissing($oldPath);
-        Storage::disk('public')->assertExists($newPath);
-
-        $this->put(route('restaurant.menu.categories.update', $category), [
-            'name' => $category->name,
-            'icon' => 'flower1',
-            'is_active' => '1',
-            'sort_order' => '0',
-            'remove_image' => '1',
-        ])->assertRedirect(route('restaurant.menu.categories.index'));
-
-        $this->assertNull($category->fresh()->image_path);
-        Storage::disk('public')->assertMissing($newPath);
+        $this->assertSame($oldPath, $category->image_path);
+        Storage::disk('public')->assertExists($oldPath);
     }
 
-    public function test_category_icon_picker_and_image_preview_render_on_owner_pages_and_pos(): void
+    public function test_category_icon_picker_and_legacy_image_render_on_owner_pages_and_pos(): void
     {
         $category = $this->createCategory($this->restaurant, 'Fish');
         $path = UploadedFile::fake()->image('fish.jpg')->store(
@@ -218,18 +226,26 @@ class RestaurantMenuCategoryManagementTest extends TestCase
         $this->get(route('restaurant.menu.categories.create'))
             ->assertOk()
             ->assertSee('data-category-icon-choice="fish"', false)
-            ->assertSee('data-category-icon-search', false);
+            ->assertSee('data-category-icon-search', false)
+            ->assertSee('data-icon-class="water"', false)
+            ->assertDontSee('Category image', false)
+            ->assertDontSee('type="file"', false);
         $this->get(route('restaurant.menu.categories.edit', $category))
             ->assertOk()
-            ->assertSee(asset('storage/'.$path), false)
+            ->assertSee('value="fish"', false)
+            ->assertSee('Selected: Fish')
+            ->assertDontSee('Category image', false)
+            ->assertDontSee('type="file"', false)
             ->assertSee('assets/menu-category.js');
         $this->get(route('restaurant.menu.categories.index'))
             ->assertOk()
             ->assertSee('menu-category-thumbnail', false)
+            ->assertSee('bi bi-water', false)
             ->assertSee(asset('storage/'.$path), false);
         $this->get(route('pos.index'))
             ->assertOk()
             ->assertSee('category-btn-image', false)
+            ->assertSee('bi bi-water', false)
             ->assertSee(asset('storage/'.$path), false);
     }
 
@@ -263,21 +279,6 @@ class RestaurantMenuCategoryManagementTest extends TestCase
             ])
             ->assertRedirect(route('restaurant.menu.categories.create'))
             ->assertSessionHasErrors('icon');
-
-        $this->assertDatabaseCount('restaurant_menu_categories', 0);
-    }
-
-    public function test_invalid_category_image_is_rejected(): void
-    {
-        $this->from(route('restaurant.menu.categories.create'))
-            ->post(route('restaurant.menu.categories.store'), [
-                'name' => 'Invalid Image',
-                'image' => UploadedFile::fake()->create('payload.txt', 10, 'text/plain'),
-                'is_active' => '1',
-                'sort_order' => '0',
-            ])
-            ->assertRedirect(route('restaurant.menu.categories.create'))
-            ->assertSessionHasErrors('image');
 
         $this->assertDatabaseCount('restaurant_menu_categories', 0);
     }

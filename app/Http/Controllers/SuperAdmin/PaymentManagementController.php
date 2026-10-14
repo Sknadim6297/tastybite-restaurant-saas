@@ -4,10 +4,10 @@ namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Restaurant;
+use App\Models\RestaurantSubscription;
 use App\Models\RestaurantAuditLog;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPaymentRefund;
-use App\Models\SubscriptionPlan;
 use App\Models\SuperAdmin;
 use App\Services\PaymentManagementService;
 use App\Services\PlatformSettingsService;
@@ -15,6 +15,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -34,7 +35,7 @@ class PaymentManagementController extends Controller
         $filters = $this->filters($request, 'all');
         $query = $this->filteredPayments($filters);
 
-        $payments = $query->with(['restaurant.owners', 'plan'])
+        $payments = $query->with(['restaurant.owners', 'plan', 'subscription'])
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
             ->paginate(15)
@@ -71,9 +72,51 @@ class PaymentManagementController extends Controller
 
         return view('super-admin.payments.create', [
             'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
-            'plans' => SubscriptionPlan::query()->where('status', 'active')->orderBy('name')->get(),
             'paidAt' => CarbonImmutable::now(config('app.timezone'))->format('Y-m-d\TH:i'),
             'paymentPreferences' => $preferences,
+        ]);
+    }
+
+    public function restaurantSubscriptions(Restaurant $restaurant): JsonResponse
+    {
+        $owner = $restaurant->owners()->orderBy('id')->first(['id', 'name', 'email']);
+        $subscriptions = $restaurant->subscriptions()
+            ->orderByDesc('starts_at')
+            ->orderByDesc('id')
+            ->get([
+                'id', 'restaurant_id', 'subscription_plan_id', 'plan_name', 'plan_code',
+                'price', 'currency', 'billing_period', 'duration_months', 'duration_days',
+                'status', 'is_trial', 'starts_at', 'expires_at',
+            ]);
+        $summaries = $this->payments->subscriptionPaymentSummaries($subscriptions);
+        $timezone = config('app.timezone');
+
+        return response()->json([
+            'restaurant' => [
+                'id' => $restaurant->id,
+                'name' => $restaurant->name,
+                'email' => $restaurant->email,
+                'phone' => $restaurant->phone,
+            ],
+            'owner' => $owner ? [
+                'name' => $owner->name,
+                'email' => $owner->email,
+                'mobile' => null,
+            ] : null,
+            'subscriptions' => $subscriptions->map(function ($subscription) use ($summaries, $timezone): array {
+                return [
+                    'id' => $subscription->id,
+                    'plan_name' => $subscription->plan_name,
+                    'plan_code' => $subscription->plan_code,
+                    'billing_duration' => $this->billingDuration($subscription),
+                    'starts_at' => $subscription->starts_at->timezone($timezone)->format('M j, Y'),
+                    'expires_at' => $subscription->expires_at->timezone($timezone)->format('M j, Y'),
+                    'status' => $subscription->effectiveStatus(),
+                    'price' => number_format((float) $subscription->price, 2, '.', ''),
+                    'currency' => $subscription->currency,
+                    ...$summaries[$subscription->id],
+                ];
+            }),
         ]);
     }
 
@@ -84,9 +127,8 @@ class PaymentManagementController extends Controller
 
         $validated = $request->validate([
             'restaurant_id' => ['required', 'integer', 'exists:restaurants,id'],
-            'subscription_plan_id' => ['required', 'integer', 'exists:subscription_plans,id'],
+            'restaurant_subscription_id' => ['required', 'integer', 'exists:restaurant_subscriptions,id'],
             'amount' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:99999999.99'],
-            'currency' => ['required', Rule::in(['INR'])],
             'payment_method' => ['required', Rule::in($preferences['allowed_methods'])],
             'transaction_reference' => [
                 'nullable', 'string', 'max:255',
@@ -131,7 +173,8 @@ class PaymentManagementController extends Controller
     {
         $this->payments->approve($payment, $this->actor());
 
-        return back()->with('status', 'Payment approved and the linked subscription period was recorded.');
+        return redirect()->route('super-admin.payments.show', $payment)
+            ->with('status', 'Payment approved successfully.');
     }
 
     public function reject(Request $request, SubscriptionPayment $payment): RedirectResponse
@@ -252,7 +295,10 @@ class PaymentManagementController extends Controller
             'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id'],
             'status' => ['nullable', Rule::in(['pending', 'approved', 'rejected', 'refunded'])],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
-            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'date_to' => array_merge(
+                ['nullable', 'date_format:Y-m-d'],
+                $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
+            ),
             'scope' => ['nullable', Rule::in(['all', 'real', 'demo'])],
         ]);
 
@@ -326,5 +372,21 @@ class PaymentManagementController extends Controller
         $absolute = abs($cents);
 
         return $sign.intdiv($absolute, 100).'.'.str_pad((string) ($absolute % 100), 2, '0', STR_PAD_LEFT);
+    }
+
+    private function billingDuration(RestaurantSubscription $subscription): string
+    {
+        if ($subscription->is_trial) {
+            return 'Trial';
+        }
+
+        return match ($subscription->billing_period) {
+            'monthly' => 'Monthly · 1 calendar month',
+            'quarterly' => 'Quarterly · 3 calendar months',
+            'yearly' => 'Yearly · 12 calendar months',
+            default => $subscription->duration_months
+                ? 'Custom · '.$subscription->duration_months.' calendar months'
+                : 'Custom · '.$subscription->duration_days.' days',
+        };
     }
 }

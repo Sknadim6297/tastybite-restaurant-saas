@@ -7,11 +7,14 @@ use App\Models\RestaurantSubscription;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\View\View;
+use RuntimeException;
 
 class DashboardController extends Controller
 {
@@ -77,6 +80,47 @@ class DashboardController extends Controller
             ->with('status', 'Profile details updated successfully.');
     }
 
+    public function updateBranding(Request $request): RedirectResponse
+    {
+        $user = Auth::guard('web')->user();
+        abort_unless($user->isOwner() && $user->restaurant, 403);
+
+        $validated = $request->validate([
+            'logo' => [
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+                'dimensions:min_width=64,min_height=64,max_width=2048,max_height=2048',
+            ],
+            'remove_logo' => ['sometimes', 'boolean'],
+        ]);
+        $restaurant = $user->restaurant;
+        $image = $validated['logo'] ?? null;
+        $removeLogo = (bool) ($validated['remove_logo'] ?? false);
+        $oldPath = $restaurant->logo_path;
+        $newPath = $image instanceof UploadedFile
+            ? $image->store('restaurant-branding/'.$restaurant->id, 'public')
+            : null;
+
+        if ($image instanceof UploadedFile && (! \is_string($newPath) || $newPath === '')) {
+            throw new RuntimeException('The restaurant logo could not be stored.');
+        }
+
+        if ($newPath !== null || $removeLogo) {
+            $restaurant->update(['logo_path' => $newPath]);
+
+            if ($oldPath) {
+                $this->deleteRestaurantLogo($oldPath, $restaurant->id);
+            }
+        }
+
+        return redirect()->route('restaurant.profile')
+            ->with('status', $newPath !== null || $removeLogo
+                ? 'Restaurant branding updated successfully.'
+                : 'No branding changes were made.');
+    }
+
     public function updatePassword(Request $request): RedirectResponse
     {
         $user = Auth::guard('web')->user();
@@ -108,5 +152,24 @@ class DashboardController extends Controller
 
         return redirect()->route('restaurant.profile')
             ->with('status', 'Password updated successfully.');
+    }
+
+    private function deleteRestaurantLogo(string $path, int $restaurantId): void
+    {
+        $directory = 'restaurant-branding/'.$restaurantId;
+        $filename = basename($path);
+
+        if (
+            dirname($path) !== $directory
+            || $filename === ''
+            || ! preg_match('/\A[A-Za-z0-9._-]+\z/', $filename)
+        ) {
+            return;
+        }
+
+        $disk = Storage::disk('public');
+        if ($disk->exists($path) && ! $disk->delete($path)) {
+            throw new RuntimeException('The previous restaurant logo could not be removed from storage.');
+        }
     }
 }

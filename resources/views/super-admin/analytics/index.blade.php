@@ -14,9 +14,9 @@
     </div>
 
     <div class="page-tools">
-        <form method="GET" action="{{ route('super-admin.analytics.index') }}" class="toolbar-actions" style="flex:1;">
-            <label class="form-field"><span>From</span><input class="toolbar-search" type="date" name="date_from" value="{{ $filters['date_from'] }}" required></label>
-            <label class="form-field"><span>To</span><input class="toolbar-search" type="date" name="date_to" value="{{ $filters['date_to'] }}" required></label>
+        <form method="GET" action="{{ route('super-admin.analytics.index') }}" class="toolbar-actions" style="flex:1;" data-auto-filter>
+            <label class="form-field"><span>From</span><input class="toolbar-search" type="date" name="date_from" value="{{ $filters['date_from'] }}"></label>
+            <label class="form-field"><span>To</span><input class="toolbar-search" type="date" name="date_to" value="{{ $filters['date_to'] }}"></label>
             <label class="form-field"><span>Data scope</span>
                 <select class="toolbar-search" name="scope">
                     @foreach (['real' => 'Real records only', 'demo' => 'Demo records only', 'all' => 'All records'] as $scope => $label)
@@ -24,7 +24,6 @@
                     @endforeach
                 </select>
             </label>
-            <button class="button button-secondary" type="submit">Apply</button>
         </form>
     </div>
 

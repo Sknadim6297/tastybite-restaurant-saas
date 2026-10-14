@@ -18,7 +18,7 @@
         <div class="summary-tile"><strong>{{ $stats->inactive }}</strong><span>Disabled accounts</span></div>
     </div>
 
-    <form class="owner-filter-card" method="GET" action="{{ route('super-admin.restaurant-owners.index') }}">
+    <form class="owner-filter-card" method="GET" action="{{ route('super-admin.restaurant-owners.index') }}" data-auto-filter>
         <div class="form-field owner-search-field">
             <label for="search">Search owners</label>
             <input id="search" name="search" type="search" value="{{ $filters['search'] ?? '' }}" placeholder="Name, email, or restaurant">
@@ -43,8 +43,7 @@
         <input type="hidden" name="sort" value="{{ $sort }}">
         <input type="hidden" name="direction" value="{{ $direction }}">
         <div class="owner-filter-actions">
-            <button class="button button-primary" type="submit">Apply filters</button>
-            <a class="button button-secondary" href="{{ route('super-admin.restaurant-owners.index') }}">Clear</a>
+            <a class="button button-secondary" href="{{ route('super-admin.restaurant-owners.index') }}" data-auto-filter-reset>Clear</a>
         </div>
     </form>
 

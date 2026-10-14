@@ -7,9 +7,9 @@ use App\Models\RestaurantAuditLog;
 use App\Models\RestaurantSubscription;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPaymentRefund;
-use App\Models\SubscriptionPlan;
 use App\Models\SuperAdmin;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -18,7 +18,6 @@ use Illuminate\Validation\ValidationException;
 class PaymentManagementService
 {
     public function __construct(
-        private readonly SubscriptionService $subscriptions,
         private readonly SuperAdminNotificationService $notifications,
         private readonly InvoiceManagementService $invoices,
     ) {}
@@ -32,20 +31,29 @@ class PaymentManagementService
 
         try {
             return DB::transaction(function () use ($data, $actor, $proofPath): SubscriptionPayment {
-                Restaurant::query()->findOrFail($data['restaurant_id']);
-                $plan = SubscriptionPlan::query()->findOrFail($data['subscription_plan_id']);
-                if (! $plan->isActive()) {
-                    throw ValidationException::withMessages(['subscription_plan_id' => 'Select an active subscription plan.']);
+                $restaurant = Restaurant::query()->lockForUpdate()->findOrFail($data['restaurant_id']);
+                $subscription = RestaurantSubscription::query()
+                    ->where('restaurant_id', $restaurant->id)
+                    ->lockForUpdate()
+                    ->find($data['restaurant_subscription_id']);
+                if (! $subscription) {
+                    throw ValidationException::withMessages(['restaurant_subscription_id' => 'Select a subscription belonging to the selected restaurant.']);
+                }
+
+                $summary = $this->subscriptionPaymentSummaries(new EloquentCollection([$subscription]))[$subscription->id];
+                if (SubscriptionPayment::toCents((string) $data['amount']) > SubscriptionPayment::toCents($summary['available_amount'])) {
+                    throw ValidationException::withMessages(['amount' => 'The payment amount exceeds the available subscription balance.']);
                 }
 
                 $payment = SubscriptionPayment::create([
                     'restaurant_id' => $data['restaurant_id'],
-                    'subscription_plan_id' => $data['subscription_plan_id'],
-                    'plan_name' => $plan->name,
-                    'plan_code' => $plan->code,
+                    'subscription_plan_id' => $subscription->subscription_plan_id,
+                    'restaurant_subscription_id' => $subscription->id,
+                    'plan_name' => $subscription->plan_name,
+                    'plan_code' => $subscription->plan_code,
                     'created_by' => $actor->id,
                     'amount' => $data['amount'],
-                    'currency' => strtoupper($data['currency']),
+                    'currency' => $subscription->currency,
                     'payment_method' => $data['payment_method'],
                     'transaction_reference' => $data['transaction_reference'] ?? null,
                     'status' => 'pending',
@@ -83,58 +91,30 @@ class PaymentManagementService
             }
 
             $restaurant = Restaurant::query()->lockForUpdate()->findOrFail($payment->restaurant_id);
-            $plan = SubscriptionPlan::query()->lockForUpdate()->findOrFail($payment->subscription_plan_id);
             if (! $restaurant->isActive()) {
-                throw ValidationException::withMessages(['payment' => 'Payments for inactive restaurants cannot activate a subscription.']);
+                throw ValidationException::withMessages(['payment' => 'Payments for inactive restaurants cannot be approved.']);
             }
-            if (! $plan->isActive()) {
-                throw ValidationException::withMessages(['payment' => 'The selected plan is no longer active.']);
+            if (! $payment->restaurant_subscription_id) {
+                throw ValidationException::withMessages(['payment' => 'This payment is not linked to an existing subscription. Record a new payment against the correct subscription.']);
             }
 
-            $previous = RestaurantSubscription::query()
+            $subscription = RestaurantSubscription::query()
                 ->where('restaurant_id', $restaurant->id)
-                ->orderByDesc('created_at')
-                ->orderByDesc('id')
                 ->lockForUpdate()
-                ->first();
+                ->find($payment->restaurant_subscription_id);
+            if (! $subscription || $payment->subscription_plan_id !== $subscription->subscription_plan_id) {
+                throw ValidationException::withMessages(['payment' => 'The linked subscription does not match this payment.']);
+            }
 
-            if ($previous === null) {
-                $subscription = $this->subscriptions->assign(
-                    $restaurant,
-                    $plan,
-                    CarbonImmutable::now(config('app.timezone')),
-                    null,
-                    false,
-                    $actor,
-                    [
-                        'payment_id' => $payment->id,
-                        'transaction_reference' => $payment->transaction_reference,
-                    ],
-                );
-            } else {
-                $status = $previous->effectiveStatus();
-                if (! in_array($status, ['active', 'trial', 'expired'], true)) {
-                    throw ValidationException::withMessages([
-                        'payment' => 'The restaurant has a suspended or cancelled subscription. Resolve its subscription status before approving this payment.',
-                    ]);
-                }
-                if ($previous->subscription_plan_id !== $plan->id) {
-                    throw ValidationException::withMessages([
-                        'subscription_plan_id' => 'A renewal payment must use the restaurant subscription’s current plan.',
-                    ]);
-                }
-
-                $subscription = $this->subscriptions->renew($previous, null, $actor, [
-                    'payment_id' => $payment->id,
-                    'transaction_reference' => $payment->transaction_reference,
-                ]);
+            $summary = $this->subscriptionPaymentSummaries(new EloquentCollection([$subscription]), $payment->id)[$subscription->id];
+            if (SubscriptionPayment::toCents((string) $payment->amount) > SubscriptionPayment::toCents($summary['available_amount'])) {
+                throw ValidationException::withMessages(['payment' => 'This payment exceeds the remaining subscription balance and cannot be approved.']);
             }
 
             $payment->update([
                 'status' => 'approved',
                 'approved_by' => $actor->id,
                 'approved_at' => CarbonImmutable::now(config('app.timezone'))->utc(),
-                'restaurant_subscription_id' => $subscription->id,
             ]);
 
             $this->invoices->issueForApprovedPayment($payment, $subscription, $actor);
@@ -148,6 +128,79 @@ class PaymentManagementService
 
             return $payment->fresh();
         });
+    }
+
+    /**
+     * @param  EloquentCollection<int, RestaurantSubscription>  $subscriptions
+     * @return array<int, array{total_payable: string, already_paid: string, outstanding: string, pending_amount: string, available_amount: string, payment_status: string}>
+     */
+    public function subscriptionPaymentSummaries(EloquentCollection $subscriptions, ?int $excludePendingPaymentId = null): array
+    {
+        $summaries = [];
+        $subscriptionIds = $subscriptions->modelKeys();
+
+        foreach ($subscriptions as $subscription) {
+            $summaries[$subscription->id] = [
+                'total_payable' => SubscriptionPayment::formatCents(SubscriptionPayment::toCents((string) $subscription->price)),
+                'already_paid' => '0.00',
+                'outstanding' => SubscriptionPayment::formatCents(SubscriptionPayment::toCents((string) $subscription->price)),
+                'pending_amount' => '0.00',
+                'available_amount' => SubscriptionPayment::formatCents(SubscriptionPayment::toCents((string) $subscription->price)),
+                'payment_status' => 'Unpaid',
+            ];
+        }
+
+        if ($subscriptionIds === []) {
+            return $summaries;
+        }
+
+        $payments = SubscriptionPayment::query()
+            ->whereIn('restaurant_subscription_id', $subscriptionIds)
+            ->whereIn('status', ['approved', 'refunded', 'pending'])
+            ->with('refunds:id,subscription_payment_id,amount')
+            ->get(['id', 'restaurant_subscription_id', 'amount', 'status']);
+
+        $paidCents = array_fill_keys($subscriptionIds, 0);
+        $pendingCents = array_fill_keys($subscriptionIds, 0);
+
+        foreach ($payments as $payment) {
+            $subscriptionId = (int) $payment->restaurant_subscription_id;
+            if ($payment->status === 'pending') {
+                if ($payment->id !== $excludePendingPaymentId) {
+                    $pendingCents[$subscriptionId] += SubscriptionPayment::toCents((string) $payment->amount);
+                }
+
+                continue;
+            }
+
+            $refundCents = $payment->refunds->sum(
+                fn (SubscriptionPaymentRefund $refund): int => SubscriptionPayment::toCents((string) $refund->amount),
+            );
+            $paidCents[$subscriptionId] += max(
+                0,
+                SubscriptionPayment::toCents((string) $payment->amount) - $refundCents,
+            );
+        }
+
+        foreach ($subscriptions as $subscription) {
+            $id = $subscription->id;
+            $totalCents = SubscriptionPayment::toCents((string) $subscription->price);
+            $paid = min($paidCents[$id], $totalCents);
+            $outstanding = max(0, $totalCents - $paid);
+            $available = max(0, $outstanding - $pendingCents[$id]);
+            $summaries[$id] = [
+                'total_payable' => SubscriptionPayment::formatCents($totalCents),
+                'already_paid' => SubscriptionPayment::formatCents($paid),
+                'outstanding' => SubscriptionPayment::formatCents($outstanding),
+                'pending_amount' => SubscriptionPayment::formatCents($pendingCents[$id]),
+                'available_amount' => SubscriptionPayment::formatCents($available),
+                'payment_status' => $outstanding === 0
+                    ? 'Fully Paid'
+                    : ($paid > 0 ? 'Partially Paid' : ($pendingCents[$id] > 0 ? 'Pending Approval' : 'Unpaid')),
+            ];
+        }
+
+        return $summaries;
     }
 
     public function reject(SubscriptionPayment $payment, SuperAdmin $actor, string $reason): SubscriptionPayment

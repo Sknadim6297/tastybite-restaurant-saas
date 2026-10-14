@@ -48,7 +48,7 @@ class ActivityLogController extends Controller
 
         return view('super-admin.activity-logs.show', [
             'log' => $activityLog,
-            'details' => $this->redact((array) $activityLog->details),
+            'details' => $activityLog->getRawOriginal('details'),
             'module' => self::MODULES[$activityLog->target_type] ?? 'Platform',
             'relatedUrl' => $this->relatedUrl($activityLog),
         ]);
@@ -89,7 +89,10 @@ class ActivityLogController extends Controller
     {
         return $request->validate([
             'date_from' => ['nullable', 'date_format:Y-m-d'],
-            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'date_to' => array_merge(
+                ['nullable', 'date_format:Y-m-d'],
+                $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
+            ),
             'actor_id' => ['nullable', 'integer', 'exists:super_admins,id'],
             'action' => ['nullable', 'string', 'max:100'],
             'module' => ['nullable', Rule::in(array_keys(self::MODULES))],
@@ -119,19 +122,6 @@ class ActivityLogController extends Controller
                         ->orWhereHas('restaurant', fn (Builder $restaurant) => $restaurant->where('name', 'like', "%{$term}%"));
                 });
             });
-    }
-
-    private function redact(array $details): array
-    {
-        foreach ($details as $key => $value) {
-            if (preg_match('/password|token|secret|credential|api.?key|proof.?path|remember|account.?fingerprint/i', (string) $key)) {
-                $details[$key] = '[redacted]';
-            } elseif (is_array($value)) {
-                $details[$key] = $this->redact($value);
-            }
-        }
-
-        return $details;
     }
 
     private function relatedUrl(RestaurantAuditLog $log): ?string

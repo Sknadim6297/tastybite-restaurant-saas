@@ -14,7 +14,7 @@
     </div>
 
     <div class="page-tools">
-        <form method="GET" action="{{ $expiring ? route('super-admin.subscriptions.expiring') : route('super-admin.subscriptions.index') }}" class="toolbar-actions">
+        <form method="GET" action="{{ $expiring ? route('super-admin.subscriptions.expiring') : route('super-admin.subscriptions.index') }}" class="toolbar-actions" data-auto-filter>
             <input class="toolbar-search" type="search" name="search" value="{{ $search }}" placeholder="Search restaurant or plan">
             @unless($expiring)
                 <select class="toolbar-search" name="status" aria-label="Filter by status">
@@ -24,9 +24,8 @@
                     @endforeach
                 </select>
             @endunless
-            <button class="button button-secondary" type="submit">Filter</button>
         </form>
-        <a class="button button-secondary" href="{{ $expiring ? route('super-admin.subscriptions.expiring') : route('super-admin.subscriptions.index') }}">Reset</a>
+        <a class="button button-secondary" href="{{ $expiring ? route('super-admin.subscriptions.expiring') : route('super-admin.subscriptions.index') }}" data-auto-filter-reset>Reset</a>
     </div>
 
     <div class="table-shell">

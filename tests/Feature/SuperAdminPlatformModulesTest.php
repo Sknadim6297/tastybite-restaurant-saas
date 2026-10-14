@@ -10,6 +10,7 @@ use App\Models\SubscriptionPaymentRefund;
 use App\Models\SubscriptionPlan;
 use App\Models\SuperAdmin;
 use App\Models\SuperAdminNotification;
+use App\Models\User;
 use App\Services\PlatformSettingsService;
 use App\Services\SuperAdminNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -132,6 +133,48 @@ class SuperAdminPlatformModulesTest extends TestCase
         }
     }
 
+    public function test_filterable_super_admin_listing_and_report_pages_use_automatic_filters(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        foreach ([
+            route('super-admin.restaurants.index'),
+            route('super-admin.restaurant-approvals.index'),
+            route('super-admin.restaurant-owners.index'),
+            route('super-admin.subscription-plans.index'),
+            route('super-admin.subscriptions.index'),
+            route('super-admin.subscriptions.expiring'),
+            route('super-admin.subscriptions.history'),
+            route('super-admin.payments.index'),
+            route('super-admin.payments.reports'),
+            route('super-admin.invoices.index'),
+            route('super-admin.support-tickets.index'),
+            route('super-admin.support-access.index'),
+            route('super-admin.announcements.index'),
+            route('super-admin.activity-logs.index'),
+            route('super-admin.reports.restaurants'),
+            route('super-admin.reports.subscriptions'),
+            route('super-admin.reports.payments'),
+            route('super-admin.reports.revenue'),
+            route('super-admin.analytics.index'),
+        ] as $url) {
+            $this->get($url)
+                ->assertOk()
+                ->assertSee('data-auto-filter', false);
+        }
+
+        $dateToOnly = now(config('app.timezone'))->toDateString();
+        foreach ([
+            route('super-admin.activity-logs.index', ['date_to' => $dateToOnly]),
+            route('super-admin.reports.restaurants', ['date_to' => $dateToOnly]),
+            route('super-admin.reports.subscriptions', ['date_to' => $dateToOnly]),
+            route('super-admin.reports.payments', ['date_to' => $dateToOnly]),
+            route('super-admin.reports.revenue', ['date_to' => $dateToOnly]),
+        ] as $url) {
+            $this->get($url)->assertOk();
+        }
+    }
+
     public function test_settings_tabs_render_the_shared_styled_controls(): void
     {
         $this->actingAsSuperAdmin();
@@ -210,12 +253,73 @@ class SuperAdminPlatformModulesTest extends TestCase
         $log = RestaurantAuditLog::query()->where('action', 'test_sensitive_action')->firstOrFail();
         $this->get(route('super-admin.activity-logs.show', $log))
             ->assertOk()
-            ->assertSee('[redacted]')
+            ->assertSee('Restaurant')
+            ->assertSee((string) $restaurant->id)
+            ->assertDontSee('[redacted]')
             ->assertDontSee('MustNeverAppear123!');
         $export = $this->get(route('super-admin.activity-logs.export', ['restaurant_id' => $restaurant->id]))
             ->assertOk()
             ->assertHeader('content-type', 'text/csv; charset=UTF-8');
         $this->assertStringContainsString('198.51.100.8', $export->streamedContent());
+    }
+
+    public function test_audit_details_are_formatted_on_activity_restaurant_and_owner_pages(): void
+    {
+        $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant('audit-format-restaurant');
+        $owner = User::create([
+            'restaurant_id' => $restaurant->id,
+            'name' => 'Audit Owner',
+            'email' => 'audit-owner@example.test',
+            'password' => 'StrongPassword123!',
+            'role' => 'owner',
+            'status' => 'active',
+        ]);
+        $details = [
+            'restaurant_name' => $restaurant->name,
+            'owner_email' => $owner->email,
+            'custom_field_name' => '<img src=x onerror=alert(1)>',
+            'access_token' => 'sensitive-token-value',
+        ];
+        $restaurantLog = RestaurantAuditLog::create([
+            'actor_type' => 'super_admin',
+            'restaurant_id' => $restaurant->id,
+            'action' => 'restaurant_details_updated',
+            'target_type' => 'restaurant',
+            'target_id' => $restaurant->id,
+            'details' => $details,
+        ]);
+        RestaurantAuditLog::create([
+            'actor_type' => 'super_admin',
+            'restaurant_id' => $restaurant->id,
+            'action' => 'owner_profile_updated',
+            'target_type' => 'restaurant_user',
+            'target_id' => $owner->id,
+            'details' => $details,
+        ]);
+
+        $this->get(route('super-admin.activity-logs.show', $restaurantLog))
+            ->assertOk()
+            ->assertSee('Owner Email')
+            ->assertSee($owner->email)
+            ->assertSee('Custom Field Name')
+            ->assertSee('&lt;img', false)
+            ->assertDontSee('<img', false)
+            ->assertDontSee('sensitive-token-value');
+        $this->get(route('super-admin.restaurants.show', $restaurant))
+            ->assertOk()
+            ->assertSee('Owner Email')
+            ->assertSee($owner->email)
+            ->assertSee('Custom Field Name')
+            ->assertSee('&lt;img', false)
+            ->assertDontSee('sensitive-token-value');
+        $this->get(route('super-admin.restaurant-owners.show', $owner))
+            ->assertOk()
+            ->assertSee('Owner Email')
+            ->assertSee($owner->email)
+            ->assertSee('Custom Field Name')
+            ->assertSee('&lt;img', false)
+            ->assertDontSee('sensitive-token-value');
     }
 
     public function test_settings_persist_preferences_enforce_manual_payment_policy_and_password_security(): void

@@ -33,8 +33,7 @@
             <form method="POST" action="{{ route('super-admin.subscriptions.renew', $subscription) }}" class="panel-card form-stack" data-loading-form>
                 @csrf
                 <h3>Renew subscription</h3>
-                <p class="field-hint">A new historical subscription period is created. Leave expiry empty to use the saved plan duration.</p>
-                <div class="form-field"><label for="renew-expiry-date">Expiry override (optional)</label><input id="renew-expiry-date" name="expiry_date" type="date" value="{{ old('expiry_date') }}">@error('expiry_date')<span class="field-error">{{ $message }}</span>@enderror</div>
+                <p class="field-hint">A new historical period is created automatically from the saved {{ $subscription->is_trial ? 'paid plan duration' : 'subscription duration' }}. An active period continues from its expiry; an expired period restarts today.</p>
                 @error('subscription')<span class="field-error">{{ $message }}</span>@enderror
                 <button class="button button-primary" type="submit">Renew</button>
             </form>

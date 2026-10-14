@@ -24,11 +24,10 @@
                         <td>
                             @if($category->image_path)
                                 <img class="menu-category-thumbnail" src="{{ $category->image_url }}" alt="" loading="lazy">
-                            @else
-                                <span class="menu-category-icon" aria-label="{{ \App\Models\RestaurantMenuCategory::ICONS[$category->icon] ?? 'Default category' }}">
-                                    <i class="bi bi-{{ $category->icon ?: 'grid' }}" aria-hidden="true"></i>
-                                </span>
                             @endif
+                            <span class="menu-category-icon" aria-label="{{ \App\Models\RestaurantMenuCategory::ICONS[$category->icon] ?? 'Default category' }}">
+                                <i class="bi bi-{{ \App\Models\RestaurantMenuCategory::iconClassFor($category->icon) }}" aria-hidden="true"></i>
+                            </span>
                         </td>
                         <td><span class="status-pill status-{{ $category->is_active ? 'active' : 'inactive' }}">{{ $category->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td>{{ $category->sort_order }}</td>

@@ -33,7 +33,7 @@
     </div>
 
     <div class="page-tools">
-        <form method="GET" action="{{ route('super-admin.restaurants.index') }}" class="toolbar-actions" style="flex:1;">
+        <form method="GET" action="{{ route('super-admin.restaurants.index') }}" class="toolbar-actions" style="flex:1;" data-auto-filter>
             <input class="toolbar-search" type="search" name="search" value="{{ $search }}" placeholder="Search name, slug, or email">
             <select class="toolbar-search" name="status" aria-label="Filter by status" style="max-width:180px;">
                 <option value="">All statuses</option>
@@ -41,9 +41,8 @@
                 <option value="suspended" @selected($statusFilter === 'suspended')>Suspended</option>
                 <option value="inactive" @selected($statusFilter === 'inactive')>Inactive</option>
             </select>
-            <button class="button button-secondary" type="submit">Filter</button>
         </form>
-        <a class="button button-secondary" href="{{ route('super-admin.restaurants.index') }}">Reset</a>
+        <a class="button button-secondary" href="{{ route('super-admin.restaurants.index') }}" data-auto-filter-reset>Reset</a>
     </div>
 
     <div class="table-shell">

@@ -6,13 +6,13 @@
 @section('content')
     <div class="page-heading"><div><span class="eyebrow">PLATFORM INSIGHTS</span><h1>Revenue report</h1><p>Collection totals include approved payments only and subtract recorded refunds. Recorded refunds do not confirm an external money transfer.</p></div><a class="button button-secondary" href="{{ route('super-admin.reports.export', array_merge(request()->query(), ['type' => 'revenue'])) }}">Export CSV</a></div>
     @include('super-admin.reports._tabs', ['active' => 'revenue'])
-    <form method="GET" class="form-card report-filters">
+    <form method="GET" class="form-card report-filters" data-auto-filter>
         <label>Data scope<select name="scope"><option value="real" @selected($filters['scope'] === 'real')>Real records</option><option value="demo" @selected($filters['scope'] === 'demo')>Demo records</option><option value="all" @selected($filters['scope'] === 'all')>All records</option></select></label>
         <label>Restaurant ID<input type="number" min="1" name="restaurant_id" value="{{ $filters['restaurant_id'] ?? '' }}"></label>
         <label>Plan ID<input type="number" min="1" name="plan_id" value="{{ $filters['plan_id'] ?? '' }}"></label>
         <label>Payment date from<input type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}"></label>
         <label>Payment date to<input type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}"></label>
-        <div class="report-filter-actions"><button class="button button-primary">Apply filters</button><a class="button button-secondary" href="{{ route('super-admin.reports.revenue') }}">Clear</a></div>
+        <div class="report-filter-actions"><a class="button button-secondary" href="{{ route('super-admin.reports.revenue') }}" data-auto-filter-reset>Clear</a></div>
     </form>
     <section class="summary-row report-summary">
         <article class="summary-tile"><span>Approved gross payments</span><strong>INR {{ $gross }}</strong></article>

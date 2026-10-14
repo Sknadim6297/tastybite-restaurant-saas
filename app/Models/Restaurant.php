@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Storage;
 
 class Restaurant extends Model
 {
@@ -20,6 +21,7 @@ class Restaurant extends Model
         'address',
         'status',
         'approval_status',
+        'logo_path',
     ];
 
     public function users(): HasMany
@@ -85,6 +87,23 @@ class Restaurant extends Model
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        $path = $this->logo_path;
+        $ownedPathPattern = '/\Arestaurant-branding\/'.preg_quote((string) $this->getKey(), '/').'\/[A-Za-z0-9._-]+\z/';
+
+        if (
+            ! \is_string($path)
+            || ! preg_match($ownedPathPattern, $path)
+            || \in_array(basename($path), ['.', '..'], true)
+            || ! Storage::disk('public')->exists($path)
+        ) {
+            return null;
+        }
+
+        return asset('storage/'.$path);
     }
 
 }

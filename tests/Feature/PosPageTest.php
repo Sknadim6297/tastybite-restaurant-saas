@@ -15,6 +15,8 @@ class PosPageTest extends TestCase
 {
     use RefreshDatabase;
 
+    private User $owner;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -25,7 +27,7 @@ class PosPageTest extends TestCase
             'email' => 'pos@example.test',
             'status' => 'active',
         ]);
-        $user = User::create([
+        $this->owner = User::create([
             'restaurant_id' => $restaurant->id,
             'name' => 'POS Test Owner',
             'email' => 'pos-owner@example.test',
@@ -62,8 +64,31 @@ class PosPageTest extends TestCase
             'expires_at' => CarbonImmutable::now(config('app.timezone'))->addMonth(),
         ]);
 
-        $this->actingAs($user, 'web');
-        $this->app['session']->put('restaurant_user_password_version', hash('sha256', $user->getAuthPassword()));
+        $this->actingAs($this->owner, 'web');
+        $this->app['session']->put('restaurant_user_password_version', hash('sha256', $this->owner->getAuthPassword()));
+    }
+
+    public function test_owner_login_session_marker_persists_through_regeneration_and_allows_pos_access(): void
+    {
+        $this->post(route('restaurant.logout'))
+            ->assertRedirect(route('restaurant.login'));
+
+        $this->post(route('restaurant.login.submit'), [
+            'email' => $this->owner->email,
+            'password' => 'StrongTestPass123!',
+        ])
+            ->assertRedirect(route('restaurant.dashboard'))
+            ->assertSessionHas(
+                'restaurant_user_password_version',
+                hash('sha256', $this->owner->getAuthPassword())
+            );
+
+        $this->assertAuthenticatedAs($this->owner, 'web');
+
+        $this->get(route('pos.index'))
+            ->assertOk()
+            ->assertSee('Tasty Bite POS')
+            ->assertSee('id="billingPanel"', false);
     }
 
     public function test_pos_page_renders_with_local_assets_without_a_print_html_page(): void
@@ -72,8 +97,14 @@ class PosPageTest extends TestCase
             ->assertOk()
             ->assertSee('Tasty Bite POS')
             ->assertSee('Billing (POS)')
+            ->assertSee('Restaurant POS')
+            ->assertSee('data-bs-toggle="dropdown"', false)
+            ->assertSee('data-search-focus', false)
+            ->assertSee(route('restaurant.logout'), false)
             ->assertSee(asset('assets/style.css'), false)
+            ->assertSee(asset('assets/style.css') . '?v=' . hash_file('sha256', public_path('assets/style.css')), false)
             ->assertSee(asset('assets/script.js'), false)
+            ->assertSee(asset('assets/script.js') . '?v=' . hash_file('sha256', public_path('assets/script.js')), false)
             ->assertDontSee('/pos-print.html');
 
         $this->get('/pos-print.html')->assertNotFound();
@@ -82,5 +113,60 @@ class PosPageTest extends TestCase
     public function test_print_html_page_is_not_available(): void
     {
         $this->get('/pos-print.html')->assertNotFound();
+    }
+
+    public function test_pos_renders_the_two_step_billing_controls_without_duplicating_billing_fields(): void
+    {
+        $response = $this->get(route('pos.index'));
+
+        $response->assertOk()
+            ->assertSee('id="posLayout"', false)
+            ->assertSee('id="categoryScroller"', false)
+            ->assertSee('data-cat-scroll="1"', false)
+            ->assertSee('id="billingPanel"', false)
+            ->assertSee('aria-hidden="true" inert', false)
+            ->assertSee('id="checkoutTitle"', false)
+            ->assertSee('Restaurant Checkout')
+            ->assertSee('id="nextBilling"', false)
+            ->assertSee('Next: Billing')
+            ->assertSee('id="nextBillingCount"', false)
+            ->assertSee('id="billingBack"', false)
+            ->assertSee('Back to Products')
+            ->assertSee('Payment Method')
+            ->assertSee('Payment Details')
+            ->assertSee('data-payment-method="Cash"', false)
+            ->assertSee('data-payment-method="Card"', false)
+            ->assertSee('data-payment-method="UPI"', false)
+            ->assertSee('id="paymentNotice"', false)
+            ->assertSee('id="billingClose"', false)
+            ->assertSee('role="dialog"', false)
+            ->assertSee('aria-modal="true"', false)
+            ->assertSee('id="tableNo"', false)
+            ->assertSee('id="guestNo"', false)
+            ->assertSee('id="orderNotes"', false)
+            ->assertSee('id="discount"', false)
+            ->assertSee('id="cartItems"', false)
+            ->assertSee('id="grandTotal"', false)
+            ->assertSee('onclick="holdOrder()"', false)
+            ->assertSee('onclick="clearCart()"', false)
+            ->assertSee('onclick="generateBill()"', false);
+
+        $script = file_get_contents(public_path('assets/script.js'));
+        $this->assertIsString($script);
+        $this->assertStringContainsString('[...cart.values()].reduce((total, item) => total + item.qty, 0)', $script);
+        $this->assertStringContainsString('setBillingOpen(true)', $script);
+        $this->assertStringContainsString('setBillingOpen(false)', $script);
+        $this->assertStringContainsString('billingPanel.inert = !isOpen;', $script);
+        $this->assertStringContainsString('paymentMethodNotices', $script);
+        $this->assertStringContainsString('no card details are collected here', $script);
+
+        $style = file_get_contents(public_path('assets/style.css'));
+        $this->assertIsString($style);
+        $this->assertStringContainsString('.pos-layout.is-billing-open', $style);
+        $this->assertStringContainsString('width: min(960px, calc(100vw - 48px));', $style);
+        $this->assertStringContainsString('grid-template-columns: 55fr 45fr;', $style);
+        $this->assertStringNotContainsString('--pos-billing-width: 420px;', $style);
+        $this->assertStringContainsString('@media (max-width: 767.98px)', $style);
+        $this->assertStringContainsString('prefers-reduced-motion: reduce', $style);
     }
 }

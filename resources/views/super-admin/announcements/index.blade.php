@@ -20,7 +20,7 @@
     </div>
 
     <div class="page-tools">
-        <form method="GET" action="{{ route('super-admin.announcements.index') }}" class="toolbar-actions" style="flex:1;">
+        <form method="GET" action="{{ route('super-admin.announcements.index') }}" class="toolbar-actions" style="flex:1;" data-auto-filter>
             <input class="toolbar-search" type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Search announcement title or text">
             <select class="toolbar-search" name="status" aria-label="Filter by status" style="max-width:180px;">
                 <option value="">All statuses</option>
@@ -28,9 +28,8 @@
                     <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ ucfirst($status) }}</option>
                 @endforeach
             </select>
-            <button class="button button-secondary" type="submit">Filter</button>
         </form>
-        <a class="button button-secondary" href="{{ route('super-admin.announcements.index') }}">Reset</a>
+        <a class="button button-secondary" href="{{ route('super-admin.announcements.index') }}" data-auto-filter-reset>Reset</a>
     </div>
 
     <div class="table-shell">

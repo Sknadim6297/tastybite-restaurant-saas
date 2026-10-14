@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Restaurant;
+use App\Models\RestaurantSubscription;
 use App\Models\SubscriptionInvoice;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
@@ -121,6 +122,9 @@ class SuperAdminInvoiceManagementTest extends TestCase
         $this->get(route('super-admin.invoices.index', ['status' => 'refunded']))
             ->assertOk()
             ->assertSee('No receipts found');
+        $this->get(route('super-admin.invoices.index', ['date_to' => now(config('app.timezone'))->toDateString()]))
+            ->assertOk()
+            ->assertSee('data-auto-filter', false);
     }
 
     public function test_pending_or_rejected_payments_do_not_receive_receipts(): void
@@ -169,10 +173,28 @@ class SuperAdminInvoiceManagementTest extends TestCase
             'duration_months' => 1,
             'status' => 'active',
         ]);
+        $startsAt = now()->startOfDay();
+        $subscription = RestaurantSubscription::create([
+            'restaurant_id' => $restaurant->id,
+            'subscription_plan_id' => $plan->id,
+            'plan_name' => $plan->name,
+            'plan_code' => $plan->code,
+            'price' => $plan->price,
+            'currency' => $plan->currency,
+            'billing_period' => $plan->billing_period,
+            'duration_months' => $plan->duration_months,
+            'duration_days' => $plan->duration_days,
+            'status' => 'active',
+            'is_trial' => false,
+            'starts_at' => $startsAt,
+            'expires_at' => $startsAt->copy()->addMonth()->endOfDay(),
+            'created_by' => $admin->id,
+        ]);
 
         return SubscriptionPayment::create(array_merge([
             'restaurant_id' => $restaurant->id,
             'subscription_plan_id' => $plan->id,
+            'restaurant_subscription_id' => $subscription->id,
             'created_by' => $admin->id,
             'plan_name' => $plan->name,
             'plan_code' => $plan->code,

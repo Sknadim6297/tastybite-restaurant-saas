@@ -109,7 +109,7 @@
                         <td>{{ str_replace('_', ' ', $log->action) }}</td>
                         <td>{{ $log->actor?->name ?? ucfirst($log->actor_type) }}</td>
                         <td>{{ $log->created_at->format('M j, Y H:i') }}</td>
-                        <td>{{ is_array($log->details) ? json_encode($log->details) : ($log->details ?? '—') }}</td>
+                        <td>@include('super-admin.activity-logs._details', ['details' => $log->getRawOriginal('details')])</td>
                     </tr>
                 @empty
                     <tr>

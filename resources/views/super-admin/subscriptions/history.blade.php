@@ -8,11 +8,16 @@
         <div><span class="eyebrow">AUDIT TRAIL</span><h1>Subscription history</h1><p>Recorded assignment, renewal, extension, reactivation, suspension, and cancellation events.</p></div>
     </div>
     <div class="page-tools">
-        <form method="GET" action="{{ route('super-admin.subscriptions.history') }}" class="toolbar-actions">
+        <form method="GET" action="{{ route('super-admin.subscriptions.history') }}" class="toolbar-actions" id="subscription-history-filters" data-auto-filter>
+            <select class="toolbar-search" name="restaurant_id" aria-label="Filter by restaurant" id="subscription-history-restaurant">
+                <option value="">All Restaurants</option>
+                @foreach($restaurants as $restaurant)
+                    <option value="{{ $restaurant->id }}" @selected((string) $restaurantId === (string) $restaurant->id)>{{ $restaurant->name }}</option>
+                @endforeach
+            </select>
             <input class="toolbar-search" type="search" name="search" value="{{ $search }}" placeholder="Search restaurant or event">
-            <button class="button button-secondary" type="submit">Search</button>
         </form>
-        <a class="button button-secondary" href="{{ route('super-admin.subscriptions.history') }}">Reset</a>
+        <a class="button button-secondary" href="{{ route('super-admin.subscriptions.history') }}" data-auto-filter-reset>Reset</a>
     </div>
     <div class="table-shell">
         <table class="data-table">
@@ -29,7 +34,7 @@
                         <td>@if($event->subscription)<a class="button button-secondary" href="{{ route('super-admin.subscriptions.show', $event->subscription) }}">View</a>@endif</td>
                     </tr>
                 @empty
-                    <tr><td colspan="7"><div class="empty-state"><h3>No subscription history</h3><p>Lifecycle events will appear here after subscriptions are assigned.</p></div></td></tr>
+                    <tr><td colspan="7"><div class="empty-state"><h3>{{ $restaurantId !== '' ? 'No subscription history found for this restaurant.' : 'No subscription history' }}</h3><p>{{ $restaurantId === '' ? 'Lifecycle events will appear here after subscriptions are assigned.' : '' }}</p></div></td></tr>
                 @endforelse
             </tbody>
         </table>

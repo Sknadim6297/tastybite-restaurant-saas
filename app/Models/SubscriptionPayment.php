@@ -48,6 +48,26 @@ class SubscriptionPayment extends Model
         ];
     }
 
+    public function getFormattedIdAttribute(): ?string
+    {
+        return $this->getKey() === null
+            ? null
+            : sprintf('PAY%06d', (int) $this->getKey());
+    }
+
+    public function getPaymentMethodLabelAttribute(): ?string
+    {
+        return match ($this->payment_method) {
+            'upi' => 'UPI',
+            'bank_transfer' => 'Bank Transfer',
+            'cash' => 'Cash',
+            'other' => 'Other',
+            default => $this->payment_method
+                ? ucfirst(str_replace('_', ' ', $this->payment_method))
+                : null,
+        };
+    }
+
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);

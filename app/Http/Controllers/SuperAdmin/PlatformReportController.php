@@ -128,7 +128,7 @@ class PlatformReportController extends Controller
     public function payments(Request $request): View
     {
         $filters = $this->filters($request);
-        $query = $this->paymentsForScope(SubscriptionPayment::query()->with(['restaurant', 'refunds']), $filters['scope'])
+        $query = $this->paymentsForScope(SubscriptionPayment::query()->with(['restaurant', 'plan', 'refunds']), $filters['scope'])
             ->when($filters['restaurant_id'] ?? null, fn (Builder $builder, int $id) => $builder->where('restaurant_id', $id))
             ->when($filters['plan_id'] ?? null, fn (Builder $builder, int $id) => $builder->where('subscription_plan_id', $id))
             ->when($filters['status'] ?? null, fn (Builder $builder, string $status) => $builder->where('status', $status))
@@ -182,7 +182,10 @@ class PlatformReportController extends Controller
             'type' => ['required', Rule::in(['restaurants', 'subscriptions', 'payments', 'revenue'])],
             'scope' => ['nullable', Rule::in(['real', 'demo', 'all'])],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
-            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'date_to' => array_merge(
+                ['nullable', 'date_format:Y-m-d'],
+                $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
+            ),
             'status' => ['nullable', Rule::in(['active', 'suspended', 'inactive', 'trial', 'expired', 'cancelled', 'pending', 'approved', 'rejected', 'refunded'])],
             'subscription_status' => ['nullable', Rule::in(['active', 'trial', 'expired', 'suspended', 'cancelled'])],
             'plan_id' => ['nullable', 'integer', 'exists:subscription_plans,id'],
@@ -266,7 +269,10 @@ class PlatformReportController extends Controller
         return $request->validate([
             'scope' => ['nullable', Rule::in(['real', 'demo', 'all'])],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
-            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'date_to' => array_merge(
+                ['nullable', 'date_format:Y-m-d'],
+                $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
+            ),
             'status' => ['nullable', Rule::in(['active', 'suspended', 'inactive', 'pending', 'approved', 'rejected', 'refunded'])],
             'subscription_status' => ['nullable', Rule::in(['active', 'trial', 'expired', 'suspended', 'cancelled'])],
             'plan_id' => ['nullable', 'integer', 'exists:subscription_plans,id'],

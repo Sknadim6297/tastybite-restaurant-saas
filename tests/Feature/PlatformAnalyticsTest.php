@@ -81,6 +81,10 @@ class PlatformAnalyticsTest extends TestCase
         $demoResponse->assertViewHas('summary', fn (array $summary): bool => $summary['new_restaurants'] === 1
             && $summary['new_subscriptions'] === 0);
         $demoResponse->assertViewHas('revenue', fn ($rows): bool => $rows->contains(fn (array $row): bool => $row['gross'] === '200.00'));
+
+        $this->get(route('super-admin.analytics.index', ['date_to' => '2026-10-13']))
+            ->assertOk()
+            ->assertSee('data-auto-filter', false);
     }
 
     private function actingAsSuperAdmin(): SuperAdmin

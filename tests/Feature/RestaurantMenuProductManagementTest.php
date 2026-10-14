@@ -116,6 +116,23 @@ class RestaurantMenuProductManagementTest extends TestCase
         Storage::disk('public')->assertExists($product->image_path);
     }
 
+    public function test_owner_can_upload_valid_jpeg_png_and_webp_product_images(): void
+    {
+        foreach (['jpeg', 'png', 'webp'] as $extension) {
+            $name = 'Format '.$extension;
+            $response = $this->post(route('restaurant.menu.products.store'), $this->validProductData([
+                'name' => $name,
+                'image' => UploadedFile::fake()->image('food.'.$extension, 128, 128),
+            ]));
+
+            $response->assertRedirect(route('restaurant.menu.products.index'));
+            $product = RestaurantMenuItem::query()->where('name', $name)->firstOrFail();
+            $this->assertStringStartsWith('restaurant-menu/'.$this->restaurant->id.'/', $product->image_path);
+            Storage::disk('public')->assertExists($product->image_path);
+            $this->assertStringContainsString('storage/'.$product->image_path, $product->image_url);
+        }
+    }
+
     public function test_owner_can_edit_product_fields_and_keep_existing_image(): void
     {
         $product = $this->createProduct($this->restaurant, 'Tea');
@@ -171,6 +188,28 @@ class RestaurantMenuProductManagementTest extends TestCase
 
         $this->assertNull($product->fresh()->image_path);
         Storage::disk('public')->assertMissing($newPath);
+    }
+
+    public function test_invalid_or_oversized_replacement_keeps_the_existing_product_image(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'Preserved Image');
+        $oldPath = $this->storeImage($this->restaurant, 'preserved.jpg');
+        $product->update(['image_path' => $oldPath]);
+
+        foreach ([
+            UploadedFile::fake()->create('unsupported.txt', 10, 'text/plain'),
+            UploadedFile::fake()->image('oversized.png', 128, 128)->size(5121),
+        ] as $replacement) {
+            $this->from(route('restaurant.menu.products.edit', $product))
+                ->put(route('restaurant.menu.products.update', $product), $this->validProductData([
+                    'image' => $replacement,
+                ]))
+                ->assertRedirect(route('restaurant.menu.products.edit', $product))
+                ->assertSessionHasErrors('image');
+
+            $this->assertSame($oldPath, $product->fresh()->image_path);
+            Storage::disk('public')->assertExists($oldPath);
+        }
     }
 
     public function test_owner_can_delete_a_product_and_its_owned_image(): void
@@ -249,6 +288,8 @@ class RestaurantMenuProductManagementTest extends TestCase
 
         $this->get(route('restaurant.menu.products.index', ['search' => 'South Indian']))
             ->assertOk()
+            ->assertSee('data-auto-filter', false)
+            ->assertDontSee('type="submit">Search', false)
             ->assertSee('Masala Dosa')
             ->assertDontSee('Filter Coffee')
             ->assertDontSee('Foreign Product');

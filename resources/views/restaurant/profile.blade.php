@@ -14,6 +14,34 @@
 
     <section class="two-column-card-grid">
         <div class="panel-card">
+            <h2>Restaurant branding</h2>
+            <p class="meta-label">Upload a logo or restaurant photo for the POS header. Use JPG, PNG, or WebP images between 64×64 and 2048×2048 pixels, up to 5 MB.</p>
+            <form method="POST" action="{{ route('restaurant.profile.branding') }}" enctype="multipart/form-data" class="form-stack">
+                @csrf
+                @method('PUT')
+                <div class="form-field">
+                    <label for="restaurant-logo">Restaurant logo or photo</label>
+                    <input id="restaurant-logo" name="logo" type="file" accept="image/jpeg,image/png,image/webp" data-branding-image-input>
+                    @error('logo')<span class="field-error">{{ $message }}</span>@enderror
+                    <div class="branding-image-preview" data-branding-image-container @if(!$restaurant->logo_url) hidden @endif>
+                        <img
+                            src="{{ $restaurant->logo_url ?? '' }}"
+                            alt="Restaurant logo preview"
+                            data-branding-image-preview
+                            @if(!$restaurant->logo_url) hidden @endif
+                        >
+                        @if($restaurant->logo_path)
+                            <label><input type="checkbox" name="remove_logo" value="1" @checked((bool) old('remove_logo'))> Remove current logo</label>
+                        @endif
+                    </div>
+                    @error('remove_logo')<span class="field-error">{{ $message }}</span>@enderror
+                </div>
+                <button class="button button-primary" type="submit">Save branding</button>
+            </form>
+            <script src="{{ asset('assets/restaurant-branding.js') }}" defer></script>
+        </div>
+
+        <div class="panel-card">
             <h2>Personal information</h2>
             <form method="POST" action="{{ route('restaurant.profile.update') }}" class="form-stack" data-loading-form>
                 @csrf

@@ -55,7 +55,10 @@ return new class extends Migration
             Schema::create('restaurant_subscription_events', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('restaurant_id')->constrained()->restrictOnDelete();
-                $table->foreignId('restaurant_subscription_id')->nullable()->constrained('restaurant_subscriptions')->nullOnDelete();
+                $table->foreignId('restaurant_subscription_id')
+                    ->nullable()
+                    ->constrained('restaurant_subscriptions', 'id', 'subscription_events_subscription_foreign')
+                    ->nullOnDelete();
                 $table->foreignId('subscription_plan_id')->nullable()->constrained('subscription_plans')->nullOnDelete();
                 $table->foreignId('actor_id')->nullable()->constrained('super_admins')->nullOnDelete();
                 $table->string('action', 40);

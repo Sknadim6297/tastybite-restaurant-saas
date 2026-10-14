@@ -87,6 +87,47 @@ class SubscriptionManagementTest extends TestCase
         $this->assertDatabaseCount('subscription_plans', 1);
     }
 
+    public function test_subscription_plan_form_renders_safely_for_create_and_edit(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->get(route('super-admin.subscription-plans.create'))
+            ->assertOk()
+            ->assertSee('Create subscription plan')
+            ->assertSee('value="0.00"', false);
+
+        $plan = $this->createPlan([
+            'billing_period' => 'custom',
+            'duration_months' => null,
+            'duration_days' => 45,
+            'trial_available' => true,
+            'trial_duration_days' => 7,
+        ]);
+
+        $this->get(route('super-admin.subscription-plans.edit', $plan))
+            ->assertOk()
+            ->assertSee('Edit '.$plan->name)
+            ->assertSee('value="45"', false)
+            ->assertSee('value="7"', false)
+            ->assertSee('value="custom" selected', false);
+    }
+
+    public function test_plan_configuration_ignores_custom_duration_inputs_for_standard_billing_periods(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->post(route('super-admin.subscription-plans.store'), $this->planInput([
+            'code' => 'MONTHLY',
+            'billing_period' => 'monthly',
+            'duration_months' => 'not-used',
+            'duration_days' => 'not-used',
+        ]))->assertRedirect();
+
+        $plan = SubscriptionPlan::query()->where('code', 'MONTHLY')->firstOrFail();
+        $this->assertSame(1, $plan->duration_months);
+        $this->assertNull($plan->duration_days);
+    }
+
     public function test_subscription_assignment_records_trial_term_and_rejects_overlapping_assignment(): void
     {
         $admin = $this->actingAsSuperAdmin();
@@ -126,6 +167,59 @@ class SubscriptionManagementTest extends TestCase
         $this->assertDatabaseCount('restaurant_subscriptions', 1);
     }
 
+    public function test_assignment_calculates_expiry_from_plan_and_ignores_client_expiry_input(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2024-01-01 10:00:00', config('app.timezone')));
+        $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant('Month End House', 'month-end-house');
+        $plan = $this->createPlan(['billing_period' => 'monthly', 'duration_months' => 1]);
+
+        $this->post(route('super-admin.subscriptions.store'), [
+            'restaurant_id' => $restaurant->id,
+            'subscription_plan_id' => $plan->id,
+            'starts_at' => '2024-01-31',
+            'expiry_date' => '2024-04-30',
+            'trial' => '0',
+        ])->assertRedirect();
+
+        $subscription = RestaurantSubscription::query()->firstOrFail();
+        $this->assertSame(
+            '2024-02-28 23:59:59',
+            $subscription->expires_at->timezone(config('app.timezone'))->toDateTimeString(),
+        );
+        $this->assertDatabaseHas('restaurant_subscription_events', [
+            'restaurant_subscription_id' => $subscription->id,
+            'action' => 'assigned',
+        ]);
+    }
+
+    public function test_plan_expiry_handles_standard_custom_and_trial_calendar_boundaries(): void
+    {
+        $service = app(SubscriptionService::class);
+        $timezone = config('app.timezone');
+
+        $cases = [
+            [1, null, '2024-01-31', null, false, '2024-02-28'],
+            [3, null, '2024-11-30', null, false, '2025-02-27'],
+            [12, null, '2024-02-29', null, false, '2025-02-27'],
+            [2, null, '2024-01-31', null, false, '2024-03-30'],
+            [null, 45, '2024-01-31', null, false, '2024-03-15'],
+            [12, null, '2024-02-26', 7, true, '2024-03-03'],
+        ];
+
+        foreach ($cases as [$months, $days, $start, $trialDays, $trial, $expected]) {
+            $expiry = $service->planExpiry(
+                $months,
+                $days,
+                CarbonImmutable::createFromFormat('!Y-m-d', $start, $timezone),
+                $trialDays,
+                $trial,
+            );
+
+            $this->assertSame($expected.' 23:59:59', $expiry->toDateTimeString(), "{$start} should expire on {$expected}.");
+        }
+    }
+
     public function test_renewal_creates_a_separate_historical_period_and_extension_is_audited(): void
     {
         $admin = $this->actingAsSuperAdmin();
@@ -133,12 +227,12 @@ class SubscriptionManagementTest extends TestCase
         $plan = $this->createPlan();
         $service = app(SubscriptionService::class);
         $start = CarbonImmutable::now(config('app.timezone'))->subDay();
-        $initial = $service->assign($restaurant, $plan, $start, null, false, $admin);
+        $initial = $service->assign($restaurant, $plan, $start, false, $admin);
 
         $extensionTarget = $initial->expires_at->timezone(config('app.timezone'))->addDays(10)->startOfDay();
         $service->extend($initial, $extensionTarget, $admin);
         $extended = $initial->fresh();
-        $renewal = $service->renew($initial, null, $admin);
+        $renewal = $service->renew($initial, $admin);
 
         $this->assertNotSame($initial->id, $renewal->id);
         $this->assertSame($initial->id, $renewal->renewal_of_id);
@@ -166,6 +260,85 @@ class SubscriptionManagementTest extends TestCase
         }
     }
 
+    public function test_renewals_use_saved_terms_and_preserve_remaining_paid_days(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-12-01 10:00:00', config('app.timezone')));
+        $admin = $this->actingAsSuperAdmin();
+        $service = app(SubscriptionService::class);
+        $plan = $this->createPlan(['duration_months' => 1]);
+
+        $activeRestaurant = $this->createRestaurant('Active Renewal House', 'active-renewal-house');
+        $active = $service->assign(
+            $activeRestaurant,
+            $plan,
+            CarbonImmutable::parse('2026-11-15', config('app.timezone')),
+            false,
+            $admin,
+        );
+        $savedExpiry = $active->expires_at;
+
+        $plan->update(['duration_months' => 12, 'billing_period' => 'yearly']);
+        $activeRenewal = $service->renew($active, $admin);
+        $this->assertSame($savedExpiry->timezone(config('app.timezone'))->startOfDay()->addDay()->utc()->toDateTimeString(), $activeRenewal->starts_at->toDateTimeString());
+        $this->assertSame(1, $activeRenewal->duration_months);
+        $this->assertSame('2027-01-14 23:59:59', $activeRenewal->expires_at->timezone(config('app.timezone'))->toDateTimeString());
+        $this->assertSame('2026-12-14 23:59:59', $active->fresh()->expires_at->timezone(config('app.timezone'))->toDateTimeString());
+
+        $this->travelTo(CarbonImmutable::parse('2026-12-20 10:00:00', config('app.timezone')));
+        $expiredRestaurant = $this->createRestaurant('Expired Renewal House', 'expired-renewal-house');
+        $expiredPlan = $this->createPlan(['duration_months' => 1]);
+        $expired = $this->createSubscription($expiredRestaurant, $expiredPlan, [
+            'starts_at' => CarbonImmutable::parse('2026-11-01', config('app.timezone'))->utc(),
+            'expires_at' => CarbonImmutable::parse('2026-12-14 23:59:59', config('app.timezone'))->utc(),
+        ]);
+
+        $expiredRenewal = $service->renew($expired, $admin);
+        $this->assertSame('2026-12-20 00:00:00', $expiredRenewal->starts_at->timezone(config('app.timezone'))->toDateTimeString());
+        $this->assertSame('2027-01-19 23:59:59', $expiredRenewal->expires_at->timezone(config('app.timezone'))->toDateTimeString());
+        $this->assertSame(1, $expiredRenewal->duration_months);
+    }
+
+    public function test_renewal_route_ignores_client_expiry_input(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-14 10:00:00', config('app.timezone')));
+        $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant('Renewal Override House', 'renewal-override-house');
+        $plan = $this->createPlan(['duration_months' => 1]);
+        $initial = $this->createSubscription($restaurant, $plan, [
+            'starts_at' => CarbonImmutable::parse('2026-10-01', config('app.timezone'))->utc(),
+            'expires_at' => CarbonImmutable::parse('2026-10-31 23:59:59', config('app.timezone'))->utc(),
+        ]);
+
+        $this->post(route('super-admin.subscriptions.renew', $initial), [
+            'expiry_date' => '2026-10-15',
+        ])->assertRedirect();
+
+        $renewal = RestaurantSubscription::query()->where('renewal_of_id', $initial->id)->firstOrFail();
+        $expectedStart = $initial->expires_at->timezone(config('app.timezone'))->startOfDay()->addDay();
+        $expectedExpiry = app(SubscriptionService::class)->planExpiry(
+            $initial->duration_months,
+            $initial->duration_days,
+            $expectedStart,
+        );
+        $this->assertSame($expectedStart->utc()->toDateTimeString(), $renewal->starts_at->toDateTimeString());
+        $this->assertSame($expectedExpiry->utc()->toDateTimeString(), $renewal->expires_at->toDateTimeString());
+    }
+
+    public function test_assignment_form_previews_expiry_without_accepting_an_expiry_override(): void
+    {
+        $this->actingAsSuperAdmin();
+        $this->createPlan();
+
+        $response = $this->get(route('super-admin.subscriptions.create'))
+            ->assertOk()
+            ->assertSee('data-subscription-expiry-preview', false)
+            ->assertSee('data-expiry-preview', false)
+            ->assertSee('data-duration-months="1"', false)
+            ->assertDontSee('name="expiry_date"', false);
+
+        $this->assertStringContainsString('monthly', $response->getContent());
+    }
+
     public function test_renewal_rolls_back_when_its_history_event_cannot_be_written(): void
     {
         $admin = $this->actingAsSuperAdmin();
@@ -174,7 +347,6 @@ class SubscriptionManagementTest extends TestCase
             $restaurant,
             $this->createPlan(),
             CarbonImmutable::now(config('app.timezone'))->subDay(),
-            null,
             false,
             $admin,
         );
@@ -183,7 +355,7 @@ class SubscriptionManagementTest extends TestCase
         });
 
         try {
-            app(SubscriptionService::class)->renew($initial, null, $admin);
+            app(SubscriptionService::class)->renew($initial, $admin);
             $this->fail('The renewal should roll back when its event cannot be recorded.');
         } catch (\RuntimeException $exception) {
             $this->assertSame('History write failed.', $exception->getMessage());
@@ -202,7 +374,6 @@ class SubscriptionManagementTest extends TestCase
             $restaurant,
             $plan,
             CarbonImmutable::now(config('app.timezone'))->subDay(),
-            null,
             false,
             $admin,
         );
@@ -240,7 +411,6 @@ class SubscriptionManagementTest extends TestCase
             $restaurant,
             $plan,
             CarbonImmutable::parse('2026-10-13', 'Asia/Kolkata'),
-            null,
             false,
             $admin,
         );
@@ -285,7 +455,6 @@ class SubscriptionManagementTest extends TestCase
             $restaurant,
             $plan,
             CarbonImmutable::now(config('app.timezone')),
-            null,
             true,
             $admin,
         );
@@ -378,6 +547,78 @@ class SubscriptionManagementTest extends TestCase
         $this->get(route('super-admin.subscriptions.show', $subscription))
             ->assertOk()
             ->assertSee('Subscription actions');
+    }
+
+    public function test_subscription_history_can_be_filtered_by_restaurant_and_retains_filter_in_pagination(): void
+    {
+        $this->actingAsSuperAdmin();
+        $restaurantA = $this->createRestaurant('Restaurant A', 'restaurant-a');
+        $restaurantB = $this->createRestaurant('Restaurant B', 'restaurant-b');
+
+        for ($index = 0; $index < 21; $index++) {
+            $this->createHistoryEvent($restaurantA);
+        }
+        $this->createHistoryEvent($restaurantB);
+
+        $allHistory = $this->get(route('super-admin.subscriptions.history'))
+            ->assertOk()
+            ->assertSee('Restaurant A')
+            ->assertSee('Restaurant B')
+            ->assertSee('All Restaurants');
+
+        $restaurantAHistory = $this->get(route('super-admin.subscriptions.history', [
+            'restaurant_id' => $restaurantA->id,
+            'search' => 'assigned',
+        ]))
+            ->assertOk()
+            ->assertSee('data-auto-filter', false)
+            ->assertDontSee('type="submit">Search', false)
+            ->assertSee('value="'.$restaurantA->id.'" selected', false)
+            ->assertSee('value="assigned"', false)
+            ->assertSee('assets/super-admin.js');
+
+        $restaurantBHistory = $this->get(route('super-admin.subscriptions.history', [
+            'restaurant_id' => $restaurantB->id,
+        ]))
+            ->assertOk()
+            ->assertSee('value="'.$restaurantB->id.'" selected', false);
+        $this->assertSame(
+            [$restaurantA->id],
+            $restaurantAHistory->viewData('events')->getCollection()->pluck('restaurant_id')->unique()->values()->all(),
+        );
+        $this->assertSame(
+            [$restaurantB->id],
+            $restaurantBHistory->viewData('events')->getCollection()->pluck('restaurant_id')->unique()->values()->all(),
+        );
+
+        $this->get(route('super-admin.subscriptions.history', [
+            'restaurant_id' => $restaurantB->id,
+            'search' => 'not-a-match',
+        ]))
+            ->assertOk()
+            ->assertSee('No subscription history found for this restaurant.');
+
+        $this->assertStringContainsString(
+            'restaurant_id='.$restaurantA->id,
+            html_entity_decode($restaurantAHistory->viewData('events')->nextPageUrl() ?? ''),
+        );
+        $this->assertStringContainsString(
+            'search=assigned',
+            html_entity_decode($restaurantAHistory->viewData('events')->nextPageUrl() ?? ''),
+        );
+        $this->assertStringNotContainsString(
+            'restaurant_id=',
+            html_entity_decode($allHistory->viewData('events')->nextPageUrl() ?? ''),
+        );
+    }
+
+    private function createHistoryEvent(Restaurant $restaurant): RestaurantSubscriptionEvent
+    {
+        return RestaurantSubscriptionEvent::create([
+            'restaurant_id' => $restaurant->id,
+            'action' => 'assigned',
+            'new_status' => 'active',
+        ]);
     }
 
     private function actingAsSuperAdmin(): SuperAdmin

@@ -8,13 +8,11 @@ use App\Models\RestaurantMenuCategory;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
-use RuntimeException;
 
 class MenuCategoryController extends Controller
 {
@@ -41,15 +39,10 @@ class MenuCategoryController extends Controller
         $owner = $this->owner();
         $validated = $this->validateCategory($request, $owner);
         $restaurant = $owner->restaurant;
-        $image = $validated['image'] ?? null;
-        unset($validated['image'], $validated['remove_image']);
 
         $restaurant->menuCategories()->create([
             ...$validated,
             'slug' => $this->uniqueSlug($restaurant->id, $validated['name']),
-            'image_path' => $image instanceof UploadedFile
-                ? $this->storeImage($image, $owner)
-                : null,
         ]);
 
         return redirect()->route('restaurant.menu.categories.index')
@@ -69,29 +62,11 @@ class MenuCategoryController extends Controller
         $owner = $this->owner();
         $category = $this->tenantCategory($category, $owner);
         $validated = $this->validateCategory($request, $owner, $category);
-        $image = $validated['image'] ?? null;
-        $removeImage = (bool) ($validated['remove_image'] ?? false);
-        unset($validated['image'], $validated['remove_image']);
-
-        $oldImagePath = $category->image_path;
-        $newImagePath = $image instanceof UploadedFile
-            ? $this->storeImage($image, $owner)
-            : null;
-
-        if ($newImagePath !== null) {
-            $validated['image_path'] = $newImagePath;
-        } elseif ($removeImage) {
-            $validated['image_path'] = null;
-        }
 
         $category->update([
             ...$validated,
             'slug' => $this->uniqueSlug($owner->restaurant_id, $validated['name'], $category->id),
         ]);
-
-        if ($oldImagePath && ($newImagePath !== null || $removeImage)) {
-            $this->deleteStoredImage($oldImagePath, $owner);
-        }
 
         return redirect()->route('restaurant.menu.categories.index')
             ->with('status', 'Category updated successfully.');
@@ -169,8 +144,6 @@ class MenuCategoryController extends Controller
             ],
             'description' => ['nullable', 'string', 'max:10000'],
             'icon' => ['nullable', 'string', Rule::in(array_keys(RestaurantMenuCategory::ICONS))],
-            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-            'remove_image' => ['sometimes', 'boolean'],
             'is_active' => ['required', 'boolean'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:4294967295'],
         ]);
@@ -201,17 +174,6 @@ class MenuCategoryController extends Controller
         abort_unless($user instanceof User && $user->isOwner() && $user->restaurant, 403);
 
         return $user;
-    }
-
-    private function storeImage(UploadedFile $image, User $owner): string
-    {
-        $path = $image->store('restaurant-menu-categories/'.$owner->restaurant_id, 'public');
-
-        if (! \is_string($path) || $path === '') {
-            throw new RuntimeException('The category image could not be stored.');
-        }
-
-        return $path;
     }
 
     private function deleteStoredImage(string $path, User $owner): void

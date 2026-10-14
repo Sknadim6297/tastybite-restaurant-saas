@@ -23,11 +23,18 @@ class EnsureRestaurantUser
             }
         }
 
+        if (! $user instanceof User) {
+            $guard->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('restaurant.login');
+        }
+
         $sessionPasswordVersion = $request->session()->get('restaurant_user_password_version');
 
         if (
-            ! $user instanceof User
-            || ! $user->isActive()
+            ! $user->isActive()
             || ! $user->restaurant
             || ! $user->restaurant->isActive()
             || ! is_string($sessionPasswordVersion)

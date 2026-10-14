@@ -52,6 +52,7 @@ Route::prefix('restaurant')->name('restaurant.')->middleware('restaurant.headers
         Route::get('/announcements/{announcement}', [AnnouncementController::class, 'show'])->name('announcements.show');
         Route::post('/announcements/{announcement}/read', [AnnouncementController::class, 'markRead'])->name('announcements.read');
         Route::put('/profile', [DashboardController::class, 'updateProfile'])->name('profile.update');
+        Route::put('/profile/branding', [DashboardController::class, 'updateBranding'])->name('profile.branding');
         Route::put('/profile/password', [DashboardController::class, 'updatePassword'])->name('profile.password');
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 

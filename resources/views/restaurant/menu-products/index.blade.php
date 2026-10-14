@@ -9,12 +9,11 @@
         <a class="button button-primary" href="{{ route('restaurant.menu.products.create') }}">Add product</a>
     </div>
 
-    <form method="GET" action="{{ route('restaurant.menu.products.index') }}" class="panel-card report-filters">
+    <form method="GET" action="{{ route('restaurant.menu.products.index') }}" class="panel-card report-filters" data-auto-filter>
         <label for="product-search">Search products</label>
         <input id="product-search" type="search" name="search" value="{{ $search }}" maxlength="255" placeholder="Search name or description">
-        <button class="button button-primary" type="submit">Search</button>
         @if($search !== '')
-            <a class="button button-secondary" href="{{ route('restaurant.menu.products.index') }}">Clear</a>
+            <a class="button button-secondary" href="{{ route('restaurant.menu.products.index') }}" data-auto-filter-reset>Clear</a>
         @endif
     </form>
 

@@ -30,6 +30,13 @@ class RestaurantAuthenticationTest extends TestCase
             ->assertHeader('Referrer-Policy', 'no-referrer');
     }
 
+    public function test_guest_pos_request_redirects_to_login_without_claiming_the_session_expired(): void
+    {
+        $this->get(route('pos.index'))
+            ->assertRedirect(route('restaurant.login'))
+            ->assertSessionHasNoErrors();
+    }
+
     public function test_invalid_restaurant_credentials_receive_a_generic_error(): void
     {
         $this->post(route('restaurant.login.submit'), [
