@@ -1,0 +1,468 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Restaurant;
+use App\Models\RestaurantMenuCategory;
+use App\Models\RestaurantMenuItem;
+use App\Models\RestaurantSubscription;
+use App\Models\SaasFeature;
+use App\Models\SubscriptionPlan;
+use App\Models\User;
+use Carbon\CarbonImmutable;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+class RestaurantMenuProductManagementTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private Restaurant $restaurant;
+
+    private Restaurant $otherRestaurant;
+
+    private User $owner;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake('public');
+
+        $this->restaurant = Restaurant::create([
+            'name' => 'Bluebird Bistro',
+            'slug' => 'bluebird-bistro',
+            'email' => 'bluebird@example.test',
+            'status' => 'active',
+        ]);
+        $this->otherRestaurant = Restaurant::create([
+            'name' => 'Greenleaf Grill',
+            'slug' => 'greenleaf-grill',
+            'email' => 'greenleaf@example.test',
+            'status' => 'active',
+        ]);
+        $this->owner = User::create([
+            'restaurant_id' => $this->restaurant->id,
+            'name' => 'Bluebird Owner',
+            'email' => 'owner@example.test',
+            'password' => 'StrongTestPass123!',
+            'role' => 'owner',
+            'status' => 'active',
+        ]);
+
+        $plan = SubscriptionPlan::create([
+            'name' => 'POS Access',
+            'code' => 'POS-ACCESS',
+            'price' => '0.00',
+            'currency' => 'INR',
+            'billing_period' => 'monthly',
+            'duration_months' => 1,
+            'trial_available' => false,
+            'status' => 'active',
+        ]);
+        $posFeature = SaasFeature::query()->where('code', 'pos')->firstOrFail();
+        $plan->features()->attach($posFeature->id, [
+            'is_enabled' => true,
+            'limit_value' => null,
+        ]);
+        RestaurantSubscription::create([
+            'restaurant_id' => $this->restaurant->id,
+            'subscription_plan_id' => $plan->id,
+            'plan_name' => $plan->name,
+            'plan_code' => $plan->code,
+            'price' => '0.00',
+            'currency' => 'INR',
+            'billing_period' => 'monthly',
+            'duration_months' => 1,
+            'status' => 'active',
+            'is_trial' => false,
+            'starts_at' => CarbonImmutable::now(config('app.timezone'))->subDay(),
+            'expires_at' => CarbonImmutable::now(config('app.timezone'))->addMonth(),
+        ]);
+
+        $this->actingAs($this->owner, 'web')
+            ->withSession([
+                'restaurant_user_password_version' => hash('sha256', $this->owner->getAuthPassword()),
+            ]);
+    }
+
+    public function test_owner_can_create_product_with_image_and_submitted_tenant_fields_are_ignored(): void
+    {
+        $category = $this->createCategory($this->restaurant, 'Breakfast');
+        $response = $this->post(route('restaurant.menu.products.store'), [
+            'name' => 'Masala Dosa',
+            'category_id' => $category->id,
+            'description' => 'Crisp dosa with potato filling',
+            'price' => '125.50',
+            'image' => UploadedFile::fake()->image('dosa.png'),
+            'food_type' => 'veg',
+            'is_available' => '1',
+            'is_active' => '1',
+            'sort_order' => '3',
+            'restaurant_id' => $this->otherRestaurant->id,
+            'image_path' => 'forged/path.png',
+        ]);
+
+        $response->assertRedirect(route('restaurant.menu.products.index'))
+            ->assertSessionHas('status', 'Product created successfully.');
+
+        $product = RestaurantMenuItem::query()->where('name', 'Masala Dosa')->firstOrFail();
+        $this->assertSame($this->restaurant->id, $product->restaurant_id);
+        $this->assertSame($category->id, $product->category_id);
+        $this->assertSame('125.50', $product->price);
+        $this->assertStringStartsWith('restaurant-menu/'.$this->restaurant->id.'/', $product->image_path);
+        Storage::disk('public')->assertExists($product->image_path);
+    }
+
+    public function test_owner_can_edit_product_fields_and_keep_existing_image(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'Tea');
+        $oldPath = $this->storeImage($this->restaurant, 'old.jpg');
+        $product->update(['image_path' => $oldPath]);
+
+        $this->put(route('restaurant.menu.products.update', $product), [
+            'name' => 'Ginger Tea',
+            'category_id' => '',
+            'description' => 'Fresh ginger',
+            'price' => '35.00',
+            'food_type' => 'non_veg',
+            'is_available' => '0',
+            'is_active' => '0',
+            'sort_order' => '8',
+            'restaurant_id' => $this->otherRestaurant->id,
+            'image_path' => 'forged/path.jpg',
+        ])->assertRedirect(route('restaurant.menu.products.index'));
+
+        $this->assertDatabaseHas('restaurant_menu_items', [
+            'id' => $product->id,
+            'restaurant_id' => $this->restaurant->id,
+            'category_id' => null,
+            'name' => 'Ginger Tea',
+            'image_path' => $oldPath,
+            'food_type' => 'non_veg',
+            'is_available' => 0,
+            'is_active' => 0,
+            'sort_order' => 8,
+        ]);
+        Storage::disk('public')->assertExists($oldPath);
+    }
+
+    public function test_replacing_or_removing_a_product_image_cleans_up_only_the_old_file(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'Juice');
+        $oldPath = $this->storeImage($this->restaurant, 'old.jpg');
+        $product->update(['image_path' => $oldPath]);
+
+        $this->put(route('restaurant.menu.products.update', $product), $this->validProductData([
+            'image' => UploadedFile::fake()->image('new.webp'),
+        ]))->assertRedirect(route('restaurant.menu.products.index'));
+
+        $product->refresh();
+        $newPath = $product->image_path;
+        $this->assertNotSame($oldPath, $newPath);
+        Storage::disk('public')->assertMissing($oldPath);
+        Storage::disk('public')->assertExists($newPath);
+
+        $this->put(route('restaurant.menu.products.update', $product), $this->validProductData([
+            'remove_image' => '1',
+        ]))->assertRedirect(route('restaurant.menu.products.index'));
+
+        $this->assertNull($product->fresh()->image_path);
+        Storage::disk('public')->assertMissing($newPath);
+    }
+
+    public function test_owner_can_delete_a_product_and_its_owned_image(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'Lassi');
+        $path = $this->storeImage($this->restaurant, 'lassi.jpg');
+        $product->update(['image_path' => $path]);
+
+        $this->delete(route('restaurant.menu.products.destroy', $product))
+            ->assertRedirect(route('restaurant.menu.products.index'));
+
+        $this->assertDatabaseMissing('restaurant_menu_items', ['id' => $product->id]);
+        Storage::disk('public')->assertMissing($path);
+    }
+
+    public function test_edit_form_previews_the_saved_image(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'Preview Product');
+        $path = $this->storeImage($this->restaurant, 'preview.jpg');
+        $product->update(['image_path' => $path]);
+
+        $this->get(route('restaurant.menu.products.edit', $product))
+            ->assertOk()
+            ->assertSee('data-product-image-preview', false)
+            ->assertSee(asset('storage/'.$path), false)
+            ->assertSee('assets/menu-product.js');
+    }
+
+    public function test_product_listing_shows_owned_image_and_placeholder_for_missing_image(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'Image Product');
+        $path = $this->storeImage($this->restaurant, 'listing.jpg');
+        $product->update(['image_path' => $path]);
+        $this->createProduct($this->restaurant, 'No Image Product');
+
+        $this->get(route('restaurant.menu.products.index'))
+            ->assertOk()
+            ->assertSee('src="'.asset('storage/'.$path).'"', false)
+            ->assertSee('src="'.asset('assets/menu-item-placeholder.svg').'"', false);
+    }
+
+    public function test_edit_form_uses_placeholder_when_saved_image_file_is_missing(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'Missing Image Product');
+        $product->update(['image_path' => 'restaurant-menu/'.$this->restaurant->id.'/missing.jpg']);
+
+        $this->get(route('restaurant.menu.products.edit', $product))
+            ->assertOk()
+            ->assertSee('src="'.asset('assets/menu-item-placeholder.svg').'"', false)
+            ->assertSee('name="remove_image"', false);
+    }
+
+    public function test_non_owner_restaurant_user_cannot_manage_products(): void
+    {
+        $staff = User::create([
+            'restaurant_id' => $this->restaurant->id,
+            'name' => 'Bluebird Staff',
+            'email' => 'staff@example.test',
+            'password' => 'StrongTestPass123!',
+            'role' => 'staff',
+            'status' => 'active',
+        ]);
+        $this->actingAs($staff, 'web')
+            ->withSession([
+                'restaurant_user_password_version' => hash('sha256', $staff->getAuthPassword()),
+            ]);
+
+        $this->get(route('restaurant.menu.products.index'))->assertForbidden();
+    }
+
+    public function test_owner_can_search_their_products(): void
+    {
+        $this->createProduct($this->restaurant, 'Masala Dosa', 'South Indian breakfast');
+        $this->createProduct($this->restaurant, 'Filter Coffee', 'Fresh brew');
+        $this->createProduct($this->otherRestaurant, 'Foreign Product', 'South Indian breakfast');
+
+        $this->get(route('restaurant.menu.products.index', ['search' => 'South Indian']))
+            ->assertOk()
+            ->assertSee('Masala Dosa')
+            ->assertDontSee('Filter Coffee')
+            ->assertDontSee('Foreign Product');
+    }
+
+    public function test_product_listing_is_tenant_scoped_and_paginated(): void
+    {
+        for ($number = 1; $number <= 16; $number++) {
+            $this->createProduct($this->restaurant, 'Owner Product '.$number);
+        }
+        $this->createProduct($this->otherRestaurant, 'Foreign Product');
+
+        $this->get(route('restaurant.menu.products.index'))
+            ->assertOk()
+            ->assertSee('Owner Product 1')
+            ->assertDontSee('Foreign Product')
+            ->assertSee('Next');
+    }
+
+    public function test_invalid_image_and_product_values_are_rejected(): void
+    {
+        $category = $this->createCategory($this->restaurant, 'Snacks');
+
+        $this->from(route('restaurant.menu.products.create'))
+            ->post(route('restaurant.menu.products.store'), [
+                ...$this->validProductData([
+                    'category_id' => $category->id,
+                    'price' => '-1',
+                    'image' => UploadedFile::fake()->create('payload.txt', 10, 'text/plain'),
+                    'food_type' => 'unknown',
+                    'sort_order' => '-1',
+                ]),
+            ])
+            ->assertRedirect(route('restaurant.menu.products.create'))
+            ->assertSessionHasErrors(['price', 'image', 'food_type', 'sort_order']);
+
+        $this->assertDatabaseCount('restaurant_menu_items', 0);
+    }
+
+    public function test_product_must_use_a_category_belonging_to_the_owner_restaurant(): void
+    {
+        $foreignCategory = $this->createCategory($this->otherRestaurant, 'Foreign');
+
+        $this->from(route('restaurant.menu.products.create'))
+            ->post(route('restaurant.menu.products.store'), $this->validProductData([
+                'category_id' => $foreignCategory->id,
+            ]))
+            ->assertRedirect(route('restaurant.menu.products.create'))
+            ->assertSessionHasErrors('category_id');
+
+        $this->assertDatabaseCount('restaurant_menu_items', 0);
+    }
+
+    public function test_owner_cannot_view_update_or_delete_another_restaurants_product(): void
+    {
+        $product = $this->createProduct($this->otherRestaurant, 'Private Product');
+
+        $this->get(route('restaurant.menu.products.edit', $product))->assertNotFound();
+        $this->put(route('restaurant.menu.products.update', $product), $this->validProductData([
+            'name' => 'Changed Product',
+        ]))->assertNotFound();
+        $this->delete(route('restaurant.menu.products.destroy', $product))->assertNotFound();
+
+        $this->assertDatabaseHas('restaurant_menu_items', [
+            'id' => $product->id,
+            'restaurant_id' => $this->otherRestaurant->id,
+            'name' => 'Private Product',
+        ]);
+    }
+
+    public function test_product_deletion_never_removes_a_file_outside_the_owner_storage_directory(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'Stored Product');
+        $foreignPath = $this->storeImage($this->otherRestaurant, 'foreign.jpg');
+        $product->update(['image_path' => $foreignPath]);
+
+        $this->delete(route('restaurant.menu.products.destroy', $product))
+            ->assertRedirect(route('restaurant.menu.products.index'));
+
+        Storage::disk('public')->assertExists($foreignPath);
+    }
+
+    public function test_product_display_never_uses_another_restaurants_image_path(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'Isolated Image Product');
+        $foreignPath = $this->storeImage($this->otherRestaurant, 'foreign-display.jpg');
+        $product->update(['image_path' => $foreignPath]);
+
+        $this->get(route('restaurant.menu.products.index'))
+            ->assertOk()
+            ->assertSee('src="'.asset('assets/menu-item-placeholder.svg').'"', false)
+            ->assertDontSee('src="'.asset('storage/'.$foreignPath).'"', false);
+    }
+
+    public function test_pos_shows_only_active_available_owner_products_with_working_category_attributes(): void
+    {
+        $category = $this->createCategory($this->restaurant, 'Breakfast');
+        $inactiveCategory = $this->createCategory($this->restaurant, 'Archived', false);
+        $this->createProduct($this->restaurant, 'Masala Dosa', 'Dosa description', $category);
+        $this->createProduct($this->restaurant, 'Unavailable Dosa', '', $category, true, false);
+        $this->createProduct($this->restaurant, 'Inactive Dosa', '', $category, false, true);
+        $this->createProduct($this->otherRestaurant, 'Foreign Dosa', '', $category);
+        $this->createProduct($this->restaurant, 'Archived Category Dosa', '', $inactiveCategory);
+
+        $response = $this->get(route('pos.index'));
+
+        $response->assertOk()
+            ->assertSee('Masala Dosa')
+            ->assertSee('data-category="'.$category->id.'"', false)
+            ->assertSee('data-category-name="Breakfast"', false)
+            ->assertSee('assets/menu-item-placeholder.svg')
+            ->assertDontSee('Unavailable Dosa')
+            ->assertDontSee('Inactive Dosa')
+            ->assertDontSee('Foreign Dosa')
+            ->assertSee('Archived Category Dosa');
+    }
+
+    public function test_pos_uses_request_aware_url_for_existing_owned_product_image(): void
+    {
+        $product = $this->createProduct($this->restaurant, 'POS Image Product');
+        $path = $this->storeImage($this->restaurant, 'pos.jpg');
+        $product->update(['image_path' => $path]);
+
+        $this->get(route('pos.index'))
+            ->assertOk()
+            ->assertSee('src="'.asset('storage/'.$path).'"', false)
+            ->assertSee('data-img="'.asset('storage/'.$path).'"', false);
+    }
+
+    public function test_pos_categories_and_products_match_the_menu_search_and_category_filter_contract(): void
+    {
+        $category = $this->createCategory($this->restaurant, 'Cold Drinks');
+        $this->createProduct($this->restaurant, 'Lemon Soda', 'Fresh lemon', $category);
+
+        $response = $this->get(route('pos.index'));
+        $response->assertOk()
+            ->assertSee('data-category="'.$category->id.'"', false)
+            ->assertSee('data-name="Lemon Soda"', false)
+            ->assertSee('data-category-name="Cold Drinks"', false);
+
+        $script = file_get_contents(public_path('assets/script.js'));
+        $this->assertIsString($script);
+        $this->assertStringContainsString('card.dataset.category === activeCategory', $script);
+        $this->assertStringContainsString('searchableText.includes(search)', $script);
+        $this->assertSame(1, substr_count($script, 'setInterval(updateClock, 1000)'));
+        $this->assertStringContainsString('new Intl.DateTimeFormat("en-IN"', $script);
+        $this->assertStringContainsString('dateEl.textContent !== dateText', $script);
+        $this->assertStringContainsString('timeEl.textContent !== timeText', $script);
+        $view = file_get_contents(resource_path('views/pos.blade.php'));
+        $this->assertIsString($view);
+        $this->assertStringContainsString('data-category="{{ $product->category_id ?? 0 }}"', $view);
+        $this->assertStringContainsString('data-category="{{ $category->id }}"', $view);
+        $this->assertStringNotContainsString('setInterval(updateClock', $view);
+
+        $styles = file_get_contents(public_path('assets/style.css'));
+        $this->assertIsString($styles);
+        $this->assertStringContainsString('font-variant-numeric: tabular-nums', $styles);
+        $this->assertStringContainsString('#currentTime', $styles);
+        $this->assertStringContainsString('@media (max-width: 1100px)', $styles);
+        $this->assertStringContainsString('@media (max-width: 767.98px)', $styles);
+        $this->assertStringNotContainsString('images.unsplash.com', $view);
+    }
+
+    private function validProductData(array $overrides = []): array
+    {
+        return array_replace([
+            'name' => 'Test Product',
+            'category_id' => '',
+            'description' => '',
+            'price' => '10.00',
+            'food_type' => 'veg',
+            'is_available' => '1',
+            'is_active' => '1',
+            'sort_order' => '0',
+        ], $overrides);
+    }
+
+    private function createCategory(
+        Restaurant $restaurant,
+        string $name,
+        bool $active = true,
+    ): RestaurantMenuCategory {
+        return RestaurantMenuCategory::create([
+            'restaurant_id' => $restaurant->id,
+            'name' => $name,
+            'slug' => strtolower(str_replace(' ', '-', $name)),
+            'is_active' => $active,
+            'sort_order' => 0,
+        ]);
+    }
+
+    private function createProduct(
+        Restaurant $restaurant,
+        string $name,
+        string $description = '',
+        ?RestaurantMenuCategory $category = null,
+        bool $active = true,
+        bool $available = true,
+    ): RestaurantMenuItem {
+        return RestaurantMenuItem::create([
+            'restaurant_id' => $restaurant->id,
+            'category_id' => $category?->id,
+            'name' => $name,
+            'description' => $description,
+            'price' => '10.00',
+            'food_type' => 'veg',
+            'is_available' => $available,
+            'is_active' => $active,
+            'sort_order' => 0,
+        ]);
+    }
+
+    private function storeImage(Restaurant $restaurant, string $name): string
+    {
+        return UploadedFile::fake()->image($name)->store('restaurant-menu/'.$restaurant->id, 'public');
+    }
+}

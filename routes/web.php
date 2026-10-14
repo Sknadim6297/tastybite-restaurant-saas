@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Restaurant\PosController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -7,7 +8,9 @@ Route::get('/', function () {
 });
 
 Route::middleware(['restaurant.headers', 'restaurant', 'restaurant.subscription'])->group(function () {
-    Route::view('/pos', 'pos')->middleware('restaurant.feature:pos')->name('pos.index');
+    Route::get('/pos', [PosController::class, 'index'])
+        ->middleware('restaurant.feature:pos')
+        ->name('pos.index');
 });
 
 require __DIR__.'/super-admin.php';

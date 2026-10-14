@@ -49,6 +49,16 @@ class Restaurant extends Model
         return $this->hasMany(RestaurantSubscription::class);
     }
 
+    public function menuCategories(): HasMany
+    {
+        return $this->hasMany(RestaurantMenuCategory::class)->orderBy('sort_order')->orderBy('name');
+    }
+
+    public function menuItems(): HasMany
+    {
+        return $this->hasMany(RestaurantMenuItem::class)->orderBy('sort_order')->orderBy('name');
+    }
+
     public function currentSubscription(): HasOne
     {
         return $this->hasOne(RestaurantSubscription::class)->latestOfMany();

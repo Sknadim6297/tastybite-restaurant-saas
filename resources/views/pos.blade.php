@@ -3,12 +3,19 @@
 @section('title', 'Tasty Bite POS')
 
 @section('content')
-<!-- HEADER -->
+@php
+    $restaurantName = $restaurant->name ?? 'TastyBite';
+    $currentUser = $currentUser ?? Auth::guard('web')->user();
+    $staffName = $currentUser?->name ?? 'Staff';
+    $staffRole = ucfirst((string) ($currentUser?->role ?? 'owner'));
+    $timezone = config('app.timezone', 'UTC');
+@endphp
+
     <header class="top-header">
       <a href="#" class="brand">
         <div class="brand-icon"><i class="bi bi-cup-hot-fill"></i></div>
         <div>
-          <h2>Tasty<span>Bite</span></h2>
+          <h2>{{ $restaurantName }}</h2>
           <small>RESTAURANT</small>
         </div>
       </a>
@@ -26,7 +33,7 @@
       <div class="header-right">
         <div class="header-date">
           <i class="bi bi-calendar3"></i>
-          <span id="currentDate">Today</span><br />
+          <span id="currentDate" data-timezone="{{ $timezone }}">Today</span><br />
           <span id="currentTime">00:00</span>
         </div>
 
@@ -41,14 +48,14 @@
 
         <div class="admin-profile">
           <div class="admin-avatar"><i class="bi bi-person-fill"></i></div>
-          <span>Admin</span>
+          <span>{{ $staffName }}</span>
+          <small>{{ $staffRole }}</small>
           <i class="bi bi-chevron-down"></i>
         </div>
       </div>
     </header>
 
     <div class="app-layout">
-      <!-- SIDEBAR: DIRECT LINKS, NO SUBMENU -->
       <aside class="sidebar">
         <a href="#" class="side-link active">
           <i class="bi bi-cart-fill"></i> Billing (POS)
@@ -83,353 +90,67 @@
         <a href="#" class="side-link"> <i class="bi bi-gear"></i> Settings </a>
 
         <div class="sidebar-bottom">
-          <strong>TastyBite POS</strong>
+          <strong>{{ $restaurantName }} POS</strong>
           Restaurant Billing System
         </div>
       </aside>
 
-      <!-- MAIN CONTENT -->
       <main class="main-content">
         <div class="pos-layout">
-          <!-- FOOD MENU -->
           <section class="menu-panel">
             <div class="category-list" id="categoryList">
-              <button class="category-btn active" data-category="All">
+              <button class="category-btn active" type="button" data-category="all" data-category-name="All">
                 <i class="bi bi-grid"></i> All
               </button>
 
-              <button class="category-btn" data-category="Starters">
-                <i class="bi bi-egg-fried"></i> Starters
-              </button>
-
-              <button class="category-btn" data-category="Main Course">
-                <i class="bi bi-cup-hot"></i> Main Course
-              </button>
-
-              <button class="category-btn" data-category="Biryani">
-                <i class="bi bi-emoji-smile"></i> Biryani
-              </button>
-
-              <button class="category-btn" data-category="Chinese">
-                <i class="bi bi-fire"></i> Chinese
-              </button>
-
-              <button class="category-btn" data-category="Tandoor">
-                <i class="bi bi-brightness-high"></i> Tandoor
-              </button>
-
-              <button class="category-btn" data-category="Desserts">
-                <i class="bi bi-cake2"></i> Desserts
-              </button>
-
-              <button class="category-btn" data-category="Beverages">
-                <i class="bi bi-cup-straw"></i> Beverages
-              </button>
+              @foreach($categories as $category)
+                <button class="category-btn" type="button" data-category="{{ $category->id }}" data-category-name="{{ $category->name }}">
+                  @if($category->image_path)
+                    <img class="category-btn-image" src="{{ $category->image_url }}" alt="" loading="lazy">
+                  @else
+                    <i class="bi bi-{{ $category->icon ?: 'grid' }}"></i>
+                  @endif
+                  <span>{{ $category->name }}</span>
+                </button>
+              @endforeach
             </div>
 
             <div class="food-grid" id="foodGrid">
-              <!-- Image URLs are demo images; replace with actual product photos. -->
-
-              <article
-                class="food-card"
-                data-name="Chicken Biryani"
-                data-category="Biryani"
-                data-price="200"
-                data-veg="false"
-                data-img="https://images.pexels.com/photos/16020573/pexels-photo-16020573.jpeg"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1563379091339-03246963d51a?auto=format&fit=crop&w=500&q=80"
-                  alt="Chicken Biryani"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Chicken Biryani</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹200 <small class="nonveg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
+              @forelse($products as $product)
+                @php
+                    $foodType = strtolower((string) ($product->food_type ?? 'veg'));
+                    $isVeg = $foodType === 'veg' || $foodType === 'vegan';
+                    $imageUrl = $product->image_url;
+                @endphp
+                <article
+                  class="food-card"
+                  data-name="{{ $product->name }}"
+                  data-category="{{ $product->category_id ?? 0 }}"
+                  data-category-name="{{ $product->category?->name ?? 'Uncategorized' }}"
+                  data-price="{{ (float) $product->price }}"
+                  data-veg="{{ $isVeg ? 'true' : 'false' }}"
+                  data-img="{{ $imageUrl }}"
+                >
+                  <img class="food-image" src="{{ $imageUrl }}" alt="{{ $product->name }}" loading="lazy" />
+                  <div class="food-info">
+                    <div class="food-name">{{ $product->name }}</div>
+                    <div class="food-bottom">
+                      <span class="food-price">₹{{ number_format((float) $product->price, 2) }} @if($isVeg) <small class="veg-dot"></small> @else <small class="nonveg-dot"></small> @endif</span>
+                      <button class="add-btn" onclick="addToCart(this)">
+                        Add <i class="bi bi-plus-lg"></i>
+                      </button>
+                    </div>
                   </div>
+                </article>
+              @empty
+                <div class="empty-cart" style="grid-column: 1 / -1;">
+                  <i class="bi bi-basket2"></i>
+                  No menu items available yet. Add products from the restaurant owner panel to populate the POS.
                 </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Mutton Biryani"
-                data-category="Biryani"
-                data-price="280"
-                data-veg="false"
-                data-img="https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=500&q=80"
-                  alt="Mutton Biryani"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Mutton Biryani</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹280 <small class="nonveg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Paneer Butter Masala"
-                data-category="Main Course"
-                data-price="220"
-                data-veg="true"
-                data-img="https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=500&q=80"
-                  alt="Paneer Butter Masala"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Paneer Butter Masala</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹220 <small class="veg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Chicken Butter Masala"
-                data-category="Main Course"
-                data-price="240"
-                data-veg="false"
-                data-img="https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=500&q=80"
-                  alt="Chicken Butter Masala"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Chicken Butter Masala</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹240 <small class="nonveg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Veg Fried Rice"
-                data-category="Chinese"
-                data-price="150"
-                data-veg="true"
-                data-img="https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=500&q=80"
-                  alt="Veg Fried Rice"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Veg Fried Rice</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹150 <small class="veg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Chicken Fried Rice"
-                data-category="Chinese"
-                data-price="180"
-                data-veg="false"
-                data-img="https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=500&q=80"
-                  alt="Chicken Fried Rice"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Chicken Fried Rice</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹180 <small class="nonveg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Chilli Chicken"
-                data-category="Starters"
-                data-price="220"
-                data-veg="false"
-                data-img="https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=500&q=80"
-                  alt="Chilli Chicken"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Chilli Chicken</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹220 <small class="nonveg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Paneer Tikka"
-                data-category="Starters"
-                data-price="200"
-                data-veg="true"
-                data-img="https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=500&q=80"
-                  alt="Paneer Tikka"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Paneer Tikka</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹200 <small class="veg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Garlic Naan"
-                data-category="Tandoor"
-                data-price="60"
-                data-veg="true"
-                data-img="https://images.unsplash.com/photo-1610057099431-d73a1c9d2f2f?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1610057099431-d73a1c9d2f2f?auto=format&fit=crop&w=500&q=80"
-                  alt="Garlic Naan"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Garlic Naan</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹60 <small class="veg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Butter Naan"
-                data-category="Tandoor"
-                data-price="50"
-                data-veg="true"
-                data-img="https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=500&q=80"
-                  alt="Butter Naan"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Butter Naan</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹50 <small class="veg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
-
-              <article
-                class="food-card"
-                data-name="Gulab Jamun"
-                data-category="Desserts"
-                data-price="80"
-                data-veg="true"
-                data-img="https://images.unsplash.com/photo-1666190094766-2d0f7e2b43b9?auto=format&fit=crop&w=500&q=80"
-              >
-                <img
-                  class="food-image"
-                  src="https://images.unsplash.com/photo-1666190094766-2d0f7e2b43b9?auto=format&fit=crop&w=500&q=80"
-                  alt="Gulab Jamun"
-                  loading="lazy"
-                />
-                <div class="food-info">
-                  <div class="food-name">Gulab Jamun</div>
-                  <div class="food-bottom">
-                    <span class="food-price"
-                      >₹80 <small class="veg-dot"></small
-                    ></span>
-                    <button class="add-btn" onclick="addToCart(this)">
-                      Add <i class="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
-                </div>
-              </article>
+              @endforelse
             </div>
           </section>
 
-          <!-- BILLING -->
           <aside class="billing-panel">
             <div class="order-type">
               <button type="button" class="active" data-type="Dine In">
@@ -547,7 +268,6 @@
                 >
                   <i class="bi bi-pause-fill"></i> Hold
                 </button>
-
               </div>
 
               <button class="generate-btn" onclick="generateBill()">
@@ -560,7 +280,6 @@
       </main>
     </div>
 
-    <!-- HELD ORDERS MODAL -->
     <div
       class="modal fade"
       id="holdOrdersModal"
@@ -595,4 +314,5 @@
         </div>
       </div>
     </div>
+
 @endsection

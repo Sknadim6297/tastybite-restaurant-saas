@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · TastyBite Restaurant</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ asset('assets/super-admin.css') }}">
 </head>
 
@@ -24,7 +25,9 @@
                 <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">◫</span><span>Orders</span><span class="nav-soon">Soon</span></span>
                 <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">♨</span><span>Kitchen / KOT</span><span class="nav-soon">Soon</span></span>
                 <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">▤</span><span>Table Management</span><span class="nav-soon">Soon</span></span>
-                <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">☰</span><span>Menu Management</span><span class="nav-soon">Soon</span></span>
+                <a href="{{ route('restaurant.menu.categories.index') }}" class="sidebar-link @if(request()->routeIs('restaurant.menu.categories.*', 'restaurant.menu.products.*')) is-active @endif"><span class="nav-icon" aria-hidden="true">☰</span><span>Menu Management</span></a>
+                <a href="{{ route('restaurant.menu.categories.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.menu.categories.*')) is-active @endif"><span class="nav-icon" aria-hidden="true">◦</span><span>Categories</span></a>
+                <a href="{{ route('restaurant.menu.products.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.menu.products.*')) is-active @endif"><span class="nav-icon" aria-hidden="true">◦</span><span>Products</span></a>
                 <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">◫</span><span>Inventory</span><span class="nav-soon">Soon</span></span>
                 <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">◧</span><span>Purchases</span><span class="nav-soon">Soon</span></span>
                 <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">♙</span><span>Staff Management</span><span class="nav-soon">Soon</span></span>

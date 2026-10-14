@@ -3,6 +3,8 @@
 use App\Http\Controllers\Restaurant\AuthController;
 use App\Http\Controllers\Restaurant\AnnouncementController;
 use App\Http\Controllers\Restaurant\DashboardController;
+use App\Http\Controllers\Restaurant\MenuCategoryController;
+use App\Http\Controllers\Restaurant\MenuProductController;
 use App\Http\Controllers\Restaurant\SubscriptionStatusController;
 use App\Http\Controllers\Restaurant\SupportTicketController;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -12,17 +14,17 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
 RateLimiter::for('restaurant-login', function (Request $request) {
-    $key = hash('sha256', Str::lower((string) $request->input('email')).'|'.$request->ip());
+    $key = hash('sha256', Str::lower((string) $request->input('email')) . '|' . $request->ip());
 
     return Limit::perMinute(5)->by($key);
 });
 
 RateLimiter::for('restaurant-password-reset', function (Request $request) {
-    return Limit::perMinute(5)->by('restaurant-password-reset|'.$request->ip());
+    return Limit::perMinute(5)->by('restaurant-password-reset|' . $request->ip());
 });
 
 RateLimiter::for('restaurant-support', function (Request $request) {
-    return Limit::perMinute(20)->by('restaurant-support|'.$request->ip());
+    return Limit::perMinute(20)->by('restaurant-support|' . $request->ip());
 });
 
 Route::prefix('restaurant')->name('restaurant.')->middleware('restaurant.headers')->group(function () {
@@ -52,6 +54,31 @@ Route::prefix('restaurant')->name('restaurant.')->middleware('restaurant.headers
         Route::put('/profile', [DashboardController::class, 'updateProfile'])->name('profile.update');
         Route::put('/profile/password', [DashboardController::class, 'updatePassword'])->name('profile.password');
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+        Route::prefix('menu/categories')->name('menu.categories.')
+            ->middleware(['restaurant.subscription', 'restaurant.feature:pos'])
+            ->controller(MenuCategoryController::class)
+            ->group(function (): void {
+                Route::get('/', 'index')->name('index');
+                Route::get('/create', 'create')->name('create');
+                Route::post('/', 'store')->name('store');
+                Route::get('/{category}/edit', 'edit')->whereNumber('category')->name('edit');
+                Route::put('/{category}', 'update')->whereNumber('category')->name('update');
+                Route::patch('/{category}/status', 'toggleStatus')->whereNumber('category')->name('status');
+                Route::delete('/{category}', 'destroy')->whereNumber('category')->name('destroy');
+            });
+
+        Route::prefix('menu/products')->name('menu.products.')
+            ->middleware(['restaurant.subscription', 'restaurant.feature:pos'])
+            ->controller(MenuProductController::class)
+            ->group(function (): void {
+                Route::get('/', 'index')->name('index');
+                Route::get('/create', 'create')->name('create');
+                Route::post('/', 'store')->name('store');
+                Route::get('/{product}/edit', 'edit')->whereNumber('product')->name('edit');
+                Route::put('/{product}', 'update')->whereNumber('product')->name('update');
+                Route::delete('/{product}', 'destroy')->whereNumber('product')->name('destroy');
+            });
 
         Route::get('/support', [SupportTicketController::class, 'index'])->name('support.index');
         Route::get('/support/create', [SupportTicketController::class, 'create'])->name('support.create');

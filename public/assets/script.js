@@ -2,7 +2,7 @@
 // ===================== TASTYBITE POS SCRIPT =====================
 
 const cart = new Map();
-let activeCategory = "All";
+let activeCategory = "all";
 let orderType = "Dine In";
 let heldOrders = [];
 let holdOrderCounter = 1;
@@ -25,26 +25,34 @@ function holdEscape(value) {
 }
 
 // Clock
-function updateClock() {
-    const dateEl = document.getElementById("currentDate");
-    const timeEl = document.getElementById("currentTime");
-    const now = new Date();
+const dateEl = document.getElementById("currentDate");
+const timeEl = document.getElementById("currentTime");
+const timeZone = dateEl?.dataset.timezone || "UTC";
+const dateFormatter = dateEl ? new Intl.DateTimeFormat("en-IN", {
+    timeZone,
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+}) : null;
+const timeFormatter = timeEl ? new Intl.DateTimeFormat("en-IN", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+}) : null;
 
-    if (dateEl) {
-        dateEl.textContent = now.toLocaleDateString("en-IN", {
-            weekday: "short",
-            day: "2-digit",
-            month: "short",
-            year: "numeric"
-        });
+function updateClock() {
+    const now = new Date();
+    const dateText = dateFormatter?.format(now);
+    const timeText = timeFormatter?.format(now);
+
+    if (dateEl && dateText && dateEl.textContent !== dateText) {
+        dateEl.textContent = dateText;
     }
 
-    if (timeEl) {
-        timeEl.textContent = now.toLocaleTimeString("en-IN", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit"
-        });
+    if (timeEl && timeText && timeEl.textContent !== timeText) {
+        timeEl.textContent = timeText;
     }
 }
 
@@ -58,7 +66,7 @@ document.querySelectorAll(".category-btn").forEach(button => {
             .forEach(btn => btn.classList.remove("active"));
 
         button.classList.add("active");
-        activeCategory = button.dataset.category || "All";
+        activeCategory = button.dataset.category || "all";
         filterMenu();
     });
 });
@@ -77,11 +85,15 @@ function filterMenu() {
 
     document.querySelectorAll(".food-card").forEach(card => {
         const matchesCategory =
-            activeCategory === "All" ||
+            activeCategory === "all" ||
             card.dataset.category === activeCategory;
 
+        const searchableText = [
+            card.dataset.name || "",
+            card.dataset.categoryName || ""
+        ].join(" ").toLowerCase();
         const matchesSearch =
-            (card.dataset.name || "").toLowerCase().includes(search);
+            searchableText.includes(search);
 
         card.style.display =
             matchesCategory && matchesSearch ? "" : "none";
