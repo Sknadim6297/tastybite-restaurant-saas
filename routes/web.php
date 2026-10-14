@@ -3,9 +3,8 @@
 use App\Http\Controllers\Restaurant\PosController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', fn () => redirect()->route('restaurant.login'))
+    ->middleware('restaurant.guest');
 
 Route::middleware(['restaurant.headers', 'restaurant', 'restaurant.subscription'])->group(function () {
     Route::get('/pos', [PosController::class, 'index'])

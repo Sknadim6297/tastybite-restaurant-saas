@@ -30,6 +30,46 @@ class RestaurantAuthenticationTest extends TestCase
             ->assertHeader('Referrer-Policy', 'no-referrer');
     }
 
+    public function test_homepage_redirects_guests_to_the_existing_restaurant_login(): void
+    {
+        $this->get('/')
+            ->assertRedirect(route('restaurant.login'));
+
+        $this->get(route('restaurant.login'))
+            ->assertOk()
+            ->assertSee('Welcome back');
+    }
+
+    public function test_homepage_redirects_an_authenticated_active_owner_to_the_dashboard(): void
+    {
+        $restaurant = Restaurant::create([
+            'name' => 'Bella Vista',
+            'slug' => 'bella-vista',
+            'email' => 'hello@bellavista.test',
+            'status' => 'active',
+        ]);
+        $owner = User::create([
+            'restaurant_id' => $restaurant->id,
+            'name' => 'Owner One',
+            'email' => 'owner@bellavista.test',
+            'role' => 'owner',
+            'status' => 'active',
+            'password' => Hash::make(self::PASSWORD),
+        ]);
+
+        $this->actingAs($owner, 'web');
+        $this->app['session']->put(
+            'restaurant_user_password_version',
+            hash('sha256', $owner->getAuthPassword()),
+        );
+
+        $this->get('/')
+            ->assertRedirect(route('restaurant.dashboard'));
+        $this->get(route('restaurant.dashboard'))
+            ->assertOk()
+            ->assertSee($restaurant->name);
+    }
+
     public function test_guest_pos_request_redirects_to_login_without_claiming_the_session_expired(): void
     {
         $this->get(route('pos.index'))
