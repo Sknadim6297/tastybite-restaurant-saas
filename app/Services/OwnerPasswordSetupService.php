@@ -79,6 +79,8 @@ class OwnerPasswordSetupService
                 $broker,
                 $email,
                 $tokenTable,
+                $mailer,
+                $configurationTransport,
                 &$issuedToken,
                 &$ownerId,
             ): string {
@@ -100,6 +102,12 @@ class OwnerPasswordSetupService
                     'hash' => $record->token,
                 ];
 
+                Log::info('Owner password reset email delivery attempt started.', [
+                    'category' => 'mail_delivery_attempt',
+                    'mailer' => $mailer,
+                    'transport' => $configurationTransport,
+                    'owner_id' => $ownerId,
+                ]);
                 $this->sendNotification($user, $token);
                 event(new PasswordResetLinkSent($user));
 
@@ -139,6 +147,13 @@ class OwnerPasswordSetupService
                 'message' => 'A password setup link could not be issued. Verify the owner account and password-reset configuration before retrying.',
             ];
         }
+
+        Log::info('Owner password reset email accepted by configured mail transport.', [
+            'category' => 'mail_delivery_accepted',
+            'mailer' => $mailer,
+            'transport' => $configurationTransport,
+            'owner_id' => $ownerId,
+        ]);
 
         if ($configurationTransport === 'array') {
             return [

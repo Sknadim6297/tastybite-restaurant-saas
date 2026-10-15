@@ -14,7 +14,7 @@ return [
     |
     */
 
-    'default' => env('MAIL_MAILER', 'log'),
+    'default' => env('MAIL_MAILER', 'smtp'),
 
     /*
     |--------------------------------------------------------------------------
@@ -50,6 +50,19 @@ return [
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url(env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
+        'smtp_backup' => [
+            'transport' => 'smtp',
+            'scheme' => env('MAIL_BACKUP_SCHEME', env('MAIL_SCHEME')),
+            'url' => env('MAIL_BACKUP_URL'),
+            'host' => env('MAIL_BACKUP_HOST', '127.0.0.1'),
+            'port' => env('MAIL_BACKUP_PORT', 2525),
+            'username' => env('MAIL_BACKUP_USERNAME'),
+            'password' => env('MAIL_BACKUP_PASSWORD'),
+            'require_tls' => env('MAIL_BACKUP_REQUIRE_TLS', env('MAIL_REQUIRE_TLS', false)),
+            'timeout' => null,
+            'local_domain' => env('MAIL_BACKUP_EHLO_DOMAIN', env('MAIL_EHLO_DOMAIN', parse_url(env('APP_URL', 'http://localhost'), PHP_URL_HOST))),
+        ],
+
         'ses' => [
             'transport' => 'ses',
         ],
@@ -82,10 +95,10 @@ return [
 
         'failover' => [
             'transport' => 'failover',
-            'mailers' => [
-                'smtp',
-                'log',
-            ],
+            'mailers' => array_values(array_filter(array_map(
+                'trim',
+                explode(',', (string) env('MAIL_FAILOVER_MAILERS', 'smtp')),
+            ))),
         ],
 
         'roundrobin' => [
