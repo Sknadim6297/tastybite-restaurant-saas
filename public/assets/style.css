@@ -867,6 +867,27 @@ textarea {
         background 180ms ease;
 }
 
+#menuSearch {
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+#menuSearch::-webkit-search-cancel-button,
+#menuSearch::-webkit-search-decoration,
+#menuSearch::-webkit-search-results-button,
+#menuSearch::-webkit-search-results-decoration {
+    display: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+#menuSearch::-ms-clear,
+#menuSearch::-ms-reveal {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
 .header-search input::placeholder {
     color: #aab0ba;
     opacity: 1;
@@ -907,9 +928,19 @@ textarea {
     border-radius: 50%;
     background: transparent;
     color: #aab0ba;
+    font-size: 14px;
+    transition:
+        background-color 160ms ease,
+        color 160ms ease;
 }
 .search-clear:hover {
+    background: rgba(255, 255, 255, 0.08);
     color: #ff9100;
+}
+.search-clear:focus-visible,
+.search-submit:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
 }
 .search-clear[hidden] {
     display: none;

@@ -5,9 +5,11 @@ namespace App\Services;
 use App\Models\Restaurant;
 use App\Models\RestaurantAuditLog;
 use App\Models\RestaurantSubscription;
+use App\Models\RestaurantSubscriptionEvent;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPaymentRefund;
 use App\Models\SuperAdmin;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\UploadedFile;
@@ -20,6 +22,7 @@ class PaymentManagementService
     public function __construct(
         private readonly SuperAdminNotificationService $notifications,
         private readonly InvoiceManagementService $invoices,
+        private readonly SubscriptionService $subscriptions,
     ) {}
 
     public function create(array $data, SuperAdmin $actor, ?UploadedFile $proof = null): SubscriptionPayment
@@ -62,12 +65,104 @@ class PaymentManagementService
                     'proof_path' => $proofPath,
                 ]);
 
+                if ($subscription->status === 'pending_payment') {
+                    $subscription->update(['status' => 'pending_approval']);
+                    RestaurantSubscriptionEvent::create([
+                        'restaurant_id' => $subscription->restaurant_id,
+                        'restaurant_subscription_id' => $subscription->id,
+                        'subscription_plan_id' => $subscription->subscription_plan_id,
+                        'actor_id' => $actor->id,
+                        'action' => 'payment_submitted',
+                        'previous_status' => 'pending_payment',
+                        'new_status' => 'pending_approval',
+                        'starts_at' => $subscription->starts_at,
+                        'expires_at' => $subscription->expires_at,
+                        'details' => ['payment_id' => $payment->id],
+                    ]);
+                }
+
                 $this->audit($actor, 'payment_recorded', $payment, [
                     'restaurant_id' => $payment->restaurant_id,
                     'amount' => $payment->amount,
                     'currency' => $payment->currency,
                     'payment_method' => $payment->payment_method,
                     'status' => $payment->status,
+                ]);
+                $this->notifications->paymentEvent('payment_submitted', $payment);
+
+                return $payment;
+            });
+        } catch (\Throwable $exception) {
+            if ($proofPath !== null) {
+                Storage::disk('local')->delete($proofPath);
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function submitOwnerPayment(
+        RestaurantSubscription $subscription,
+        User $owner,
+        array $data,
+        ?UploadedFile $proof,
+    ): SubscriptionPayment {
+        if (! $owner->isOwner() || $owner->restaurant_id !== $subscription->restaurant_id) {
+            throw ValidationException::withMessages(['subscription' => 'The selected subscription is not available to this account.']);
+        }
+
+        $proofPath = $proof?->store('payment-proofs', 'local');
+        if ($proof !== null && ! is_string($proofPath)) {
+            throw new \RuntimeException('The payment proof could not be stored securely.');
+        }
+
+        try {
+            return DB::transaction(function () use ($subscription, $owner, $data, $proofPath): SubscriptionPayment {
+                Restaurant::query()->lockForUpdate()->findOrFail($owner->restaurant_id);
+                $subscription = RestaurantSubscription::query()
+                    ->where('restaurant_id', $owner->restaurant_id)
+                    ->lockForUpdate()
+                    ->findOrFail($subscription->id);
+
+                if (! in_array($subscription->status, ['pending_payment', 'pending_approval'], true)) {
+                    throw ValidationException::withMessages(['subscription' => 'Payment submissions are not available for this subscription.']);
+                }
+
+                $summary = $this->subscriptionPaymentSummaries(new EloquentCollection([$subscription]))[$subscription->id];
+                $amountCents = SubscriptionPayment::toCents((string) $data['amount']);
+                if ($amountCents < 1 || $amountCents > SubscriptionPayment::toCents($summary['available_amount'])) {
+                    throw ValidationException::withMessages(['amount' => 'The payment amount exceeds the available subscription balance.']);
+                }
+
+                $payment = SubscriptionPayment::create([
+                    'restaurant_id' => $subscription->restaurant_id,
+                    'subscription_plan_id' => $subscription->subscription_plan_id,
+                    'restaurant_subscription_id' => $subscription->id,
+                    'plan_name' => $subscription->plan_name,
+                    'plan_code' => $subscription->plan_code,
+                    'amount' => $data['amount'],
+                    'currency' => $subscription->currency,
+                    'payment_method' => $data['payment_method'],
+                    'transaction_reference' => $data['transaction_reference'] ?? null,
+                    'status' => 'pending',
+                    'paid_at' => CarbonImmutable::now(config('app.timezone'))->utc(),
+                    'notes' => $data['notes'] ?? null,
+                    'proof_path' => $proofPath,
+                ]);
+
+                $subscription->update(['status' => 'pending_approval']);
+                RestaurantAuditLog::create([
+                    'actor_type' => 'restaurant_owner',
+                    'action' => 'payment_submitted',
+                    'target_type' => 'subscription_payment',
+                    'target_id' => $payment->id,
+                    'details' => [
+                        'restaurant_id' => $payment->restaurant_id,
+                        'owner_user_id' => $owner->id,
+                        'subscription_id' => $subscription->id,
+                        'amount' => $payment->amount,
+                        'currency' => $payment->currency,
+                    ],
                 ]);
                 $this->notifications->paymentEvent('payment_submitted', $payment);
 
@@ -117,6 +212,14 @@ class PaymentManagementService
                 'approved_at' => CarbonImmutable::now(config('app.timezone'))->utc(),
             ]);
 
+            $summary = $this->subscriptionPaymentSummaries(new EloquentCollection([$subscription]))[$subscription->id];
+            if (
+                SubscriptionPayment::toCents($summary['outstanding']) === 0
+                && in_array($subscription->status, ['pending_payment', 'pending_approval'], true)
+            ) {
+                $subscription = $this->subscriptions->activateAfterPayment($subscription, $actor);
+            }
+
             $this->invoices->issueForApprovedPayment($payment, $subscription, $actor);
 
             $this->audit($actor, 'payment_approved', $payment, [
@@ -157,11 +260,15 @@ class PaymentManagementService
         $payments = SubscriptionPayment::query()
             ->whereIn('restaurant_subscription_id', $subscriptionIds)
             ->whereIn('status', ['approved', 'refunded', 'pending'])
+            ->where(function ($query): void {
+                $query->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
+            })
             ->with('refunds:id,subscription_payment_id,amount')
             ->get(['id', 'restaurant_subscription_id', 'amount', 'status']);
 
         $paidCents = array_fill_keys($subscriptionIds, 0);
         $pendingCents = array_fill_keys($subscriptionIds, 0);
+        $refundedCentsBySubscription = array_fill_keys($subscriptionIds, 0);
 
         foreach ($payments as $payment) {
             $subscriptionId = (int) $payment->restaurant_subscription_id;
@@ -176,6 +283,7 @@ class PaymentManagementService
             $refundCents = $payment->refunds->sum(
                 fn (SubscriptionPaymentRefund $refund): int => SubscriptionPayment::toCents((string) $refund->amount),
             );
+            $refundedCentsBySubscription[$subscriptionId] += $refundCents;
             $paidCents[$subscriptionId] += max(
                 0,
                 SubscriptionPayment::toCents((string) $payment->amount) - $refundCents,
@@ -196,7 +304,9 @@ class PaymentManagementService
                 'available_amount' => SubscriptionPayment::formatCents($available),
                 'payment_status' => $outstanding === 0
                     ? 'Fully Paid'
-                    : ($paid > 0 ? 'Partially Paid' : ($pendingCents[$id] > 0 ? 'Pending Approval' : 'Unpaid')),
+                    : ($paid > 0
+                        ? 'Partially Paid'
+                        : ($pendingCents[$id] > 0 ? 'Pending Approval' : ($refundedCentsBySubscription[$id] > 0 ? 'Refunded' : 'Unpaid'))),
             ];
         }
 
@@ -217,6 +327,36 @@ class PaymentManagementService
                 'rejected_at' => CarbonImmutable::now(config('app.timezone'))->utc(),
                 'rejection_reason' => $reason,
             ]);
+
+            if (
+                $payment->restaurant_subscription_id
+                && ! SubscriptionPayment::query()
+                    ->where('restaurant_subscription_id', $payment->restaurant_subscription_id)
+                    ->where('status', 'pending')
+                    ->whereKeyNot($payment->id)
+                    ->exists()
+            ) {
+                $subscription = RestaurantSubscription::query()
+                    ->lockForUpdate()
+                    ->find($payment->restaurant_subscription_id);
+
+                if ($subscription?->status === 'pending_approval') {
+                    $previousStatus = $subscription->status;
+                    $subscription->update(['status' => 'pending_payment']);
+                    RestaurantSubscriptionEvent::create([
+                        'restaurant_id' => $subscription->restaurant_id,
+                        'restaurant_subscription_id' => $subscription->id,
+                        'subscription_plan_id' => $subscription->subscription_plan_id,
+                        'actor_id' => $actor->id,
+                        'action' => 'payment_rejected',
+                        'previous_status' => $previousStatus,
+                        'new_status' => 'pending_payment',
+                        'starts_at' => $subscription->starts_at,
+                        'expires_at' => $subscription->expires_at,
+                        'details' => ['payment_id' => $payment->id],
+                    ]);
+                }
+            }
             $this->audit($actor, 'payment_rejected', $payment, ['reason' => $reason]);
             $this->notifications->paymentEvent('payment_rejected', $payment);
 

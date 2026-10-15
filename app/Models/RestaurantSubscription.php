@@ -65,13 +65,31 @@ class RestaurantSubscription extends Model
         return $this->hasMany(RestaurantSubscriptionEvent::class);
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(SubscriptionPayment::class, 'restaurant_subscription_id');
+    }
+
+    public function getFormattedIdAttribute(): ?string
+    {
+        return $this->getKey() === null
+            ? null
+            : sprintf('SUB%06d', (int) $this->getKey());
+    }
+
     public function effectiveStatus(?CarbonInterface $now = null): string
     {
-        if (in_array($this->status, ['active', 'trial'], true) && $this->expires_at) {
-            $now ??= CarbonImmutable::now(config('app.timezone'));
+        $now ??= CarbonImmutable::now(config('app.timezone'));
 
+        if (in_array($this->status, ['active', 'trial'], true)) {
+            if ($this->starts_at && $this->starts_at->gt($now)) {
+                return 'scheduled';
+            }
+
+            if ($this->expires_at) {
             if ($this->expires_at->lt($now)) {
                 return 'expired';
+            }
             }
         }
 

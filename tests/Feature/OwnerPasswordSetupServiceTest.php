@@ -171,7 +171,10 @@ class OwnerPasswordSetupServiceTest extends TestCase
         $this->app->instance(OwnerPasswordSetupService::class, $service);
         $this->post(route('restaurant.password.email'), ['email' => $owner->email])
             ->assertRedirect(route('restaurant.password.request'))
-            ->assertSessionHas('status');
+            ->assertSessionHasErrors([
+                'email' => 'Unable to send reset email. Please try again later.',
+            ])
+            ->assertSessionMissing('status');
 
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $owner->email]);
         Log::shouldHaveReceived('warning')
@@ -206,6 +209,17 @@ class OwnerPasswordSetupServiceTest extends TestCase
         $this->assertInstanceOf(ArrayTransport::class, $transport);
         $this->assertCount(1, $transport->messages());
         $this->assertDatabaseHas('password_reset_tokens', ['email' => $owner->email]);
+    }
+
+    public function test_non_owner_restaurant_users_cannot_receive_owner_reset_tokens(): void
+    {
+        $staff = $this->createOwner();
+        $staff->forceFill(['role' => 'staff'])->save();
+
+        $result = app(OwnerPasswordSetupService::class)->sendForEmail($staff->email);
+
+        $this->assertSame('invalid_user', $result['result']);
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $staff->email]);
     }
 
     private function createOwner(): User

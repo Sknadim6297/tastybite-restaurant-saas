@@ -107,6 +107,7 @@ return [
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
             'expire' => 60,
             'throttle' => 60,
+            'expose_missing_accounts' => env('OWNER_PASSWORD_RESET_EXPOSE_MISSING_ACCOUNTS', false),
         ],
         'super_admins' => [
             'provider' => 'super_admins',

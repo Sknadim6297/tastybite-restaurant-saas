@@ -183,6 +183,8 @@ class SubscriptionManagementTest extends TestCase
         ])->assertRedirect();
 
         $subscription = RestaurantSubscription::query()->firstOrFail();
+        $this->assertSame('pending_payment', $subscription->status);
+        $this->assertFalse($subscription->isCurrentlyValid());
         $this->assertSame(
             '2024-02-28 23:59:59',
             $subscription->expires_at->timezone(config('app.timezone'))->toDateTimeString(),
@@ -226,8 +228,11 @@ class SubscriptionManagementTest extends TestCase
         $restaurant = $this->createRestaurant('Renewal House', 'renewal-house');
         $plan = $this->createPlan();
         $service = app(SubscriptionService::class);
-        $start = CarbonImmutable::now(config('app.timezone'))->subDay();
-        $initial = $service->assign($restaurant, $plan, $start, false, $admin);
+        $start = CarbonImmutable::now(config('app.timezone'))->subDay()->startOfDay();
+        $initial = $this->createSubscription($restaurant, $plan, [
+            'starts_at' => $start->utc(),
+            'expires_at' => $service->planExpiry($plan->duration_months, $plan->duration_days, $start)->utc(),
+        ]);
 
         $extensionTarget = $initial->expires_at->timezone(config('app.timezone'))->addDays(10)->startOfDay();
         $service->extend($initial, $extensionTarget, $admin);
@@ -240,6 +245,7 @@ class SubscriptionManagementTest extends TestCase
             $extended->expires_at->timezone(config('app.timezone'))->startOfDay()->addDay()->utc()->toDateTimeString(),
             $renewal->starts_at->toDateTimeString(),
         );
+        $this->assertSame('pending_payment', $renewal->status);
         $this->assertDatabaseCount('restaurant_subscriptions', 2);
 
         $this->assertDatabaseHas('restaurant_subscription_events', [
@@ -249,7 +255,8 @@ class SubscriptionManagementTest extends TestCase
         ]);
         $this->assertDatabaseHas('restaurant_subscription_events', [
             'restaurant_subscription_id' => $renewal->id,
-            'action' => 'renewed',
+            'action' => 'renewal_requested',
+            'new_status' => 'pending_payment',
         ]);
 
         try {
@@ -268,19 +275,18 @@ class SubscriptionManagementTest extends TestCase
         $plan = $this->createPlan(['duration_months' => 1]);
 
         $activeRestaurant = $this->createRestaurant('Active Renewal House', 'active-renewal-house');
-        $active = $service->assign(
-            $activeRestaurant,
-            $plan,
-            CarbonImmutable::parse('2026-11-15', config('app.timezone')),
-            false,
-            $admin,
-        );
+        $activeStart = CarbonImmutable::parse('2026-11-15', config('app.timezone'));
+        $active = $this->createSubscription($activeRestaurant, $plan, [
+            'starts_at' => $activeStart->utc(),
+            'expires_at' => $service->planExpiry(1, null, $activeStart)->utc(),
+        ]);
         $savedExpiry = $active->expires_at;
 
         $plan->update(['duration_months' => 12, 'billing_period' => 'yearly']);
         $activeRenewal = $service->renew($active, $admin);
         $this->assertSame($savedExpiry->timezone(config('app.timezone'))->startOfDay()->addDay()->utc()->toDateTimeString(), $activeRenewal->starts_at->toDateTimeString());
         $this->assertSame(1, $activeRenewal->duration_months);
+        $this->assertSame('pending_payment', $activeRenewal->status);
         $this->assertSame('2027-01-14 23:59:59', $activeRenewal->expires_at->timezone(config('app.timezone'))->toDateTimeString());
         $this->assertSame('2026-12-14 23:59:59', $active->fresh()->expires_at->timezone(config('app.timezone'))->toDateTimeString());
 
@@ -334,6 +340,7 @@ class SubscriptionManagementTest extends TestCase
             ->assertSee('data-subscription-expiry-preview', false)
             ->assertSee('data-expiry-preview', false)
             ->assertSee('data-duration-months="1"', false)
+            ->assertSee('Paid plans remain pending until a payment is verified.')
             ->assertDontSee('name="expiry_date"', false);
 
         $this->assertStringContainsString('monthly', $response->getContent());
@@ -343,13 +350,24 @@ class SubscriptionManagementTest extends TestCase
     {
         $admin = $this->actingAsSuperAdmin();
         $restaurant = $this->createRestaurant('Rollback House', 'rollback-house');
-        $initial = app(SubscriptionService::class)->assign(
-            $restaurant,
-            $this->createPlan(),
-            CarbonImmutable::now(config('app.timezone'))->subDay(),
-            false,
-            $admin,
-        );
+        $plan = $this->createPlan();
+        $initial = $this->createSubscription($restaurant, $plan, [
+            'status' => 'active',
+            'starts_at' => CarbonImmutable::now(config('app.timezone'))->subDays(5)->startOfDay()->utc(),
+            'expires_at' => CarbonImmutable::now(config('app.timezone'))->addDays(10)->endOfDay()->utc(),
+        ]);
+        RestaurantSubscriptionEvent::create([
+            'restaurant_id' => $restaurant->id,
+            'restaurant_subscription_id' => $initial->id,
+            'subscription_plan_id' => $plan->id,
+            'actor_id' => $admin->id,
+            'action' => 'assigned',
+            'previous_status' => null,
+            'new_status' => 'active',
+            'starts_at' => $initial->starts_at,
+            'expires_at' => $initial->expires_at,
+            'details' => ['source' => 'test'],
+        ]);
         Event::listen('eloquent.creating: '.RestaurantSubscriptionEvent::class, static function (): void {
             throw new \RuntimeException('History write failed.');
         });
@@ -370,13 +388,23 @@ class SubscriptionManagementTest extends TestCase
         $admin = $this->actingAsSuperAdmin();
         $restaurant = $this->createRestaurant('Lifecycle House', 'lifecycle-house');
         $plan = $this->createPlan();
-        $subscription = app(SubscriptionService::class)->assign(
-            $restaurant,
-            $plan,
-            CarbonImmutable::now(config('app.timezone'))->subDay(),
-            false,
-            $admin,
-        );
+        $subscription = $this->createSubscription($restaurant, $plan, [
+            'status' => 'active',
+            'starts_at' => CarbonImmutable::now(config('app.timezone'))->subDay()->startOfDay()->utc(),
+            'expires_at' => CarbonImmutable::now(config('app.timezone'))->addDays(10)->endOfDay()->utc(),
+        ]);
+        RestaurantSubscriptionEvent::create([
+            'restaurant_id' => $restaurant->id,
+            'restaurant_subscription_id' => $subscription->id,
+            'subscription_plan_id' => $plan->id,
+            'actor_id' => $admin->id,
+            'action' => 'assigned',
+            'previous_status' => null,
+            'new_status' => 'active',
+            'starts_at' => $subscription->starts_at,
+            'expires_at' => $subscription->expires_at,
+            'details' => ['source' => 'test'],
+        ]);
         $service = app(SubscriptionService::class);
 
         $service->changeStatus($subscription, 'suspended', $admin);
@@ -404,16 +432,14 @@ class SubscriptionManagementTest extends TestCase
     {
         config(['app.timezone' => 'Asia/Kolkata']);
         $this->travelTo(CarbonImmutable::parse('2026-10-13 10:00:00', 'Asia/Kolkata'));
-        $admin = $this->actingAsSuperAdmin();
+        $this->actingAsSuperAdmin();
         $restaurant = $this->createRestaurant('Timezone House', 'timezone-house');
         $plan = $this->createPlan(['duration_months' => 1]);
-        $subscription = app(SubscriptionService::class)->assign(
-            $restaurant,
-            $plan,
-            CarbonImmutable::parse('2026-10-13', 'Asia/Kolkata'),
-            false,
-            $admin,
-        );
+        $subscription = $this->createSubscription($restaurant, $plan, [
+            'starts_at' => CarbonImmutable::parse('2026-10-13', 'Asia/Kolkata')->utc(),
+            'expires_at' => CarbonImmutable::parse('2026-11-12 23:59:59', 'Asia/Kolkata')->utc(),
+            'status' => 'active',
+        ]);
 
         $this->assertSame('2026-11-12 23:59:59', $subscription->expires_at->timezone('Asia/Kolkata')->toDateTimeString());
         $this->assertTrue($subscription->isCurrentlyValid($subscription->expires_at));
@@ -436,7 +462,7 @@ class SubscriptionManagementTest extends TestCase
 
         $this->get(route('restaurant.dashboard'))->assertOk()->assertSee('Expired');
         $this->get(route('restaurant.profile'))->assertOk();
-        $this->get(route('restaurant.subscription'))->assertOk()->assertSee('Renewal instructions');
+        $this->get(route('restaurant.subscription'))->assertOk()->assertSee('Payment history');
         $this->assertAuthenticatedAs($user, 'web');
     }
 

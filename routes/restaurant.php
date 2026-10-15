@@ -27,6 +27,12 @@ RateLimiter::for('restaurant-support', function (Request $request) {
     return Limit::perMinute(20)->by('restaurant-support|' . $request->ip());
 });
 
+RateLimiter::for('restaurant-payment-submission', function (Request $request) {
+    $userId = $request->user('web')?->getAuthIdentifier() ?? 'guest';
+
+    return Limit::perMinute(5)->by('restaurant-payment-submission|'.$userId.'|'.$request->ip());
+});
+
 Route::prefix('restaurant')->name('restaurant.')->middleware('restaurant.headers')->group(function () {
     Route::middleware('restaurant.guest')->group(function () {
         Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -47,6 +53,13 @@ Route::prefix('restaurant')->name('restaurant.')->middleware('restaurant.headers
     Route::middleware(['restaurant', 'platform.settings'])->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/subscription', [SubscriptionStatusController::class, 'show'])->name('subscription');
+        Route::get('/subscription/invoices/{invoice}/pdf', [SubscriptionStatusController::class, 'invoicePdf'])
+            ->whereNumber('invoice')
+            ->name('subscription.invoices.pdf');
+        Route::post('/subscription/{restaurantSubscription}/payments', [SubscriptionStatusController::class, 'submitPayment'])
+            ->whereNumber('restaurantSubscription')
+            ->middleware('throttle:restaurant-payment-submission')
+            ->name('subscription.payments.store');
         Route::get('/profile', [DashboardController::class, 'profile'])->name('profile');
         Route::get('/announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
         Route::get('/announcements/{announcement}', [AnnouncementController::class, 'show'])->name('announcements.show');

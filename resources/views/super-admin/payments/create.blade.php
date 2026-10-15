@@ -4,7 +4,7 @@
 @section('section', 'Payments')
 
 @section('content')
-    <div class="page-heading"><div><span class="eyebrow">MANUAL PAYMENT ENTRY</span><h1>Record a payment</h1><p>Record payment against an existing subscription. Approval records the payment only; subscription access and dates are unchanged.</p></div></div>
+    <div class="page-heading"><div><span class="eyebrow">SUBSCRIPTION BILLING</span><h1>Record an offline payment</h1><p>Payments remain pending verification until an authorized Super Admin approves them.</p></div></div>
     @if($paymentPreferences['instructions'] !== '')
         <div class="notice-card"><strong>Payment recording guidance</strong><p>{{ $paymentPreferences['instructions'] }}</p></div>
     @endif
@@ -16,7 +16,7 @@
         data-loading-form
         data-subscription-payment-form
         data-subscriptions-url="{{ route('super-admin.payments.restaurants.subscriptions', ['restaurant' => '__RESTAURANT__']) }}"
-        data-old-subscription="{{ old('restaurant_subscription_id', '') }}"
+        data-old-subscription="{{ old('restaurant_subscription_id', $selectedSubscriptionId) }}"
         data-old-amount="{{ old('amount', '') }}"
     >
         @csrf
@@ -26,7 +26,7 @@
                 <select id="restaurant_id" name="restaurant_id" required data-payment-restaurant>
                     <option value="">Select a restaurant</option>
                     @foreach($restaurants as $restaurant)
-                        <option value="{{ $restaurant->id }}" @selected((string) old('restaurant_id') === (string) $restaurant->id)>{{ $restaurant->name }} (ID #{{ $restaurant->id }})</option>
+                        <option value="{{ $restaurant->id }}" @selected((string) old('restaurant_id', $selectedRestaurantId) === (string) $restaurant->id)>{{ $restaurant->name }} (ID #{{ $restaurant->id }})</option>
                     @endforeach
                 </select>
                 @error('restaurant_id')<span class="field-error">{{ $message }}</span>@enderror

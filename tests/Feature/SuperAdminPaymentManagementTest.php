@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Restaurant;
 use App\Models\RestaurantSubscription;
+use App\Models\RestaurantSubscriptionEvent;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPaymentRefund;
 use App\Models\SubscriptionPlan;
@@ -383,6 +384,151 @@ class SuperAdminPaymentManagementTest extends TestCase
         $this->assertSame($before['status'], $subscription->fresh()->status);
     }
 
+    public function test_approving_full_payment_activates_pending_subscription_from_approval_date(): void
+    {
+        $admin = $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant();
+        $plan = $this->createPlan();
+        $subscription = $this->createSubscription($restaurant, $plan, $admin);
+        $subscription->update(['status' => 'pending_payment']);
+        $payment = SubscriptionPayment::create($this->paymentAttributes($restaurant, $plan, $admin, [
+            'restaurant_subscription_id' => $subscription->id,
+            'amount' => $subscription->price,
+        ]));
+
+        $this->post(route('super-admin.payments.approve', $payment))->assertRedirect();
+
+        $activated = $subscription->fresh();
+        $expectedStart = CarbonImmutable::now(config('app.timezone'))->startOfDay();
+        $expectedExpiry = app(SubscriptionService::class)->planExpiry(
+            $subscription->duration_months,
+            $subscription->duration_days,
+            $expectedStart,
+        );
+        $this->assertSame('approved', $payment->fresh()->status);
+        $this->assertSame('active', $activated->status);
+        $this->assertSame($expectedStart->utc()->toDateTimeString(), $activated->starts_at->toDateTimeString());
+        $this->assertSame($expectedExpiry->utc()->toDateTimeString(), $activated->expires_at->toDateTimeString());
+        $this->assertDatabaseHas('restaurant_subscription_events', [
+            'restaurant_subscription_id' => $subscription->id,
+            'action' => 'payment_activated',
+            'new_status' => 'active',
+        ]);
+        $this->assertDatabaseHas('subscription_invoices', [
+            'subscription_payment_id' => $payment->id,
+            'restaurant_subscription_id' => $subscription->id,
+        ]);
+    }
+
+    public function test_owner_submission_requires_review_and_is_scoped_to_the_owners_restaurant(): void
+    {
+        Storage::fake('local');
+        $restaurant = $this->createRestaurant();
+        $plan = $this->createPlan();
+        $subscription = $this->createSubscription($restaurant, $plan);
+        $subscription->update(['status' => 'pending_payment']);
+        $owner = User::create([
+            'restaurant_id' => $restaurant->id,
+            'name' => 'Payment Owner',
+            'email' => 'owner-billing@example.test',
+            'password' => 'StrongOwnerPass123!',
+            'role' => 'owner',
+            'status' => 'active',
+        ]);
+        $this->actingAs($owner, 'web')->withSession([
+            'restaurant_user_password_version' => hash('sha256', $owner->getAuthPassword()),
+        ]);
+
+        $this->get(route('restaurant.subscription'))
+            ->assertOk()
+            ->assertSee('Submit payment for verification')
+            ->assertSee('Available after payment approval');
+        $this->post(route('restaurant.subscription.payments.store', $subscription), [
+            'amount' => $subscription->price,
+            'payment_method' => 'upi',
+            'transaction_reference' => 'OWNER-PAYMENT-1',
+            'proof' => UploadedFile::fake()->image('receipt.jpg'),
+        ])->assertRedirect(route('restaurant.subscription'))
+            ->assertSessionHas('status', 'Payment details submitted for verification.');
+
+        $payment = SubscriptionPayment::query()->firstOrFail();
+        $this->assertSame('pending', $payment->status);
+        $this->assertSame('pending_approval', $subscription->fresh()->status);
+        $this->assertStringStartsWith('payment-proofs/', $payment->proof_path);
+        Storage::disk('local')->assertExists($payment->proof_path);
+        $this->assertDatabaseMissing('subscription_invoices', ['subscription_payment_id' => $payment->id]);
+        $this->assertDatabaseHas('restaurant_audit_logs', [
+            'target_type' => 'subscription_payment',
+            'target_id' => $payment->id,
+            'action' => 'payment_submitted',
+            'actor_type' => 'restaurant_owner',
+        ]);
+
+        $otherRestaurant = $this->createRestaurant();
+        $otherPlan = $this->createPlan();
+        $otherSubscription = $this->createSubscription($otherRestaurant, $otherPlan);
+        $this->post(route('restaurant.subscription.payments.store', $otherSubscription), [
+            'amount' => $otherSubscription->price,
+            'payment_method' => 'upi',
+        ])->assertRedirect(route('restaurant.subscription'))
+            ->assertSessionHasErrors('subscription');
+        $this->assertDatabaseCount('subscription_payments', 1);
+    }
+
+    public function test_rejecting_owner_payment_keeps_subscription_inactive_and_allows_resubmission(): void
+    {
+        $admin = $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant();
+        $plan = $this->createPlan();
+        $subscription = $this->createSubscription($restaurant, $plan, $admin);
+        $subscription->update(['status' => 'pending_approval']);
+        $payment = SubscriptionPayment::create($this->paymentAttributes($restaurant, $plan, $admin, [
+            'restaurant_subscription_id' => $subscription->id,
+        ]));
+
+        $this->post(route('super-admin.payments.reject', $payment), ['reason' => 'Transfer could not be verified.'])
+            ->assertRedirect();
+
+        $this->assertSame('rejected', $payment->fresh()->status);
+        $this->assertSame('pending_payment', $subscription->fresh()->status);
+        $this->assertDatabaseMissing('subscription_invoices', ['subscription_payment_id' => $payment->id]);
+        $this->assertDatabaseHas('restaurant_subscription_events', [
+            'restaurant_subscription_id' => $subscription->id,
+            'action' => 'payment_rejected',
+            'new_status' => 'pending_payment',
+        ]);
+    }
+
+    public function test_future_fully_paid_subscription_is_scheduled_then_activated_by_reconciliation(): void
+    {
+        $admin = $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant();
+        $plan = $this->createPlan();
+        $futureStart = CarbonImmutable::now(config('app.timezone'))->addDays(3)->startOfDay();
+        $subscription = $this->createSubscription($restaurant, $plan, $admin);
+        $subscription->update([
+            'status' => 'pending_payment',
+            'starts_at' => $futureStart->utc(),
+        ]);
+        $payment = SubscriptionPayment::create($this->paymentAttributes($restaurant, $plan, $admin, [
+            'restaurant_subscription_id' => $subscription->id,
+            'amount' => $subscription->price,
+        ]));
+
+        $this->post(route('super-admin.payments.approve', $payment))->assertRedirect();
+        $this->assertSame('scheduled', $subscription->fresh()->status);
+        $this->assertSame('scheduled', $subscription->fresh()->effectiveStatus());
+
+        $this->travelTo($futureStart->addHour());
+        $this->artisan('subscriptions:reconcile')->assertSuccessful();
+        $this->assertSame('active', $subscription->fresh()->status);
+        $this->assertDatabaseHas('restaurant_subscription_events', [
+            'restaurant_subscription_id' => $subscription->id,
+            'action' => 'scheduled_period_activated',
+            'new_status' => 'active',
+        ]);
+    }
+
     private function actingAsSuperAdmin(): SuperAdmin
     {
         $admin = SuperAdmin::create([
@@ -399,19 +545,23 @@ class SuperAdminPaymentManagementTest extends TestCase
 
     private function createRestaurant(): Restaurant
     {
+        $suffix = bin2hex(random_bytes(4));
+
         return Restaurant::create([
             'name' => 'Payment Test Restaurant',
-            'slug' => 'payment-test-restaurant',
-            'email' => 'payment-test@example.test',
+            'slug' => 'payment-test-restaurant-'.$suffix,
+            'email' => 'payment-test-'.$suffix.'@example.test',
             'status' => 'active',
         ]);
     }
 
     private function createPlan(): SubscriptionPlan
     {
+        $suffix = bin2hex(random_bytes(4));
+
         return SubscriptionPlan::create([
             'name' => 'Monthly Plan',
-            'code' => 'MONTHLY-PLAN',
+            'code' => 'MONTHLY-PLAN-'.$suffix,
             'price' => '1299.50',
             'currency' => 'INR',
             'billing_period' => 'monthly',

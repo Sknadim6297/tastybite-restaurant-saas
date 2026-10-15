@@ -9,6 +9,7 @@ use App\Models\RestaurantSubscription;
 use App\Models\SaasFeature;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use Database\Seeders\DemoRestaurantMenuSeeder;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -295,6 +296,29 @@ class RestaurantMenuProductManagementTest extends TestCase
             ->assertDontSee('Foreign Product');
     }
 
+    public function test_owner_can_filter_products_by_an_owned_category_only(): void
+    {
+        $breakfast = $this->createCategory($this->restaurant, 'Breakfast');
+        $beverages = $this->createCategory($this->restaurant, 'Beverages');
+        $foreignCategory = $this->createCategory($this->otherRestaurant, 'Foreign Category');
+        $this->createProduct($this->restaurant, 'Masala Dosa', '', $breakfast);
+        $this->createProduct($this->restaurant, 'Filter Coffee', '', $beverages);
+        $this->createProduct($this->otherRestaurant, 'Foreign Product', '', $foreignCategory);
+
+        $this->get(route('restaurant.menu.products.index', ['category_id' => $breakfast->id]))
+            ->assertOk()
+            ->assertSee('id="product-category"', false)
+            ->assertSee('value="'.$breakfast->id.'" selected', false)
+            ->assertSee('Masala Dosa')
+            ->assertDontSee('Filter Coffee')
+            ->assertDontSee('Foreign Product');
+
+        $this->from(route('restaurant.menu.products.index'))
+            ->get(route('restaurant.menu.products.index', ['category_id' => $foreignCategory->id]))
+            ->assertRedirect(route('restaurant.menu.products.index'))
+            ->assertSessionHasErrors('category_id');
+    }
+
     public function test_product_listing_is_tenant_scoped_and_paginated(): void
     {
         for ($number = 1; $number <= 16; $number++) {
@@ -451,6 +475,104 @@ class RestaurantMenuProductManagementTest extends TestCase
         $this->assertStringContainsString('@media (max-width: 1100px)', $styles);
         $this->assertStringContainsString('@media (max-width: 767.98px)', $styles);
         $this->assertStringNotContainsString('images.unsplash.com', $view);
+    }
+
+    public function test_demo_menu_seeder_creates_tenant_scoped_idempotent_menu_and_images_for_menu_and_pos(): void
+    {
+        $seeder = app(DemoRestaurantMenuSeeder::class);
+        $result = $seeder->seedForRestaurant($this->restaurant->id);
+
+        $this->assertSame([
+            'categories_created' => 10,
+            'products_created' => 50,
+            'images_created' => 50,
+        ], $result);
+        $this->assertSame(10, $this->restaurant->menuCategories()->count());
+        $this->assertSame(50, $this->restaurant->menuItems()->count());
+        $this->assertSame(0, $this->otherRestaurant->menuCategories()->count());
+        $this->assertSame(0, $this->otherRestaurant->menuItems()->count());
+
+        $products = $this->restaurant->menuItems()->with('category')->get();
+        $this->assertCount(50, $products);
+        foreach ($products as $product) {
+            $this->assertSame($this->restaurant->id, $product->restaurant_id);
+            $this->assertSame($this->restaurant->id, $product->category->restaurant_id);
+            $this->assertTrue($product->is_active);
+            $this->assertTrue($product->is_available);
+            $this->assertStringStartsWith('restaurant-menu/'.$this->restaurant->id.'/demo-', $product->image_path);
+            Storage::disk('public')->assertExists($product->image_path);
+            $this->assertStringContainsString('storage/'.$product->image_path, $product->image_url);
+        }
+
+        $chickenBiryani = $products->firstWhere('name', 'Chicken Biryani');
+        $this->assertSame('200.00', $chickenBiryani->price);
+        $this->assertSame('Biryani & Rice', $chickenBiryani->category->name);
+        $this->assertSame('non_veg', $chickenBiryani->food_type);
+
+        $this->get(route('restaurant.menu.categories.index'))
+            ->assertOk()
+            ->assertSee('Biryani & Rice')
+            ->assertSee('Beverages');
+        $this->get(route('restaurant.menu.products.index'))
+            ->assertOk()
+            ->assertSee('Chicken Biryani')
+            ->assertSee('menu-product-thumbnail');
+        $this->get(route('restaurant.menu.products.edit', $chickenBiryani))
+            ->assertOk()
+            ->assertSee('src="'.asset('storage/'.$chickenBiryani->image_path).'"', false);
+        $this->get(route('pos.index'))
+            ->assertOk()
+            ->assertSee('data-name="Chicken Biryani"', false)
+            ->assertSee('src="'.asset('storage/'.$chickenBiryani->image_path).'"', false);
+
+        $secondRun = $seeder->seedForRestaurant($this->restaurant->id);
+        $this->assertSame([
+            'categories_created' => 0,
+            'products_created' => 0,
+            'images_created' => 0,
+        ], $secondRun);
+        $this->assertSame(10, $this->restaurant->menuCategories()->count());
+        $this->assertSame(50, $this->restaurant->menuItems()->count());
+    }
+
+    public function test_demo_menu_seeder_does_not_overwrite_matching_existing_menu_data(): void
+    {
+        $category = RestaurantMenuCategory::create([
+            'restaurant_id' => $this->restaurant->id,
+            'name' => 'Biryani & Rice',
+            'slug' => 'biryani-rice',
+            'description' => 'Existing restaurant description',
+            'icon' => 'stars',
+            'is_active' => false,
+            'sort_order' => 77,
+        ]);
+        $existingProduct = RestaurantMenuItem::create([
+            'restaurant_id' => $this->restaurant->id,
+            'category_id' => $category->id,
+            'name' => 'Chicken Biryani',
+            'description' => 'Existing product description',
+            'price' => '999.00',
+            'food_type' => 'veg',
+            'is_available' => false,
+            'is_active' => false,
+            'sort_order' => 88,
+        ]);
+
+        $result = app(DemoRestaurantMenuSeeder::class)->seedForRestaurant($this->restaurant->id);
+
+        $this->assertSame([
+            'categories_created' => 9,
+            'products_created' => 49,
+            'images_created' => 49,
+        ], $result);
+        $this->assertSame('Existing restaurant description', $category->fresh()->description);
+        $this->assertSame('stars', $category->fresh()->icon);
+        $this->assertFalse($category->fresh()->is_active);
+        $this->assertSame('999.00', $existingProduct->fresh()->price);
+        $this->assertSame('Existing product description', $existingProduct->fresh()->description);
+        $this->assertFalse($existingProduct->fresh()->is_active);
+        $this->assertFalse($existingProduct->fresh()->is_available);
+        $this->assertNull($existingProduct->fresh()->image_path);
     }
 
     private function validProductData(array $overrides = []): array

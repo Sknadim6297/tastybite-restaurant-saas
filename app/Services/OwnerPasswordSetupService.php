@@ -74,6 +74,17 @@ class OwnerPasswordSetupService
 
         try {
             $broker = Password::broker('users');
+            $candidate = $broker->getUser(['email' => $email]);
+
+            if (! $candidate instanceof User || ! $candidate->isOwner()) {
+                return [
+                    'sent' => false,
+                    'result' => 'invalid_user',
+                    'toast' => 'warning',
+                    'message' => 'A password setup link could not be issued. Verify the owner account and password-reset configuration before retrying.',
+                ];
+            }
+
             $tokenTable = config('auth.passwords.users.table');
             $status = $broker->sendResetLink(['email' => $email], function ($user, string $token) use (
                 $broker,
@@ -84,7 +95,7 @@ class OwnerPasswordSetupService
                 &$issuedToken,
                 &$ownerId,
             ): string {
-                if (! $user instanceof User || Str::lower($user->email) !== $email) {
+                if (! $user instanceof User || ! $user->isOwner() || Str::lower($user->email) !== $email) {
                     return Password::INVALID_USER;
                 }
 

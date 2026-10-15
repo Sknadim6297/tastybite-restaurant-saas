@@ -10,9 +10,25 @@
     </div>
 
     <form method="GET" action="{{ route('restaurant.menu.products.index') }}" class="panel-card report-filters" data-auto-filter>
-        <label for="product-search">Search products</label>
-        <input id="product-search" type="search" name="search" value="{{ $search }}" maxlength="255" placeholder="Search name or description">
-        @if($search !== '')
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="product-search">Search products</label>
+                <input id="product-search" type="search" name="search" value="{{ $search }}" maxlength="255" placeholder="Search name or description">
+            </div>
+            <div class="form-field">
+                <label for="product-category">Category</label>
+                <select id="product-category" name="category_id">
+                    <option value="">All categories</option>
+                    @foreach($categories as $category)
+                        <option value="{{ $category->id }}" @selected((string) $categoryId === (string) $category->id)>{{ $category->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="button button-primary" type="submit">Apply filters</button>
+            </div>
+        </div>
+        @if($search !== '' || $categoryId !== null)
             <a class="button button-secondary" href="{{ route('restaurant.menu.products.index') }}" data-auto-filter-reset>Clear</a>
         @endif
     </form>

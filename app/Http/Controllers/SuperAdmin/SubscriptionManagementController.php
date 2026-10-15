@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Restaurant;
 use App\Models\RestaurantSubscription;
 use App\Models\RestaurantSubscriptionEvent;
+use App\Models\SubscriptionPayment;
+use App\Models\SubscriptionPaymentRefund;
 use App\Models\SubscriptionPlan;
 use App\Models\SuperAdmin;
+use App\Services\PaymentManagementService;
 use App\Services\SubscriptionService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -19,7 +22,10 @@ use Illuminate\View\View;
 
 class SubscriptionManagementController extends Controller
 {
-    public function __construct(private readonly SubscriptionService $subscriptions) {}
+    public function __construct(
+        private readonly SubscriptionService $subscriptions,
+        private readonly PaymentManagementService $payments,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -37,6 +43,7 @@ class SubscriptionManagementController extends Controller
             'restaurants' => Restaurant::query()->where('status', 'active')->orderBy('name')->get(['id', 'name', 'slug']),
             'plans' => SubscriptionPlan::query()->where('status', 'active')->orderBy('name')->get(),
             'startDate' => CarbonImmutable::now(config('app.timezone'))->format('Y-m-d'),
+            'paymentPreferences' => app(\App\Services\PlatformSettingsService::class)->group('payment'),
         ]);
     }
 
@@ -75,6 +82,7 @@ class SubscriptionManagementController extends Controller
             'restaurant',
             'plan',
             'creator',
+            'payments' => fn ($query) => $query->with(['creator', 'approver', 'rejector', 'invoice', 'refunds'])->latest('paid_at'),
             'events' => fn ($query) => $query->with('actor')->latest(),
         ]);
 
@@ -86,7 +94,7 @@ class SubscriptionManagementController extends Controller
         $renewal = $this->subscriptions->renew($restaurantSubscription, $this->actor());
 
         return redirect()->route('super-admin.subscriptions.show', $renewal)
-            ->with('status', 'Subscription renewed. The previous subscription remains in history.');
+            ->with('status', 'Renewal created and awaiting payment. The previous subscription remains in history.');
     }
 
     public function extend(Request $request, RestaurantSubscription $restaurantSubscription): RedirectResponse
@@ -155,31 +163,56 @@ class SubscriptionManagementController extends Controller
     {
         $now = CarbonImmutable::now(config('app.timezone'));
         $databaseNow = $now->utc();
-        $query = RestaurantSubscription::query()->with('restaurant');
+        $query = RestaurantSubscription::query()->with(['restaurant.owners', 'payments']);
 
         if ($request->filled('search')) {
             $search = trim($request->string('search')->toString());
             $query->where(function ($builder) use ($search): void {
                 $builder->where('plan_name', 'like', "%{$search}%")
                     ->orWhere('plan_code', 'like', "%{$search}%")
+                    ->orWhere('id', 'like', "%{$search}%")
                     ->orWhereHas('restaurant', fn ($restaurant) => $restaurant
                         ->where('name', 'like', "%{$search}%")
-                        ->orWhere('slug', 'like', "%{$search}%"));
+                        ->orWhere('slug', 'like', "%{$search}%")
+                        ->orWhereHas('owners', fn ($owner) => $owner
+                            ->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")))
+                    ->orWhereHas('payments', fn ($payment) => $payment
+                        ->where('transaction_reference', 'like', "%{$search}%"));
             });
+        }
+
+        $statusFilter = $request->input('status', '');
+        if ($statusFilter !== '' && in_array($statusFilter, [
+            'pending_payment', 'pending_approval', 'scheduled', 'active', 'trial', 'expired', 'suspended', 'cancelled',
+        ], true)) {
+            if ($statusFilter === 'expired') {
+                $query->where(function ($builder) use ($databaseNow): void {
+                    $builder->where('status', 'expired')
+                        ->orWhere(function ($legacy) use ($databaseNow): void {
+                            $legacy->whereIn('status', ['active', 'trial'])->where('expires_at', '<', $databaseNow);
+                        });
+                });
+            } elseif (in_array($statusFilter, ['active', 'trial'], true)) {
+                $query->where('status', $statusFilter)->where('starts_at', '<=', $databaseNow)->where('expires_at', '>=', $databaseNow);
+            } else {
+                $query->where('status', $statusFilter);
+            }
+        }
+
+        $paymentStatusFilter = $request->input('payment_status', '');
+        if (in_array($paymentStatusFilter, ['pending', 'approved', 'rejected', 'refunded'], true)) {
+            $query->whereHas('payments', function ($payments) use ($paymentStatusFilter): void {
+                $payments->where('status', $paymentStatusFilter);
+            });
+        } elseif ($paymentStatusFilter === 'unpaid') {
+            $query->whereDoesntHave('payments', fn ($payments) => $payments->whereIn('status', ['pending', 'approved', 'refunded']));
         }
 
         if ($expiring) {
             $query->whereIn('status', ['active', 'trial'])
                 ->where('starts_at', '<=', $databaseNow)
                 ->whereBetween('expires_at', [$databaseNow, $now->addDays(30)->utc()]);
-        } elseif (in_array($request->input('status'), ['active', 'trial'], true)) {
-            $query->where('status', $request->input('status'))
-                ->where('starts_at', '<=', $databaseNow)
-                ->where('expires_at', '>=', $databaseNow);
-        } elseif ($request->input('status') === 'expired') {
-            $query->whereIn('status', ['active', 'trial'])->where('expires_at', '<', $databaseNow);
-        } elseif (in_array($request->input('status'), ['suspended', 'cancelled'], true)) {
-            $query->where('status', $request->input('status'));
         }
 
         $sort = in_array($request->input('sort'), ['plan_name', 'starts_at', 'expires_at', 'created_at'], true)
@@ -187,14 +220,90 @@ class SubscriptionManagementController extends Controller
             : 'created_at';
         $direction = $request->input('direction') === 'asc' ? 'asc' : 'desc';
         $subscriptions = $query->orderBy($sort, $direction)->paginate(15)->withQueryString();
+        $paymentQueue = SubscriptionPayment::query()
+            ->with(['restaurant.owners', 'subscription'])
+            ->where('status', 'pending')
+            ->where(function ($query): void {
+                $query->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
+            })
+            ->orderBy('paid_at')
+            ->orderBy('id')
+            ->paginate(10, ['*'], 'approvals_page')
+            ->withQueryString();
+        $paymentHistory = SubscriptionPayment::query()
+            ->with(['restaurant.owners', 'subscription'])
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->paginate(10, ['*'], 'payments_page')
+            ->withQueryString();
+        $refundHistory = SubscriptionPaymentRefund::query()
+            ->with(['payment.restaurant', 'administrator'])
+            ->orderByDesc('refunded_at')
+            ->paginate(10, ['*'], 'refunds_page')
+            ->withQueryString();
+        $allSubscriptions = RestaurantSubscription::query()->get([
+            'id', 'restaurant_id', 'subscription_plan_id', 'price', 'currency', 'billing_period',
+            'duration_months', 'duration_days', 'status', 'is_trial', 'starts_at', 'expires_at',
+        ]);
+        $paymentSummaries = $this->payments->subscriptionPaymentSummaries($allSubscriptions);
+        $realPayments = SubscriptionPayment::query()
+            ->whereNotNull('id')
+            ->where(function ($query): void {
+                $query->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
+            });
+        $approvedPayments = (clone $realPayments)->whereIn('status', ['approved', 'refunded'])
+            ->with('refunds:id,subscription_payment_id,amount')
+            ->get(['id', 'amount']);
+        $collectedCents = 0;
+        foreach ($approvedPayments as $payment) {
+            $refundedCents = $payment->refunds->sum(
+                fn (SubscriptionPaymentRefund $refund): int => SubscriptionPayment::toCents((string) $refund->amount),
+            );
+            $collectedCents += max(0, SubscriptionPayment::toCents((string) $payment->amount) - $refundedCents);
+        }
+        $refundedCents = 0;
+        foreach (SubscriptionPaymentRefund::query()
+            ->whereHas('payment', fn ($payment) => $payment->where(function ($query): void {
+                $query->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
+            }))
+            ->get(['amount']) as $refund) {
+            $refundedCents += SubscriptionPayment::toCents((string) $refund->amount);
+        }
+        $pendingAmountCents = 0;
+        foreach ($allSubscriptions as $allSubscription) {
+            if (in_array($allSubscription->status, ['pending_payment', 'pending_approval'], true)) {
+                $pendingAmountCents += SubscriptionPayment::toCents(
+                    $paymentSummaries[$allSubscription->id]['outstanding'],
+                );
+            }
+        }
 
         return view('super-admin.subscriptions.index', [
             'subscriptions' => $subscriptions,
             'search' => $request->input('search', ''),
-            'statusFilter' => $request->input('status', ''),
+            'statusFilter' => $statusFilter,
+            'paymentStatusFilter' => $paymentStatusFilter,
             'sort' => $sort,
             'direction' => $direction,
             'expiring' => $expiring,
+            'paymentSummaries' => $paymentSummaries,
+            'paymentQueue' => $paymentQueue,
+            'paymentHistory' => $paymentHistory,
+            'refundHistory' => $refundHistory,
+            'summary' => [
+                'total_subscriptions' => RestaurantSubscription::query()->count(),
+                'active_subscriptions' => RestaurantSubscription::query()->where('status', 'active')
+                    ->where('starts_at', '<=', $databaseNow)->where('expires_at', '>=', $databaseNow)->count(),
+                'pending_payments' => RestaurantSubscription::query()->where('status', 'pending_payment')->count(),
+                'pending_approvals' => (clone $realPayments)->where('status', 'pending')->count(),
+                'expired_subscriptions' => RestaurantSubscription::query()->where(function ($builder) use ($databaseNow): void {
+                    $builder->where('status', 'expired')
+                        ->orWhere(fn ($legacy) => $legacy->whereIn('status', ['active', 'trial'])->where('expires_at', '<', $databaseNow));
+                })->count(),
+                'collected' => SubscriptionPayment::formatCents($collectedCents),
+                'pending_amount' => SubscriptionPayment::formatCents($pendingAmountCents),
+                'refunded' => SubscriptionPayment::formatCents($refundedCents),
+            ],
         ]);
     }
 

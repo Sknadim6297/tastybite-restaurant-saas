@@ -110,6 +110,28 @@ class PosPageTest extends TestCase
         $this->get('/pos-print.html')->assertNotFound();
     }
 
+    public function test_pos_search_has_one_custom_clear_button_and_hides_native_search_controls(): void
+    {
+        $response = $this->get(route('pos.index'))->assertOk();
+        $html = $response->getContent();
+        $this->assertSame(1, substr_count($html, 'data-search-clear'));
+        $this->assertStringContainsString('class="search-clear" type="button" data-search-clear', $html);
+        $this->assertStringContainsString('<i class="bi bi-x-lg" aria-hidden="true"></i>', $html);
+        $this->assertStringContainsString('class="search-submit" type="button" data-search-focus', $html);
+
+        $style = file_get_contents(public_path('assets/style.css'));
+        $this->assertIsString($style);
+        $this->assertStringContainsString('#menuSearch::-webkit-search-cancel-button', $style);
+        $this->assertStringContainsString('#menuSearch::-ms-clear', $style);
+
+        $script = file_get_contents(public_path('assets/script.js'));
+        $this->assertIsString($script);
+        $this->assertStringContainsString('searchClear.hidden = menuSearch.value.trim().length === 0;', $script);
+        $this->assertStringContainsString('menuSearch.dispatchEvent(new Event("input", { bubbles: true }));', $script);
+        $this->assertStringContainsString('if (event.key === "Enter")', $script);
+        $this->assertStringContainsString('menuSearch.focus();', $script);
+    }
+
     public function test_print_html_page_is_not_available(): void
     {
         $this->get('/pos-print.html')->assertNotFound();

@@ -53,9 +53,6 @@
                 <a href="{{ route('super-admin.subscriptions.history') }}" class="sidebar-link @if(request()->routeIs('super-admin.subscriptions.history')) is-active @endif">
                     <span class="nav-icon" aria-hidden="true">≡</span><span>Subscription History</span>
                 </a>
-                <a href="{{ route('super-admin.payments.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.payments.*')])>
-                    <span class="nav-icon" aria-hidden="true">₹</span><span>Payments</span>
-                </a>
                 <a href="{{ route('super-admin.invoices.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.invoices.*')])>
                     <span class="nav-icon" aria-hidden="true">▧</span><span>Invoices &amp; Billing</span>
                 </a>

@@ -102,8 +102,13 @@ class AuthController extends Controller
 
     public function sendResetLink(Request $request, OwnerPasswordSetupService $passwordSetupService): RedirectResponse
     {
+        $email = $request->input('email');
+        if (is_string($email)) {
+            $request->merge(['email' => Str::lower(trim($email))]);
+        }
+
         $validator = Validator::make($request->all(), [
-            'email' => ['required', 'email', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255'],
         ]);
 
         if ($validator->fails()) {
@@ -112,12 +117,34 @@ class AuthController extends Controller
                 ->withInput($request->only('email'));
         }
 
-        $passwordSetupService->sendForEmail($validator->validated()['email']);
+        $result = $passwordSetupService->sendForEmail($validator->validated()['email']);
 
-        return redirect()->route('restaurant.password.request')->with(
-            'status',
-            'Your request has been received. If an eligible account matches, reset instructions may be sent. Contact support if they do not arrive.'
-        );
+        if ($result['result'] === 'invalid_user' && config('auth.passwords.users.expose_missing_accounts', false)) {
+            return redirect()->route('restaurant.password.request')
+                ->withErrors([
+                    'email' => 'No account found with this email address.',
+                ])
+                ->withInput($request->only('email'));
+        }
+
+        if ($result['sent']) {
+            return redirect()->route('restaurant.password.request')->with([
+                'status' => 'Password reset link has been sent successfully.',
+                'toast_type' => 'success',
+            ]);
+        }
+
+        if ($result['result'] === 'invalid_user') {
+            return redirect()->route('restaurant.password.request')
+                ->with('status', 'If an active restaurant owner account matches this email, reset instructions will be sent.')
+                ->with('toast_type', 'information');
+        }
+
+        return redirect()->route('restaurant.password.request')
+            ->withErrors([
+                'email' => 'Unable to send reset email. Please try again later.',
+            ])
+            ->withInput($request->only('email'));
     }
 
     public function showResetPassword(string $token): View

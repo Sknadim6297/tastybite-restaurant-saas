@@ -5,7 +5,7 @@
 
 @section('content')
     <div class="page-heading">
-        <div><span class="eyebrow">SUBSCRIPTION OPERATIONS</span><h1>Assign a restaurant subscription</h1><p>Choose a restaurant and plan; expiry is calculated from the plan duration. No payment will be collected.</p></div>
+        <div><span class="eyebrow">SUBSCRIPTION OPERATIONS</span><h1>Assign a restaurant subscription</h1><p>Choose a restaurant and plan. Paid plans remain pending until a payment is verified.</p></div>
     </div>
     @if($plans->isEmpty())
         <div class="notice-card"><strong>No active plans are available.</strong><p>Create or activate a subscription plan before assigning one to a restaurant.</p><a class="button button-secondary" href="{{ route('super-admin.subscription-plans.index') }}">Manage plans</a></div>
@@ -56,6 +56,18 @@
                     <input type="hidden" name="trial" value="0">
                     <label><input type="checkbox" name="trial" value="1" @checked((bool) old('trial'))> Assign as a trial (only available if the selected plan offers a trial)</label>
                     @error('trial')<span class="field-error">{{ $message }}</span>@enderror
+                </div>
+                <div class="form-field form-field-full">
+                    <strong>Payment details</strong>
+                    <div class="detail-grid">
+                        <div class="detail-item"><span>Payment methods</span><strong>{{ collect($paymentPreferences['allowed_methods'])->map(fn ($method) => ucfirst(str_replace('_', ' ', $method)))->join(', ') ?: 'Not configured' }}</strong></div>
+                        <div class="detail-item"><span>Proof requirement</span><strong>{{ $paymentPreferences['proof_required'] ? 'Required' : 'Optional' }}</strong></div>
+                    </div>
+                    @if(filled($paymentPreferences['instructions']))
+                        <div class="notice-card"><strong>Configured payment instructions</strong><p>{{ $paymentPreferences['instructions'] }}</p></div>
+                    @else
+                        <p class="field-hint">No payment instructions are configured. No account details or payment instructions will be invented.</p>
+                    @endif
                 </div>
             </div>
             @error('subscription')<span class="field-error">{{ $message }}</span>@enderror

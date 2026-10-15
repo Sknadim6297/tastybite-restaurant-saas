@@ -7,6 +7,7 @@ use App\Models\RestaurantSubscription;
 use App\Models\SubscriptionPlan;
 use App\Models\SuperAdmin;
 use App\Models\User;
+use App\Services\OwnerPasswordSetupService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Transport\ArrayTransport;
@@ -165,7 +166,10 @@ class RestaurantAuthenticationTest extends TestCase
 
         $this->post(route('restaurant.password.email'), ['email' => strtoupper($owner->email)])
             ->assertRedirect(route('restaurant.password.request'))
-            ->assertSessionHas('status');
+            ->assertSessionHasErrors([
+                'email' => 'Unable to send reset email. Please try again later.',
+            ])
+            ->assertSessionMissing('status');
 
         $transport = app('mail.manager')->mailer()->getSymfonyTransport();
         $this->assertInstanceOf(ArrayTransport::class, $transport);
@@ -201,6 +205,70 @@ class RestaurantAuthenticationTest extends TestCase
         $this->assertAuthenticatedAs($owner->fresh(), 'web');
     }
 
+    public function test_unregistered_owner_reset_email_uses_a_generic_response_by_default(): void
+    {
+        config(['auth.passwords.users.expose_missing_accounts' => false]);
+
+        $this->post(route('restaurant.password.email'), ['email' => 'missing@example.test'])
+            ->assertRedirect(route('restaurant.password.request'))
+            ->assertSessionHas('status', 'If an active restaurant owner account matches this email, reset instructions will be sent.')
+            ->assertSessionHas('toast_type', 'information');
+
+        $this->assertDatabaseCount('password_reset_tokens', 0);
+    }
+
+    public function test_unregistered_owner_reset_email_can_show_opt_in_validation_message(): void
+    {
+        config(['auth.passwords.users.expose_missing_accounts' => true]);
+
+        $this->from(route('restaurant.password.request'))
+            ->post(route('restaurant.password.email'), ['email' => 'missing@example.test'])
+            ->assertRedirect(route('restaurant.password.request'))
+            ->assertSessionHasErrors([
+                'email' => 'No account found with this email address.',
+            ])
+            ->assertSessionMissing('status');
+
+        $this->get(route('restaurant.password.request'))
+            ->assertSee('id="email-error"', false)
+            ->assertSee('No account found with this email address.')
+            ->assertDontSee('If an active restaurant owner account matches this email');
+
+        $this->assertDatabaseCount('password_reset_tokens', 0);
+    }
+
+    public function test_invalid_owner_reset_email_format_is_reported_below_the_input(): void
+    {
+        $this->from(route('restaurant.password.request'))
+            ->post(route('restaurant.password.email'), ['email' => 'not-an-email'])
+            ->assertRedirect(route('restaurant.password.request'))
+            ->assertSessionHasErrors(['email']);
+
+        $this->get(route('restaurant.password.request'))
+            ->assertSee('id="email-error"', false)
+            ->assertSee('The email field must be a valid email address.');
+    }
+
+    public function test_owner_reset_success_message_requires_service_transport_acceptance(): void
+    {
+        $this->mock(OwnerPasswordSetupService::class, function ($mock): void {
+            $mock->shouldReceive('sendForEmail')
+                ->once()
+                ->with('owner@example.test')
+                ->andReturn([
+                    'sent' => true,
+                    'result' => 'accepted_by_transport',
+                    'message' => 'accepted',
+                    'toast' => 'success',
+                ]);
+        });
+
+        $this->post(route('restaurant.password.email'), ['email' => ' OWNER@example.test '])
+            ->assertRedirect(route('restaurant.password.request'))
+            ->assertSessionHas('status', 'Password reset link has been sent successfully.')
+            ->assertSessionHas('toast_type', 'success');
+    }
+
     public function test_public_reset_response_is_generic_when_failover_contains_a_log_mailer(): void
     {
         $owner = User::create([
@@ -227,7 +295,10 @@ class RestaurantAuthenticationTest extends TestCase
 
         $this->post(route('restaurant.password.email'), ['email' => $owner->email])
             ->assertRedirect(route('restaurant.password.request'))
-            ->assertSessionHas('status');
+            ->assertSessionHasErrors([
+                'email' => 'Unable to send reset email. Please try again later.',
+            ])
+            ->assertSessionMissing('status');
 
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $owner->email]);
         Notification::assertNothingSent();
@@ -245,6 +316,19 @@ class RestaurantAuthenticationTest extends TestCase
         $this->post(route('restaurant.login.submit'), [
             'email' => 'unknown@example.com',
             'password' => self::PASSWORD,
+        ])->assertTooManyRequests();
+    }
+
+    public function test_restaurant_password_reset_requests_are_rate_limited(): void
+    {
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->post(route('restaurant.password.email'), [
+                'email' => 'unknown@example.test',
+            ])->assertRedirect(route('restaurant.password.request'));
+        }
+
+        $this->post(route('restaurant.password.email'), [
+            'email' => 'unknown@example.test',
         ])->assertTooManyRequests();
     }
 

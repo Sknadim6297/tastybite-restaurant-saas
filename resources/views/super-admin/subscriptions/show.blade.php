@@ -7,11 +7,11 @@
     @php($effectiveStatus = $subscription->effectiveStatus())
     <div class="page-heading">
         <div>
-            <span class="eyebrow">SUBSCRIPTION RECORD #{{ $subscription->id }}</span>
+            <span class="eyebrow">SUBSCRIPTION {{ $subscription->formatted_id }}</span>
             <h1>{{ $subscription->restaurant->name }}</h1>
             <p>{{ $subscription->plan_name }} · {{ $subscription->plan_code }} · {{ $subscription->currency }} {{ number_format((float) $subscription->price, 2) }}</p>
         </div>
-        <span class="status-pill status-{{ $effectiveStatus }}">{{ ucfirst($effectiveStatus) }}</span>
+        <span class="status-pill status-{{ str_replace('_', '-', $effectiveStatus) }}">{{ str_replace('_', ' ', ucfirst($effectiveStatus)) }}</span>
     </div>
 
     <section class="panel-card">
@@ -20,12 +20,42 @@
             <div class="detail-item"><span>Plan</span><strong>{{ $subscription->plan_name }} · {{ $subscription->plan_code }}</strong></div>
             <div class="detail-item"><span>Billing</span><strong>{{ $subscription->currency }} {{ number_format((float) $subscription->price, 2) }} · {{ ucfirst($subscription->billing_period) }}</strong></div>
             <div class="detail-item"><span>Type</span><strong>{{ $subscription->is_trial ? 'Trial' : 'Standard' }}</strong></div>
-            <div class="detail-item"><span>Start date</span><strong>{{ $subscription->starts_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</strong></div>
-            <div class="detail-item"><span>Expiry date</span><strong>{{ $subscription->expires_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</strong></div>
+            <div class="detail-item"><span>Start date</span><strong>{{ in_array($subscription->status, ['pending_payment', 'pending_approval'], true) ? 'After payment approval' : $subscription->starts_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</strong></div>
+            <div class="detail-item"><span>Expiry date</span><strong>{{ in_array($subscription->status, ['pending_payment', 'pending_approval'], true) ? 'After payment approval' : $subscription->expires_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</strong></div>
             <div class="detail-item"><span>Assigned by</span><strong>{{ $subscription->creator?->name ?? 'Platform admin account unavailable' }}</strong></div>
             <div class="detail-item"><span>Renewal of</span><strong>{{ $subscription->renewal_of_id ? '#'.$subscription->renewal_of_id : 'Initial assignment' }}</strong></div>
         </div>
     </section>
+
+    <div class="section-heading"><div><h2>Payments &amp; verification</h2><p>Payment status is separate from subscription access. Approval activates only a fully paid pending subscription.</p></div>
+        @if(in_array($subscription->status, ['pending_payment', 'pending_approval'], true))
+            <a class="button button-primary" href="{{ route('super-admin.payments.create', ['restaurant_id' => $subscription->restaurant_id, 'restaurant_subscription_id' => $subscription->id]) }}">Record offline payment</a>
+        @endif
+    </div>
+    <div class="table-shell">
+        <table class="data-table">
+            <thead><tr><th>Payment</th><th>Amount</th><th>Method / Reference</th><th>Status</th><th>Submitted</th><th>Invoice / Actions</th></tr></thead>
+            <tbody>
+                @forelse($subscription->payments as $payment)
+                    <tr>
+                        <td>{{ $payment->formatted_id }}</td>
+                        <td>{{ $payment->currency }} {{ number_format((float) $payment->amount, 2) }}</td>
+                        <td>{{ $payment->payment_method_label ?? '—' }}<br><span class="meta-label">{{ $payment->transaction_reference ?: '—' }}</span></td>
+                        <td><span class="status-pill status-{{ $payment->status }}">{{ ucfirst($payment->status) }}</span></td>
+                        <td>{{ $payment->paid_at?->timezone(config('app.timezone'))->format('M j, Y H:i') ?? '—' }}</td>
+                        <td>
+                            @if($payment->invoice)
+                                <a class="button button-secondary" href="{{ route('super-admin.invoices.show', $payment->invoice) }}">Invoice</a>
+                            @endif
+                            <a class="button button-secondary" href="{{ route('super-admin.payments.show', $payment) }}">{{ $payment->status === 'pending' ? 'Review' : 'Details' }}</a>
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="6"><div class="empty-state"><h3>No payment records</h3><p>Payment submissions and approvals will appear here.</p></div></td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 
     <div class="section-heading"><div><h2>Subscription actions</h2><p>Every lifecycle change is stored as a separate history event.</p></div></div>
     <section class="subscription-action-grid">
@@ -33,7 +63,7 @@
             <form method="POST" action="{{ route('super-admin.subscriptions.renew', $subscription) }}" class="panel-card form-stack" data-loading-form>
                 @csrf
                 <h3>Renew subscription</h3>
-                <p class="field-hint">A new historical period is created automatically from the saved {{ $subscription->is_trial ? 'paid plan duration' : 'subscription duration' }}. An active period continues from its expiry; an expired period restarts today.</p>
+                <p class="field-hint">A new pending-payment period is created from the saved subscription terms. It does not grant access until verified payment is approved. An active period starts after its expiry; an expired period starts today.</p>
                 @error('subscription')<span class="field-error">{{ $message }}</span>@enderror
                 <button class="button button-primary" type="submit">Renew</button>
             </form>

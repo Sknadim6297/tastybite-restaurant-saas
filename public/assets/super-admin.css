@@ -1520,6 +1520,19 @@ form[data-plan-duration-form] .form-field[hidden] {
     background: #fff6e8;
     color: #8a5200;
 }
+.status-pill.status-scheduled,
+.status-pill.status-pending-payment,
+.status-pill.status-pending-approval,
+.status-pill.status-pending-verification,
+.status-pill.status-unpaid,
+.status-pill.status-partially-paid {
+    background: #fff6e8;
+    color: #8a5200;
+}
+.status-pill.status-fully-paid {
+    background: #ebf9f0;
+    color: #1e7a43;
+}
 .status-pill.status-approved {
     background: #ebf9f0;
     color: #1e7a43;
@@ -2016,7 +2029,7 @@ form[data-plan-duration-form] .form-field[hidden] {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 10px;
 }
-.subscription-overview > div:not(.subscription-empty) {
+.subscription-overview > .summary-tile {
     display: grid;
     align-content: start;
     gap: 8px;

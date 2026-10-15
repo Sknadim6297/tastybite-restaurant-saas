@@ -59,7 +59,7 @@ class SubscriptionService
                 'billing_period' => $plan->billing_period,
                 'duration_months' => $plan->duration_months,
                 'duration_days' => $plan->duration_days,
-                'status' => $trial ? 'trial' : 'active',
+                'status' => $trial ? 'trial' : 'pending_payment',
                 'is_trial' => $trial,
                 'starts_at' => $startsAt->utc(),
                 'expires_at' => $expiresAt->utc(),
@@ -70,7 +70,7 @@ class SubscriptionService
                 'price' => $subscription->price,
                 'currency' => $subscription->currency,
             ] + $eventDetails);
-            if ($subscription->status === 'active') {
+            if ($subscription->status === 'trial') {
                 $this->notifyActivation($subscription);
             }
 
@@ -114,7 +114,7 @@ class SubscriptionService
                 'billing_period' => $previous->billing_period,
                 'duration_months' => $previous->duration_months,
                 'duration_days' => $previous->duration_days,
-                'status' => 'active',
+                'status' => 'pending_payment',
                 'is_trial' => false,
                 'starts_at' => $startsAt->utc(),
                 'expires_at' => $expiresAt->utc(),
@@ -122,14 +122,60 @@ class SubscriptionService
                 'renewal_of_id' => $previous->id,
             ]);
 
-            $this->recordEvent($renewal, $actor, 'renewed', $previous->effectiveStatus(), 'active', [
+            $this->recordEvent($renewal, $actor, 'renewal_requested', $previous->effectiveStatus(), 'pending_payment', [
                 'renewed_from_id' => $previous->id,
                 'price' => $renewal->price,
                 'currency' => $renewal->currency,
             ] + $eventDetails);
-            $this->notifyActivation($renewal, true);
 
             return $renewal;
+        });
+    }
+
+    public function activateAfterPayment(
+        RestaurantSubscription $subscription,
+        SuperAdmin $actor,
+    ): RestaurantSubscription {
+        return DB::transaction(function () use ($subscription, $actor): RestaurantSubscription {
+            $restaurant = Restaurant::query()->lockForUpdate()->findOrFail($subscription->restaurant_id);
+            $subscription = RestaurantSubscription::query()->lockForUpdate()->findOrFail($subscription->id);
+
+            if (! in_array($subscription->status, ['pending_payment', 'pending_approval'], true)) {
+                return $subscription;
+            }
+
+            $now = CarbonImmutable::now(config('app.timezone'));
+            $plannedStart = $subscription->starts_at->timezone(config('app.timezone'))->startOfDay();
+            $startsAt = $plannedStart->lt($now->startOfDay()) ? $now->startOfDay() : $plannedStart;
+            $expiresAt = $this->planExpiry(
+                $subscription->duration_months,
+                $subscription->duration_days,
+                $startsAt,
+            );
+            $this->assertExpiryAfterStart($startsAt, $expiresAt);
+            $this->assertNoOverlap($restaurant, $startsAt->utc(), $expiresAt->utc(), $subscription->id);
+
+            $previousStatus = $subscription->status;
+            $newStatus = $startsAt->lte($now) ? 'active' : 'scheduled';
+            $subscription->update([
+                'status' => $newStatus,
+                'starts_at' => $startsAt->utc(),
+                'expires_at' => $expiresAt->utc(),
+            ]);
+
+            $this->recordEvent(
+                $subscription,
+                $actor,
+                $newStatus === 'active' ? 'payment_activated' : 'payment_scheduled',
+                $previousStatus,
+                $newStatus,
+            );
+
+            if ($newStatus === 'active') {
+                $this->notifyActivation($subscription);
+            }
+
+            return $subscription;
         });
     }
 
@@ -238,7 +284,7 @@ class SubscriptionService
     ): void {
         $overlap = RestaurantSubscription::query()
             ->where('restaurant_id', $restaurant->id)
-            ->whereIn('status', ['active', 'trial'])
+            ->whereIn('status', ['active', 'trial', 'pending_payment', 'pending_approval', 'scheduled'])
             ->where('starts_at', '<=', $expiresAt)
             ->where('expires_at', '>=', $startsAt->startOfDay())
             ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))

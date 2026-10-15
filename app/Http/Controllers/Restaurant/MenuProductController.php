@@ -20,10 +20,21 @@ class MenuProductController extends Controller
     public function index(Request $request): View
     {
         $owner = $this->owner();
-        $search = trim((string) $request->query('search', ''));
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'category_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('restaurant_menu_categories', 'id')
+                    ->where('restaurant_id', $owner->restaurant_id),
+            ],
+        ]);
+        $search = trim((string) ($validated['search'] ?? ''));
+        $categoryId = $validated['category_id'] ?? null;
 
         $products = $owner->restaurant->menuItems()
             ->with('category')
+            ->when($categoryId !== null, fn ($query) => $query->where('category_id', $categoryId))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('name', 'like', '%'.$search.'%')
@@ -40,6 +51,8 @@ class MenuProductController extends Controller
             'restaurant' => $owner->restaurant,
             'products' => $products,
             'search' => $search,
+            'categories' => $owner->restaurant->menuCategories()->orderBy('name')->get(['id', 'name']),
+            'categoryId' => $categoryId,
         ]);
     }
 

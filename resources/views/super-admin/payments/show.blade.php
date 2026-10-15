@@ -24,10 +24,10 @@
     </div></section>
 
     @if($payment->status === 'pending')
-        <div class="section-heading"><div><h2>Review payment</h2><p>Approval records this payment and its receipt only; it does not create, renew, reactivate, or extend subscription access.</p></div></div>
+        <div class="section-heading"><div><h2>Review payment</h2><p>Approval records this payment and its receipt. A pending subscription becomes active only when its saved amount is fully paid; approved renewals remain scheduled until their start date.</p></div></div>
         <section class="payment-actions panel-card">
             @if($payment->subscription)
-                <form method="POST" action="{{ route('super-admin.payments.approve', $payment) }}" data-loading-form data-confirm="Approve this payment and issue its payment receipt? Subscription access and dates will not change." data-confirm-title="Approve payment?" data-confirm-action="Approve">
+                <form method="POST" action="{{ route('super-admin.payments.approve', $payment) }}" data-loading-form data-confirm="Approve this verified payment and issue its receipt? A pending subscription activates only when fully paid." data-confirm-title="Approve payment?" data-confirm-action="Approve">
                     @csrf<button class="button button-primary" type="submit">Approve payment</button>
                 </form>
             @else

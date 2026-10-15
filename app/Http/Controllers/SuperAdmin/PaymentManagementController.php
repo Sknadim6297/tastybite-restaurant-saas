@@ -17,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -65,15 +66,25 @@ class PaymentManagementController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
         $preferences = $this->settings->group('payment');
         abort_unless($preferences['manual_enabled'], 403, 'Manual payment recording is disabled in platform settings.');
+
+        $restaurantId = $request->integer('restaurant_id');
+        $subscriptionId = $request->integer('restaurant_subscription_id');
+        $subscriptionBelongsToRestaurant = $restaurantId > 0 && $subscriptionId > 0
+            && RestaurantSubscription::query()
+                ->where('restaurant_id', $restaurantId)
+                ->whereKey($subscriptionId)
+                ->exists();
 
         return view('super-admin.payments.create', [
             'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
             'paidAt' => CarbonImmutable::now(config('app.timezone'))->format('Y-m-d\TH:i'),
             'paymentPreferences' => $preferences,
+            'selectedRestaurantId' => $subscriptionBelongsToRestaurant ? $restaurantId : null,
+            'selectedSubscriptionId' => $subscriptionBelongsToRestaurant ? $subscriptionId : null,
         ]);
     }
 
@@ -109,8 +120,12 @@ class PaymentManagementController extends Controller
                     'plan_name' => $subscription->plan_name,
                     'plan_code' => $subscription->plan_code,
                     'billing_duration' => $this->billingDuration($subscription),
-                    'starts_at' => $subscription->starts_at->timezone($timezone)->format('M j, Y'),
-                    'expires_at' => $subscription->expires_at->timezone($timezone)->format('M j, Y'),
+                    'starts_at' => in_array($subscription->status, ['pending_payment', 'pending_approval'], true)
+                        ? null
+                        : $subscription->starts_at->timezone($timezone)->format('M j, Y'),
+                    'expires_at' => in_array($subscription->status, ['pending_payment', 'pending_approval'], true)
+                        ? null
+                        : $subscription->expires_at->timezone($timezone)->format('M j, Y'),
                     'status' => $subscription->effectiveStatus(),
                     'price' => number_format((float) $subscription->price, 2, '.', ''),
                     'currency' => $subscription->currency,
@@ -231,10 +246,18 @@ class PaymentManagementController extends Controller
             ->groupBy('plan_name')->orderBy('plan_name')->get();
         $byStatus = (clone $base)->selectRaw('status as label, COUNT(*) as payment_count, SUM(amount) as gross')
             ->groupBy('status')->orderBy('status')->get();
+        $byMethod = (clone $base)->selectRaw('payment_method as label, COUNT(*) as payment_count, SUM(CASE WHEN status IN ("approved", "refunded") THEN amount ELSE 0 END) as gross')
+            ->groupBy('payment_method')->orderBy('payment_method')->get();
         $byDate = (clone $base)->selectRaw('DATE(paid_at) as label, COUNT(*) as payment_count, SUM(CASE WHEN status IN ("approved", "refunded") THEN amount ELSE 0 END) as gross')
             ->groupByRaw('DATE(paid_at)')->orderByDesc('label')->limit(90)->get();
+        $monthExpression = DB::connection()->getDriverName() === 'sqlite'
+            ? "strftime('%Y-%m', paid_at)"
+            : "DATE_FORMAT(paid_at, '%Y-%m')";
+        $byMonth = (clone $base)->selectRaw("{$monthExpression} as label, COUNT(*) as payment_count, SUM(CASE WHEN status IN ('approved', 'refunded') THEN amount ELSE 0 END) as gross")
+            ->groupByRaw($monthExpression)->orderByDesc('label')->limit(24)->get();
 
         $gross = SubscriptionPayment::formatCents(SubscriptionPayment::toCents((string) $gross));
+        $refundTotal = SubscriptionPayment::formatCents(SubscriptionPayment::toCents((string) $refundTotal));
 
         return view('super-admin.payments.reports', [
             'filters' => $filters,
@@ -242,11 +265,13 @@ class PaymentManagementController extends Controller
             'byRestaurant' => $byRestaurant,
             'byPlan' => $byPlan,
             'byStatus' => $byStatus,
+            'byMethod' => $byMethod,
             'byDate' => $byDate,
+            'byMonth' => $byMonth,
             'gross' => $gross,
             'refundTotal' => $refundTotal,
             'net' => SubscriptionPayment::formatCents(
-                SubscriptionPayment::toCents((string) $gross) - SubscriptionPayment::toCents((string) $refundTotal)
+                SubscriptionPayment::toCents($gross) - SubscriptionPayment::toCents($refundTotal)
             ),
         ]);
     }

@@ -163,17 +163,23 @@ function updateCartItemCount() {
 if (menuSearch) {
     menuSearch.addEventListener("input", () => {
         if (searchClear) {
-            searchClear.hidden = menuSearch.value.length === 0;
+            searchClear.hidden = menuSearch.value.trim().length === 0;
         }
         filterMenu();
+    });
+
+    menuSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            filterMenu();
+        }
     });
 }
 
 if (menuSearch && searchClear) {
     searchClear.addEventListener("click", () => {
         menuSearch.value = "";
-        searchClear.hidden = true;
-        filterMenu();
+        menuSearch.dispatchEvent(new Event("input", { bubbles: true }));
         menuSearch.focus();
     });
 }
