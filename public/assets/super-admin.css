@@ -474,6 +474,22 @@ form[data-plan-duration-form] .form-field[hidden] {
     padding-left: 27px;
     font-size: 11px;
 }
+.sidebar-menu-group > summary {
+    list-style: none;
+    cursor: pointer;
+}
+.sidebar-menu-group > summary::-webkit-details-marker { display: none; }
+.sidebar-menu-group > summary::marker { content: ""; }
+.sidebar-menu-group[open] > summary .sidebar-menu-chevron { transform: rotate(180deg); }
+.sidebar-menu-chevron {
+    margin-left: auto;
+    font-size: 12px;
+    transition: transform 160ms ease;
+}
+.sidebar-menu-children {
+    display: grid;
+    gap: 2px;
+}
 .menu-product-thumbnail {
     width: 42px;
     height: 42px;
@@ -2615,6 +2631,24 @@ form[data-plan-duration-form] .form-field[hidden] {
 .invoice-filter-tools .toolbar-actions {
     flex-wrap: wrap;
 }
+.vendor-line-items {
+    display: grid;
+    gap: 12px;
+}
+.vendor-line-item {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+}
+.vendor-line-item-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(105px, 1fr));
+    gap: 12px;
+    min-width: 0;
+}
 @media print {
     body,
     .admin-page,
@@ -2650,6 +2684,14 @@ form[data-plan-duration-form] .form-field[hidden] {
     .invoice-filter-tools .toolbar-actions > * {
         flex: 1 1 100%;
         width: 100%;
+    }
+    .vendor-line-item-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 460px) {
+    .vendor-line-item-grid {
+        grid-template-columns: 1fr;
     }
 }
 

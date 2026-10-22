@@ -3,10 +3,14 @@
 use App\Http\Controllers\Restaurant\AuthController;
 use App\Http\Controllers\Restaurant\AnnouncementController;
 use App\Http\Controllers\Restaurant\DashboardController;
+use App\Http\Controllers\Restaurant\InventoryController;
 use App\Http\Controllers\Restaurant\MenuCategoryController;
 use App\Http\Controllers\Restaurant\MenuProductController;
 use App\Http\Controllers\Restaurant\SubscriptionStatusController;
 use App\Http\Controllers\Restaurant\SupportTicketController;
+use App\Http\Controllers\Restaurant\VendorController;
+use App\Http\Controllers\Restaurant\VendorGoodsReceiptController;
+use App\Http\Controllers\Restaurant\VendorPurchaseOrderController;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -69,6 +73,57 @@ Route::prefix('restaurant')->name('restaurant.')->middleware('restaurant.headers
         Route::put('/profile/password', [DashboardController::class, 'updatePassword'])->name('profile.password');
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+        Route::prefix('inventory')->name('inventory.')
+            ->middleware('restaurant.subscription')
+            ->controller(InventoryController::class)
+            ->group(function (): void {
+                Route::get('/', 'overview')->name('overview');
+                Route::get('/items', 'items')->name('items.index');
+                Route::get('/items/export', 'exportItems')->name('items.export');
+                Route::get('/items/create', 'createItem')->name('items.create');
+                Route::post('/items', 'storeItem')->name('items.store');
+                Route::get('/items/{item}', 'showItem')->whereNumber('item')->name('items.show');
+                Route::get('/items/{item}/edit', 'editItem')->whereNumber('item')->name('items.edit');
+                Route::put('/items/{item}', 'updateItem')->whereNumber('item')->name('items.update');
+                Route::delete('/items/{item}', 'archiveItem')->whereNumber('item')->name('items.archive');
+                Route::get('/categories', 'categories')->name('categories.index');
+                Route::post('/categories', 'storeCategory')->name('categories.store');
+                Route::put('/categories/{category}', 'updateCategory')->whereNumber('category')->name('categories.update');
+                Route::delete('/categories/{category}', 'deleteCategory')->whereNumber('category')->name('categories.delete');
+                Route::get('/units', 'units')->name('units.index');
+                Route::post('/units', 'storeUnit')->name('units.store');
+                Route::post('/units/conversions', 'storeConversion')->name('units.conversions.store');
+                Route::delete('/units/{unit}', 'deleteUnit')->whereNumber('unit')->name('units.delete');
+                Route::get('/locations', 'locations')->name('locations.index');
+                Route::post('/locations', 'storeLocation')->name('locations.store');
+                Route::put('/locations/{location}', 'updateLocation')->whereNumber('location')->name('locations.update');
+                Route::delete('/locations/{location}', 'deleteLocation')->whereNumber('location')->name('locations.delete');
+                Route::get('/stock/create', 'movementForm')->name('stock.create');
+                Route::post('/stock/opening', 'openingStock')->name('stock.opening');
+                Route::post('/stock/in', 'stockIn')->name('stock.in');
+                Route::post('/stock/out', 'stockOut')->name('stock.out');
+                Route::post('/stock/transfers', 'transfer')->name('stock.transfers.store');
+                Route::post('/stock/adjustments', 'adjustStock')->name('stock.adjustments.store');
+                Route::get('/counts', 'counts')->name('counts.index');
+                Route::post('/counts', 'startCount')->name('counts.store');
+                Route::get('/counts/{count}', 'showCount')->whereNumber('count')->name('counts.show');
+                Route::put('/counts/{count}', 'updateCount')->whereNumber('count')->name('counts.update');
+                Route::post('/counts/{count}/post', 'postCount')->whereNumber('count')->name('counts.post');
+                Route::get('/wastage', 'wastage')->name('wastage.index');
+                Route::post('/wastage', 'storeWastage')->name('wastage.store');
+                Route::get('/ledger', 'ledger')->name('ledger');
+                Route::get('/ledger/export', 'export')->name('export');
+                Route::get('/batches', 'batches')->name('batches');
+                Route::get('/vendor-mappings', 'vendorMappings')->name('vendor-mappings.index');
+                Route::put('/vendor-mappings/{purchaseOrderItem}', 'storeVendorMapping')->whereNumber('purchaseOrderItem')->name('vendor-mappings.update');
+                Route::get('/settings', 'settings')->name('settings');
+                Route::put('/settings', 'updateSettings')->name('settings.update');
+                Route::get('/recipes', 'recipes')->name('recipes.index');
+                Route::post('/recipes', 'storeRecipe')->name('recipes.store');
+                Route::post('/recipes/{recipe}/activate', 'activateRecipe')->whereNumber('recipe')->name('recipes.activate');
+                Route::get('/reports', 'reports')->name('reports');
+            });
+
         Route::prefix('menu/categories')->name('menu.categories.')
             ->middleware(['restaurant.subscription', 'restaurant.feature:pos'])
             ->controller(MenuCategoryController::class)
@@ -92,6 +147,48 @@ Route::prefix('restaurant')->name('restaurant.')->middleware('restaurant.headers
                 Route::get('/{product}/edit', 'edit')->whereNumber('product')->name('edit');
                 Route::put('/{product}', 'update')->whereNumber('product')->name('update');
                 Route::delete('/{product}', 'destroy')->whereNumber('product')->name('destroy');
+            });
+
+        Route::prefix('vendors')->name('vendors.')
+            ->middleware('restaurant.subscription')
+            ->controller(VendorController::class)
+            ->group(function (): void {
+                Route::get('/', 'overview')->name('overview');
+                Route::get('/list', 'index')->name('index');
+                Route::get('/create', 'create')->name('create');
+                Route::post('/', 'store')->name('store');
+                Route::get('/{vendor}/edit', 'edit')->whereNumber('vendor')->name('edit');
+                Route::put('/{vendor}', 'update')->whereNumber('vendor')->name('update');
+                Route::patch('/{vendor}/status', 'status')->whereNumber('vendor')->name('status');
+                Route::delete('/{vendor}', 'archive')->whereNumber('vendor')->name('archive');
+                Route::get('/{vendor}', 'show')->whereNumber('vendor')->name('show');
+            });
+
+        Route::prefix('vendors/purchase-orders')->name('vendors.purchase-orders.')
+            ->middleware('restaurant.subscription')
+            ->controller(VendorPurchaseOrderController::class)
+            ->group(function (): void {
+                Route::get('/', 'index')->name('index');
+                Route::get('/create', 'create')->name('create');
+                Route::post('/', 'store')->name('store');
+                Route::get('/{purchaseOrder}/edit', 'edit')->whereNumber('purchaseOrder')->name('edit');
+                Route::put('/{purchaseOrder}', 'update')->whereNumber('purchaseOrder')->name('update');
+                Route::post('/{purchaseOrder}/confirm', 'confirm')->whereNumber('purchaseOrder')->name('confirm');
+                Route::post('/{purchaseOrder}/cancel', 'cancel')->whereNumber('purchaseOrder')->name('cancel');
+                Route::get('/{purchaseOrder}/print', 'print')->whereNumber('purchaseOrder')->name('print');
+                Route::get('/{purchaseOrder}/pdf', 'pdf')->whereNumber('purchaseOrder')->name('pdf');
+                Route::get('/{purchaseOrder}', 'show')->whereNumber('purchaseOrder')->name('show');
+            });
+
+        Route::prefix('vendors/goods-received')->name('vendors.goods-received.')
+            ->middleware('restaurant.subscription')
+            ->controller(VendorGoodsReceiptController::class)
+            ->group(function (): void {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{purchaseOrder}/create', 'create')->whereNumber('purchaseOrder')->name('create');
+                Route::post('/{purchaseOrder}', 'store')->whereNumber('purchaseOrder')->name('store');
+                Route::get('/receipt/{receipt}', 'show')->whereNumber('receipt')->name('show');
+                Route::post('/receipt/{receipt}/inventory', 'postInventory')->whereNumber('receipt')->name('inventory.post');
             });
 
         Route::get('/support', [SupportTicketController::class, 'index'])->name('support.index');

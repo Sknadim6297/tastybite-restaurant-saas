@@ -26,6 +26,7 @@
 
       <nav class="header-nav" aria-label="POS navigation">
         <a href="{{ route('pos.index') }}" class="active" aria-current="page">Billing</a>
+        <a href="{{ route('pos.orders.index') }}">Order history</a>
         <a href="{{ route('restaurant.dashboard') }}">Dashboard</a>
       </nav>
 
@@ -161,6 +162,7 @@
                 @endphp
                 <article
                   class="food-card"
+                  data-product-id="{{ $product->id }}"
                   data-name="{{ $product->name }}"
                   data-category="{{ $product->category_id ?? 0 }}"
                   data-category-name="{{ $product->category?->name ?? 'Uncategorized' }}"
@@ -266,8 +268,11 @@
                     <h3>Payment Details</h3>
                     <p class="payment-notice" id="paymentNotice" aria-live="polite">
                       <i class="bi bi-info-circle" aria-hidden="true"></i>
-                      <span>Cash selected. Payment is not recorded or processed by this POS.</span>
+                      <span>Payment is not processed here. Completing a sale records the order and consumes configured recipe stock.</span>
                     </p>
+                  </div>
+                  <div class="checkout-section">
+                    <p class="payment-notice">Menu products without an active recipe can be sold, but do not deduct inventory.</p>
                   </div>
 
                   <div class="checkout-section">
@@ -335,6 +340,9 @@
                   <button class="action-btn clear-btn" type="button" onclick="clearCart()">
                     <i class="bi bi-trash3" aria-hidden="true"></i> Clear
                   </button>
+                  <button class="action-btn complete-sale-btn" id="completeSale" type="button">
+                    <i class="bi bi-check2-circle" aria-hidden="true"></i> Complete Sale
+                  </button>
                 </div>
               </footer>
             </section>
@@ -342,6 +350,18 @@
         </div>
       </main>
     </div>
+
+    @if(session('status'))
+      <div class="pos-status-message" role="status">{{ session('status') }}</div>
+    @endif
+
+    <form id="completeSaleForm" method="POST" action="{{ route('pos.orders.store') }}" hidden>
+      @csrf
+      <input type="hidden" name="idempotency_key" value="{{ $posIdempotencyKey }}">
+      <input type="hidden" name="items_json" id="posItemsJson">
+      <input type="hidden" name="discount_percent" id="posDiscountPercent">
+      <input type="hidden" name="notes" id="posOrderNotes">
+    </form>
 
     <button class="next-billing-button" id="nextBilling" type="button" aria-controls="billingPanel" aria-expanded="false">
       <span>Next: Billing</span>

@@ -565,23 +565,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.querySelector('#admin-sidebar');
     const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
     if (sidebar && sidebarToggle) {
+        const backdrop = document.createElement('button');
+        backdrop.className = 'sidebar-backdrop';
+        backdrop.type = 'button';
+        backdrop.setAttribute('aria-label', 'Close navigation');
+        backdrop.hidden = true;
+        document.body.append(backdrop);
+
         const closeSidebar = () => {
             sidebar.classList.remove('is-open');
+            backdrop.hidden = true;
+            document.body.classList.remove('sidebar-open');
             sidebarToggle.setAttribute('aria-expanded', 'false');
             sidebarToggle.setAttribute('aria-label', 'Open navigation');
         };
 
         sidebarToggle.addEventListener('click', () => {
             const isOpen = sidebar.classList.toggle('is-open');
+            backdrop.hidden = !isOpen;
+            document.body.classList.toggle('sidebar-open', isOpen);
             sidebarToggle.setAttribute('aria-expanded', String(isOpen));
             sidebarToggle.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
         });
 
+        backdrop.addEventListener('click', closeSidebar);
+        sidebar.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => {
+            if (window.matchMedia('(max-width: 700px)').matches) closeSidebar();
+        }));
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
                 closeSidebar();
             }
         });
+        window.matchMedia('(min-width: 701px)').addEventListener('change', closeSidebar);
     }
 
     const dialog = document.querySelector('[data-confirm-dialog]');

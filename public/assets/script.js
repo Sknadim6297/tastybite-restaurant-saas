@@ -265,10 +265,14 @@ function addToCart(button) {
     const name = card.dataset.name;
     if (!name) return;
 
-    if (cart.has(name)) {
-        cart.get(name).qty++;
+    const productId = Number(card.dataset.productId);
+    if (!Number.isInteger(productId) || productId <= 0) return;
+
+    if (cart.has(productId)) {
+        cart.get(productId).qty++;
     } else {
-        cart.set(name, {
+        cart.set(productId, {
+            id: productId,
             name: name,
             price: Number(card.dataset.price) || 0,
             qty: 1,
@@ -338,7 +342,7 @@ function renderCart() {
             minus.textContent = "−";
             minus.setAttribute("aria-label", "Decrease quantity");
             minus.addEventListener("click", () =>
-                changeQty(item.name, -1)
+                changeQty(item.id, -1)
             );
 
             const count = document.createElement("span");
@@ -349,7 +353,7 @@ function renderCart() {
             plus.textContent = "+";
             plus.setAttribute("aria-label", "Increase quantity");
             plus.addEventListener("click", () =>
-                changeQty(item.name, 1)
+                changeQty(item.id, 1)
             );
 
             qty.append(minus, count, plus);
@@ -368,7 +372,7 @@ function renderCart() {
             remove.innerHTML = '<i class="bi bi-trash3"></i>';
             remove.setAttribute("aria-label", "Remove " + item.name);
             remove.addEventListener("click", () =>
-                removeItem(item.name)
+                removeItem(item.id)
             );
 
             row.append(product, qty, price, total, remove);
@@ -590,7 +594,7 @@ function resumeHeldOrder(id, checked) {
     cart.clear();
 
     order.items.forEach(item => {
-        cart.set(item.name, { ...item });
+        cart.set(item.id, { ...item });
     });
 
     orderType = order.orderType || "Dine In";
@@ -634,7 +638,30 @@ function resumeHeldOrder(id, checked) {
     }
 }
 
+const completeSaleButton = document.getElementById("completeSale");
+if (completeSaleButton) {
+    completeSaleButton.addEventListener("click", () => {
+        if (cart.size === 0) {
+            alert("Add at least one menu item before completing the sale.");
+            return;
+        }
+        const form = document.getElementById("completeSaleForm");
+        const itemsField = document.getElementById("posItemsJson");
+        const discountField = document.getElementById("posDiscountPercent");
+        const notesField = document.getElementById("posOrderNotes");
+        if (!form || !itemsField || !discountField || !notesField) return;
 
+        itemsField.value = JSON.stringify([...cart.values()].map(item => ({
+            menu_item_id: item.id,
+            quantity: item.qty
+        })));
+        discountField.value = String(Math.max(0, Math.min(100, Number(document.getElementById("discount")?.value) || 0)));
+        notesField.value = document.getElementById("orderNotes")?.value || "";
+        completeSaleButton.disabled = true;
+        completeSaleButton.textContent = "Completing...";
+        form.submit();
+    });
+}
 
 // Sidebar active state
 document.querySelectorAll(".side-link").forEach(link => {

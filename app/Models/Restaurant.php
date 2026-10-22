@@ -61,6 +61,46 @@ class Restaurant extends Model
         return $this->hasMany(RestaurantMenuItem::class)->orderBy('sort_order')->orderBy('name');
     }
 
+    public function vendors(): HasMany
+    {
+        return $this->hasMany(Vendor::class);
+    }
+
+    public function vendorPurchaseOrders(): HasMany
+    {
+        return $this->hasMany(VendorPurchaseOrder::class);
+    }
+
+    public function vendorGoodsReceipts(): HasMany
+    {
+        return $this->hasMany(VendorGoodsReceipt::class);
+    }
+
+    public function vendorBills(): HasMany
+    {
+        return $this->hasMany(VendorBill::class);
+    }
+
+    public function vendorPayments(): HasMany
+    {
+        return $this->hasMany(VendorPayment::class);
+    }
+
+    public function inventoryItems(): HasMany
+    {
+        return $this->hasMany(InventoryItem::class);
+    }
+
+    public function inventoryCategories(): HasMany
+    {
+        return $this->hasMany(InventoryCategory::class);
+    }
+
+    public function inventoryLocations(): HasMany
+    {
+        return $this->hasMany(InventoryLocation::class);
+    }
+
     public function currentSubscription(): HasOne
     {
         return $this->hasOne(RestaurantSubscription::class)->latestOfMany();
