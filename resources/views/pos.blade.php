@@ -5,7 +5,7 @@
 @section('content')
 @php
     $restaurantName = $restaurant->name ?? 'TastyBite';
-    $adminAccess = request()->attributes->get('restaurant_support_admin');
+    $adminAccess = request()->attributes->get('restaurant_admin_access_admin');
     $currentUser = $adminAccess ?? ($currentUser ?? Auth::guard('web')->user());
     $staffName = $currentUser?->name ?? 'Staff';
     $staffRole = $adminAccess ? 'Super Admin' : ucfirst((string) ($currentUser?->role ?? 'owner'));
@@ -334,9 +334,6 @@
                   </button>
                   <button class="action-btn clear-btn" type="button" onclick="clearCart()">
                     <i class="bi bi-trash3" aria-hidden="true"></i> Clear
-                  </button>
-                  <button class="generate-btn" type="button" onclick="generateBill()">
-                    <i class="bi bi-receipt" aria-hidden="true"></i> Generate Bill
                   </button>
                 </div>
               </footer>

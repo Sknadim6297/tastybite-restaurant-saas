@@ -70,8 +70,8 @@
                         <td>{{ $restaurant->email }}</td>
                         <td>{{ $restaurant->phone ?? '—' }}</td>
                         <td>
-                            <span class="status-pill status-{{ $restaurant->status === 'active' ? 'active' : ($restaurant->status === 'suspended' ? 'suspended' : 'inactive') }}">
-                                {{ ucfirst($restaurant->status) }}
+                            <span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($restaurant->status) }}">
+                                {{ \App\Support\StatusPresenter::label($restaurant->status) }}
                             </span>
                         </td>
                         <td>{{ $restaurant->created_at->format('M j, Y') }}</td>

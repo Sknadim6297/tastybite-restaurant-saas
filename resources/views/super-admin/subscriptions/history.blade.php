@@ -21,15 +21,15 @@
     </div>
     <div class="table-shell">
         <table class="data-table">
-            <thead><tr><th>Recorded</th><th>Restaurant</th><th>Event</th><th>Previous</th><th>New</th><th>Actor</th><th></th></tr></thead>
+            <thead><tr><th>Recorded</th><th>Restaurant</th><th>Event</th><th>Previous Status</th><th>New Status</th><th>Actor</th><th></th></tr></thead>
             <tbody>
                 @forelse($events as $event)
                     <tr>
                         <td>{{ $event->created_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</td>
                         <td>{{ $event->restaurant?->name ?? 'Restaurant unavailable' }}</td>
-                        <td>{{ ucfirst(str_replace('_', ' ', $event->action)) }}</td>
-                        <td>{{ $event->previous_status ? ucfirst($event->previous_status) : '—' }}</td>
-                        <td>{{ $event->new_status ? ucfirst($event->new_status) : '—' }}</td>
+                        <td>{{ \App\Support\StatusPresenter::label($event->action) }}</td>
+                        <td>{{ \App\Support\StatusPresenter::label($event->previous_status) }}</td>
+                        <td>{{ \App\Support\StatusPresenter::label($event->new_status) }}</td>
                         <td>{{ $event->actor?->name ?? 'Platform admin account unavailable' }}</td>
                         <td>@if($event->subscription)<a class="button button-secondary" href="{{ route('super-admin.subscriptions.show', $event->subscription) }}">View</a>@endif</td>
                     </tr>

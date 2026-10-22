@@ -18,7 +18,11 @@ class SubscriptionPlanController extends Controller
 {
     public function index(Request $request): View
     {
-        $query = SubscriptionPlan::query()->withCount('subscriptions');
+        $query = SubscriptionPlan::query()
+            ->where('code', 'not like', 'DEMO-TB-2026-%')
+            ->withCount(['subscriptions' => fn ($subscriptions) => $subscriptions->whereHas(
+                'restaurant', fn ($restaurant) => $restaurant->where('slug', 'not like', 'demo-tb-2026-%'),
+            )]);
 
         if ($request->filled('search')) {
             $search = trim($request->string('search')->toString());
@@ -59,9 +63,14 @@ class SubscriptionPlanController extends Controller
 
     public function show(SubscriptionPlan $subscriptionPlan): View
     {
-        $subscriptionPlan->loadCount('subscriptions');
+        $this->ensureBusinessPlan($subscriptionPlan);
+        $subscriptionPlan->loadCount(['subscriptions' => fn ($subscriptions) => $subscriptions->whereHas(
+            'restaurant', fn ($restaurant) => $restaurant->where('slug', 'not like', 'demo-tb-2026-%'),
+        )]);
         $subscriptionPlan->load([
-            'subscriptions' => fn ($query) => $query->with('restaurant')->latest()->limit(10),
+            'subscriptions' => fn ($query) => $query->whereHas(
+                'restaurant', fn ($restaurant) => $restaurant->where('slug', 'not like', 'demo-tb-2026-%'),
+            )->with('restaurant')->latest()->limit(10),
         ]);
 
         return view('super-admin.subscription-plans.show', ['plan' => $subscriptionPlan]);
@@ -69,11 +78,13 @@ class SubscriptionPlanController extends Controller
 
     public function edit(SubscriptionPlan $subscriptionPlan): View
     {
+        $this->ensureBusinessPlan($subscriptionPlan);
         return view('super-admin.subscription-plans.edit', ['plan' => $subscriptionPlan]);
     }
 
     public function update(Request $request, SubscriptionPlan $subscriptionPlan): RedirectResponse
     {
+        $this->ensureBusinessPlan($subscriptionPlan);
         $data = $this->validatedPlan($request);
         DB::transaction(function () use ($data, $subscriptionPlan): void {
             $before = $subscriptionPlan->only([
@@ -94,6 +105,7 @@ class SubscriptionPlanController extends Controller
 
     public function updateStatus(Request $request, SubscriptionPlan $subscriptionPlan): RedirectResponse
     {
+        $this->ensureBusinessPlan($subscriptionPlan);
         $validated = $request->validate([
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ]);
@@ -151,6 +163,11 @@ class SubscriptionPlanController extends Controller
         });
 
         return $validator->validate();
+    }
+
+    private function ensureBusinessPlan(SubscriptionPlan $plan): void
+    {
+        abort_if(str_starts_with($plan->code, 'DEMO-TB-2026-'), 404);
     }
 
     /**

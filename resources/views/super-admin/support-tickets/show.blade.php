@@ -15,7 +15,7 @@
             <form method="POST" action="{{ route('super-admin.support-tickets.update', $ticket) }}" class="form-stack" data-loading-form>
                 @csrf
                 @method('PUT')
-                <div class="form-field"><label for="ticket-status">Status</label><select id="ticket-status" name="status" required>@foreach(['open', 'in_progress', 'waiting_for_restaurant', 'resolved', 'closed'] as $status)<option value="{{ $status }}" @selected($ticket->status === $status)>{{ ucfirst(str_replace('_', ' ', $status)) }}</option>@endforeach</select>@error('status')<span class="field-error">{{ $message }}</span>@enderror</div>
+                <div class="form-field"><label for="ticket-status">Status</label><select id="ticket-status" name="status" required>@foreach(['open', 'in_progress', 'waiting_for_restaurant', 'resolved', 'closed'] as $status)<option value="{{ $status }}" @selected($ticket->status === $status)>{{ \App\Support\StatusPresenter::label($status) }}</option>@endforeach</select>@error('status')<span class="field-error">{{ $message }}</span>@enderror</div>
                 <div class="form-field"><label for="ticket-priority">Priority</label><select id="ticket-priority" name="priority" required>@foreach(['low', 'normal', 'high', 'urgent'] as $priority)<option value="{{ $priority }}" @selected($ticket->priority === $priority)>{{ ucfirst($priority) }}</option>@endforeach</select></div>
                 <div class="form-field"><label for="ticket-assignee">Assigned administrator</label><select id="ticket-assignee" name="assigned_admin_id"><option value="">Unassigned</option>@foreach($admins as $admin)<option value="{{ $admin->id }}" @selected($ticket->assigned_admin_id === $admin->id)>{{ $admin->name }}</option>@endforeach</select></div>
                 <div class="form-field"><label for="ticket-reason">Status change note (optional)</label><input id="ticket-reason" name="reason" maxlength="500"></div>
@@ -47,7 +47,7 @@
             <h2 class="ticket-section-title">Status history</h2>
             <ol class="ticket-history-list">
                 @foreach($ticket->statusHistory as $entry)
-                    <li><strong>{{ $entry->previous_status ? ucfirst(str_replace('_', ' ', $entry->previous_status)).' → ' : '' }}{{ ucfirst(str_replace('_', ' ', $entry->new_status)) }}</strong><span>{{ $entry->actorAdmin?->name ?? $entry->actorUser?->name ?? 'System' }} · {{ $entry->created_at->timezone(config('app.timezone'))->format('M j, Y H:i') }}</span>@if($entry->reason)<p>{{ $entry->reason }}</p>@endif</li>
+                    <li><strong>{{ \App\Support\StatusPresenter::label($entry->previous_status) }} → {{ \App\Support\StatusPresenter::label($entry->new_status) }}</strong><span>{{ $entry->actorAdmin?->name ?? $entry->actorUser?->name ?? 'System' }} · {{ $entry->created_at->timezone(config('app.timezone'))->format('M j, Y H:i') }}</span>@if($entry->reason)<p>{{ $entry->reason }}</p>@endif</li>
                 @endforeach
             </ol>
         </section>

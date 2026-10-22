@@ -73,14 +73,13 @@
                         } elseif ($hasRejectedPayment && $balance['already_paid'] === '0.00') {
                             $paymentStatus = 'Rejected';
                         }
-                        $paymentStatusClass = str_replace(' ', '-', strtolower($paymentStatus));
                     @endphp
                     <tr>
                         <td><strong>{{ $subscription->formatted_id }}</strong><br><span class="meta-label">#{{ $subscription->id }}</span></td>
                         <td><strong>{{ $subscription->restaurant?->name ?? 'Restaurant unavailable' }}</strong><br><span class="meta-label">{{ $subscription->restaurant?->owners->first()?->name ?? 'No owner listed' }}</span></td>
                         <td>{{ $subscription->plan_name }}<br><span class="meta-label">{{ $subscription->currency }} {{ number_format((float) $subscription->price, 2) }}</span></td>
-                        <td><span class="status-pill status-{{ $paymentStatusClass }}">{{ $paymentStatus }}</span></td>
-                        <td><span class="status-pill status-{{ str_replace('_', '-', $effectiveStatus) }}">{{ str_replace('_', ' ', ucfirst($effectiveStatus)) }}</span></td>
+                        <td><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($paymentStatus) }}">{{ \App\Support\StatusPresenter::label($paymentStatus) }}</span></td>
+                        <td><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($effectiveStatus) }}">{{ \App\Support\StatusPresenter::label($effectiveStatus) }}</span></td>
                         <td>{{ in_array($subscription->status, ['pending_payment', 'pending_approval'], true) ? '—' : $subscription->starts_at->timezone(config('app.timezone'))->format('M j, Y') }}</td>
                         <td>{{ in_array($subscription->status, ['pending_payment', 'pending_approval'], true) ? '—' : $subscription->expires_at->timezone(config('app.timezone'))->format('M j, Y') }}</td>
                         <td>
@@ -131,11 +130,11 @@
                 <tbody>
                     @forelse($paymentHistory as $payment)
                         <tr>
-                            <td>{{ $payment->formatted_id }} @if($payment->isDemo())<span class="meta-label">DEMO ONLY — NOT ACTUAL MONEY</span>@endif<br><span class="meta-label">{{ $payment->transaction_reference ?: '—' }}</span></td>
+                            <td>{{ $payment->formatted_id }}<br><span class="meta-label">{{ $payment->transaction_reference ?: '—' }}</span></td>
                             <td>{{ $payment->restaurant?->name ?? '—' }}</td>
                             <td>{{ $payment->subscription?->formatted_id ?? 'Historical / unlinked' }}<br><span class="meta-label">{{ $payment->plan_name ?: '—' }}</span></td>
                             <td>{{ $payment->currency }} {{ number_format((float) $payment->amount, 2) }}</td>
-                            <td><span class="status-pill status-{{ $payment->status }}">{{ ucfirst($payment->status) }}</span></td>
+                            <td><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($payment->status) }}">{{ \App\Support\StatusPresenter::label($payment->status) }}</span></td>
                             <td>{{ $payment->paid_at?->timezone(config('app.timezone'))->format('M j, Y') ?? '—' }}</td>
                             <td><a class="button button-secondary" href="{{ route('super-admin.payments.show', $payment) }}">View</a></td>
                         </tr>

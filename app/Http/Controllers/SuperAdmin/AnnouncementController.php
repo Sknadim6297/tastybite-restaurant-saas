@@ -7,6 +7,7 @@ use App\Models\PlatformAnnouncement;
 use App\Models\Restaurant;
 use App\Models\SuperAdmin;
 use App\Services\PlatformAnnouncementService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ class AnnouncementController extends Controller
             'status' => ['nullable', Rule::in(['draft', 'published', 'archived'])],
             'search' => ['nullable', 'string', 'max:180'],
         ]);
-        $query = PlatformAnnouncement::query()->with('author')->withCount(['restaurants', 'reads']);
+        $query = $this->businessAnnouncements()->with('author')->withCount(['restaurants', 'reads']);
 
         if (filled($filters['status'] ?? null)) {
             $query->where('status', $filters['status']);
@@ -38,9 +39,9 @@ class AnnouncementController extends Controller
             'announcements' => $query->orderByDesc('created_at')->paginate(15)->withQueryString(),
             'filters' => $filters,
             'counts' => [
-                'draft' => PlatformAnnouncement::query()->where('status', 'draft')->count(),
-                'published' => PlatformAnnouncement::query()->where('status', 'published')->count(),
-                'archived' => PlatformAnnouncement::query()->where('status', 'archived')->count(),
+                'draft' => $this->businessAnnouncements()->where('status', 'draft')->count(),
+                'published' => $this->businessAnnouncements()->where('status', 'published')->count(),
+                'archived' => $this->businessAnnouncements()->where('status', 'archived')->count(),
             ],
         ]);
     }
@@ -68,6 +69,7 @@ class AnnouncementController extends Controller
 
     public function show(PlatformAnnouncement $announcement): View
     {
+        $this->ensureBusinessAnnouncement($announcement);
         $announcement->load(['author', 'restaurants' => fn ($query) => $query->orderBy('name')]);
         $recipientCount = $announcement->audience === 'all'
             ? $this->eligibleRestaurants()->count()
@@ -84,6 +86,7 @@ class AnnouncementController extends Controller
 
     public function update(Request $request, PlatformAnnouncement $announcement, PlatformAnnouncementService $service): RedirectResponse
     {
+        $this->ensureBusinessAnnouncement($announcement);
         $validated = $this->validateAnnouncement($request);
         $service->updateDraft(
             $announcement,
@@ -98,6 +101,7 @@ class AnnouncementController extends Controller
 
     public function publish(PlatformAnnouncement $announcement, PlatformAnnouncementService $service): RedirectResponse
     {
+        $this->ensureBusinessAnnouncement($announcement);
         $service->publish($announcement, $this->actor());
 
         return redirect()->route('super-admin.announcements.show', $announcement)
@@ -106,6 +110,7 @@ class AnnouncementController extends Controller
 
     public function archive(PlatformAnnouncement $announcement, PlatformAnnouncementService $service): RedirectResponse
     {
+        $this->ensureBusinessAnnouncement($announcement);
         $service->archive($announcement, $this->actor());
 
         return redirect()->route('super-admin.announcements.show', $announcement)
@@ -119,7 +124,11 @@ class AnnouncementController extends Controller
             'body' => ['required', 'string', 'min:10', 'max:10000'],
             'audience' => ['required', Rule::in(['all', 'selected'])],
             'restaurant_ids' => ['required_if:audience,selected', 'array', 'min:1', 'max:500'],
-            'restaurant_ids.*' => ['required', 'integer', 'distinct', Rule::exists('restaurants', 'id')->where('status', 'active')],
+            'restaurant_ids.*' => [
+                'required', 'integer', 'distinct',
+                Rule::exists('restaurants', 'id')->where(fn ($query) => $query
+                    ->where('status', 'active')->where('slug', 'not like', 'demo-tb-2026-%')),
+            ],
             'expires_at' => ['nullable', 'date', 'after:now'],
         ]);
     }
@@ -127,8 +136,19 @@ class AnnouncementController extends Controller
     private function eligibleRestaurants(): Collection
     {
         return Restaurant::query()->where('status', 'active')
+            ->where('slug', 'not like', 'demo-tb-2026-%')
             ->whereHas('owners', fn ($query) => $query->where('status', 'active'))
             ->orderBy('name')->get(['id', 'name', 'slug']);
+    }
+
+    private function businessAnnouncements(): Builder
+    {
+        return PlatformAnnouncement::query()->whereRaw('substr(title, 1, 14) != ?', ['[DEMO-TB-2026]']);
+    }
+
+    private function ensureBusinessAnnouncement(PlatformAnnouncement $announcement): void
+    {
+        abort_if(str_starts_with($announcement->title, '[DEMO-TB-2026]'), 404);
     }
 
     private function actor(): SuperAdmin

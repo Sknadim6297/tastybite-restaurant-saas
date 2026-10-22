@@ -7,7 +7,6 @@
     <div class="page-heading"><div><span class="eyebrow">PLATFORM INSIGHTS</span><h1>Revenue report</h1><p>Collection totals include approved payments only and subtract recorded refunds. Recorded refunds do not confirm an external money transfer.</p></div><a class="button button-secondary" href="{{ route('super-admin.reports.export', array_merge(request()->query(), ['type' => 'revenue'])) }}">Export CSV</a></div>
     @include('super-admin.reports._tabs', ['active' => 'revenue'])
     <form method="GET" class="form-card report-filters" data-auto-filter>
-        <label>Data scope<select name="scope"><option value="real" @selected($filters['scope'] === 'real')>Real records</option><option value="demo" @selected($filters['scope'] === 'demo')>Demo records</option><option value="all" @selected($filters['scope'] === 'all')>All records</option></select></label>
         <label>Restaurant ID<input type="number" min="1" name="restaurant_id" value="{{ $filters['restaurant_id'] ?? '' }}"></label>
         <label>Plan ID<input type="number" min="1" name="plan_id" value="{{ $filters['plan_id'] ?? '' }}"></label>
         <label>Payment date from<input type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}"></label>
@@ -24,7 +23,7 @@
         <div class="section-heading"><div><h2>{{ $heading }}</h2></div></div>
         <div class="table-shell"><table class="data-table"><thead><tr><th>{{ $heading === 'Revenue by date' ? 'Date' : 'Group' }}</th><th>Approved payments</th><th>Gross amount</th></tr></thead><tbody>
             @forelse($rows as $row)<tr><td>{{ $row->label }}</td><td>{{ number_format($row->payment_count) }}</td><td>INR {{ $row->gross }}</td></tr>
-            @empty<tr><td colspan="3"><div class="empty-state"><h3>No approved payments in this range</h3><p>Adjust the dates or data scope.</p></div></td></tr>@endforelse
+            @empty<tr><td colspan="3"><div class="empty-state"><h3>No approved payments in this range</h3><p>Adjust the dates to review another period.</p></div></td></tr>@endforelse
         </tbody></table></div>
     @endforeach
 @endsection

@@ -171,7 +171,7 @@ class PosPageTest extends TestCase
             ->assertSee('id="grandTotal"', false)
             ->assertSee('onclick="holdOrder()"', false)
             ->assertSee('onclick="clearCart()"', false)
-            ->assertSee('onclick="generateBill()"', false);
+            ->assertDontSee('generateBill');
 
         $script = file_get_contents(public_path('assets/script.js'));
         $this->assertIsString($script);
@@ -181,6 +181,7 @@ class PosPageTest extends TestCase
         $this->assertStringContainsString('billingPanel.inert = !isOpen;', $script);
         $this->assertStringContainsString('paymentMethodNotices', $script);
         $this->assertStringContainsString('no card details are collected here', $script);
+        $this->assertStringNotContainsString('DEMO BILL', $script);
 
         $style = file_get_contents(public_path('assets/style.css'));
         $this->assertIsString($style);

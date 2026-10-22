@@ -10,13 +10,13 @@
 
     <section class="summary-row report-summary" aria-label="Application health status">
         <article class="summary-tile"><span>Application environment</span><strong>{{ $environment }}</strong><small>{{ $debugEnabled ? 'Debug mode enabled' : 'Debug mode disabled' }}</small></article>
-        <article class="summary-tile"><span>Database</span><strong>{{ ucfirst($database['status']) }}</strong><small>{{ $database['driver'] }}</small></article>
+        <article class="summary-tile"><span>Database</span><strong>{{ \App\Support\StatusPresenter::label($database['status'] ?? null) }}</strong><small>{{ $database['driver'] }}</small></article>
         <article class="summary-tile"><span>Pending migrations</span><strong>{{ count($database['pendingMigrations']) }}</strong><small>No migrations are executed from this page</small></article>
         <article class="summary-tile"><span>Private storage</span><strong>{{ $storage['writable'] ? 'Writable' : 'Not ready' }}</strong><small>Local private disk</small></article>
     </section>
 
     <div class="notice-card" role="{{ $database['status'] === 'unavailable' ? 'alert' : 'status' }}">
-        <strong>Database check: {{ ucfirst($database['status']) }}</strong>
+        <strong>Database check: {{ \App\Support\StatusPresenter::label($database['status'] ?? null) }}</strong>
         <p>{{ $database['note'] }}</p>
     </div>
 

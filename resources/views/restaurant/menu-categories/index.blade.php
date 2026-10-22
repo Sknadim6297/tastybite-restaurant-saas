@@ -36,7 +36,7 @@
                         <td>
                             <div class="action-stack">
                                 <a class="button button-secondary" href="{{ route('restaurant.menu.categories.edit', $category) }}">Edit</a>
-                                @unless (request()->attributes->has('restaurant_support_request') || request()->attributes->has('restaurant_admin_access_restaurant'))
+                                @unless (request()->attributes->has('restaurant_admin_access_restaurant'))
                                     <form method="POST" action="{{ route('restaurant.menu.categories.status', $category) }}">
                                         @csrf
                                         @method('PATCH')

@@ -38,7 +38,7 @@
                         <td>{{ ucfirst($plan->billing_period) }}@if($plan->billing_period === 'custom') <span class="meta-label">{{ $plan->duration_months ? $plan->duration_months.' months' : $plan->duration_days.' days' }}</span>@endif</td>
                         <td>{{ $plan->trial_available ? $plan->trial_duration_days.' days' : 'Not available' }}</td>
                         <td>{{ $plan->subscriptions_count }}</td>
-                        <td><span class="status-pill status-{{ $plan->status }}">{{ ucfirst($plan->status) }}</span></td>
+                        <td><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($plan->status) }}">{{ \App\Support\StatusPresenter::label($plan->status) }}</span></td>
                         <td>
                             <div class="action-stack">
                                 <a class="button button-secondary" href="{{ route('super-admin.subscription-plans.show', $plan) }}">View</a>

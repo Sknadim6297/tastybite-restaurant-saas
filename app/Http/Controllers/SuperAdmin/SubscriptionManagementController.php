@@ -13,6 +13,7 @@ use App\Models\SuperAdmin;
 use App\Services\PaymentManagementService;
 use App\Services\SubscriptionService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,8 +41,8 @@ class SubscriptionManagementController extends Controller
     public function create(): View
     {
         return view('super-admin.subscriptions.create', [
-            'restaurants' => Restaurant::query()->where('status', 'active')->orderBy('name')->get(['id', 'name', 'slug']),
-            'plans' => SubscriptionPlan::query()->where('status', 'active')->orderBy('name')->get(),
+            'restaurants' => Restaurant::query()->where('status', 'active')->where('slug', 'not like', 'demo-tb-2026-%')->orderBy('name')->get(['id', 'name', 'slug']),
+            'plans' => SubscriptionPlan::query()->where('status', 'active')->where('code', 'not like', 'DEMO-TB-2026-%')->orderBy('name')->get(),
             'startDate' => CarbonImmutable::now(config('app.timezone'))->format('Y-m-d'),
             'paymentPreferences' => app(\App\Services\PlatformSettingsService::class)->group('payment'),
         ]);
@@ -57,11 +58,11 @@ class SubscriptionManagementController extends Controller
         ]);
 
         $actor = $this->actor();
-        $restaurant = Restaurant::query()->findOrFail($validated['restaurant_id']);
+        $restaurant = Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')->findOrFail($validated['restaurant_id']);
         if (! $restaurant->isActive()) {
             throw ValidationException::withMessages(['restaurant_id' => 'Only an active restaurant can receive a subscription.']);
         }
-        $plan = SubscriptionPlan::query()->findOrFail($validated['subscription_plan_id']);
+        $plan = SubscriptionPlan::query()->where('code', 'not like', 'DEMO-TB-2026-%')->findOrFail($validated['subscription_plan_id']);
         $startsAt = CarbonImmutable::createFromFormat('!Y-m-d', $validated['starts_at'], config('app.timezone'));
 
         $subscription = $this->subscriptions->assign(
@@ -78,11 +79,15 @@ class SubscriptionManagementController extends Controller
 
     public function show(RestaurantSubscription $restaurantSubscription): View
     {
+        $this->ensureBusinessSubscription($restaurantSubscription);
         $restaurantSubscription->load([
             'restaurant',
             'plan',
             'creator',
-            'payments' => fn ($query) => $query->with(['creator', 'approver', 'rejector', 'invoice', 'refunds'])->latest('paid_at'),
+            'payments' => function ($payments): void {
+                $this->realPayments($payments->getQuery());
+                $payments->with(['creator', 'approver', 'rejector', 'invoice', 'refunds'])->latest('paid_at');
+            },
             'events' => fn ($query) => $query->with('actor')->latest(),
         ]);
 
@@ -91,6 +96,7 @@ class SubscriptionManagementController extends Controller
 
     public function renew(Request $request, RestaurantSubscription $restaurantSubscription): RedirectResponse
     {
+        $this->ensureBusinessSubscription($restaurantSubscription);
         $renewal = $this->subscriptions->renew($restaurantSubscription, $this->actor());
 
         return redirect()->route('super-admin.subscriptions.show', $renewal)
@@ -99,6 +105,7 @@ class SubscriptionManagementController extends Controller
 
     public function extend(Request $request, RestaurantSubscription $restaurantSubscription): RedirectResponse
     {
+        $this->ensureBusinessSubscription($restaurantSubscription);
         $validated = $request->validate([
             'expiry_date' => ['required', 'date_format:Y-m-d'],
         ]);
@@ -112,6 +119,7 @@ class SubscriptionManagementController extends Controller
 
     public function updateStatus(Request $request, RestaurantSubscription $restaurantSubscription): RedirectResponse
     {
+        $this->ensureBusinessSubscription($restaurantSubscription);
         $validated = $request->validate([
             'status' => ['required', Rule::in(['active', 'suspended', 'cancelled'])],
         ]);
@@ -129,7 +137,9 @@ class SubscriptionManagementController extends Controller
 
     public function history(Request $request): View
     {
-        $query = RestaurantSubscriptionEvent::query()->with(['restaurant', 'actor', 'subscription']);
+        $query = RestaurantSubscriptionEvent::query()
+            ->whereHas('restaurant', fn (Builder $restaurant) => $restaurant->where('slug', 'not like', 'demo-tb-2026-%'))
+            ->with(['restaurant', 'actor', 'subscription']);
         $validated = $request->validate([
             'restaurant_id' => ['nullable', 'integer'],
         ]);
@@ -153,7 +163,7 @@ class SubscriptionManagementController extends Controller
 
         return view('super-admin.subscriptions.history', [
             'events' => $events,
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurants' => Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')->orderBy('name')->get(['id', 'name']),
             'restaurantId' => $restaurantId,
             'search' => $request->input('search', ''),
         ]);
@@ -163,7 +173,8 @@ class SubscriptionManagementController extends Controller
     {
         $now = CarbonImmutable::now(config('app.timezone'));
         $databaseNow = $now->utc();
-        $query = RestaurantSubscription::query()->with(['restaurant.owners', 'payments']);
+        $query = $this->realSubscriptions(RestaurantSubscription::query())
+            ->with(['restaurant.owners', 'payments' => fn ($payments) => $this->realPayments($payments->getQuery())]);
 
         if ($request->filled('search')) {
             $search = trim($request->string('search')->toString());
@@ -202,11 +213,11 @@ class SubscriptionManagementController extends Controller
 
         $paymentStatusFilter = $request->input('payment_status', '');
         if (in_array($paymentStatusFilter, ['pending', 'approved', 'rejected', 'refunded'], true)) {
-            $query->whereHas('payments', function ($payments) use ($paymentStatusFilter): void {
-                $payments->where('status', $paymentStatusFilter);
+            $query->whereHas('payments', function (Builder $payments) use ($paymentStatusFilter): void {
+                $this->realPayments($payments)->where('status', $paymentStatusFilter);
             });
         } elseif ($paymentStatusFilter === 'unpaid') {
-            $query->whereDoesntHave('payments', fn ($payments) => $payments->whereIn('status', ['pending', 'approved', 'refunded']));
+            $query->whereDoesntHave('payments', fn (Builder $payments) => $this->realPayments($payments)->whereIn('status', ['pending', 'approved', 'refunded']));
         }
 
         if ($expiring) {
@@ -220,37 +231,31 @@ class SubscriptionManagementController extends Controller
             : 'created_at';
         $direction = $request->input('direction') === 'asc' ? 'asc' : 'desc';
         $subscriptions = $query->orderBy($sort, $direction)->paginate(15)->withQueryString();
-        $paymentQueue = SubscriptionPayment::query()
+        $paymentQueue = $this->realPayments(SubscriptionPayment::query())
             ->with(['restaurant.owners', 'subscription'])
             ->where('status', 'pending')
-            ->where(function ($query): void {
-                $query->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
-            })
             ->orderBy('paid_at')
             ->orderBy('id')
             ->paginate(10, ['*'], 'approvals_page')
             ->withQueryString();
-        $paymentHistory = SubscriptionPayment::query()
+        $paymentHistory = $this->realPayments(SubscriptionPayment::query())
             ->with(['restaurant.owners', 'subscription'])
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
             ->paginate(10, ['*'], 'payments_page')
             ->withQueryString();
         $refundHistory = SubscriptionPaymentRefund::query()
+            ->whereHas('payment', fn (Builder $payment) => $this->realPayments($payment))
             ->with(['payment.restaurant', 'administrator'])
             ->orderByDesc('refunded_at')
             ->paginate(10, ['*'], 'refunds_page')
             ->withQueryString();
-        $allSubscriptions = RestaurantSubscription::query()->get([
+        $allSubscriptions = $this->realSubscriptions(RestaurantSubscription::query())->get([
             'id', 'restaurant_id', 'subscription_plan_id', 'price', 'currency', 'billing_period',
             'duration_months', 'duration_days', 'status', 'is_trial', 'starts_at', 'expires_at',
         ]);
         $paymentSummaries = $this->payments->subscriptionPaymentSummaries($allSubscriptions);
-        $realPayments = SubscriptionPayment::query()
-            ->whereNotNull('id')
-            ->where(function ($query): void {
-                $query->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
-            });
+        $realPayments = $this->realPayments(SubscriptionPayment::query());
         $approvedPayments = (clone $realPayments)->whereIn('status', ['approved', 'refunded'])
             ->with('refunds:id,subscription_payment_id,amount')
             ->get(['id', 'amount']);
@@ -263,9 +268,7 @@ class SubscriptionManagementController extends Controller
         }
         $refundedCents = 0;
         foreach (SubscriptionPaymentRefund::query()
-            ->whereHas('payment', fn ($payment) => $payment->where(function ($query): void {
-                $query->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
-            }))
+            ->whereHas('payment', fn (Builder $payment) => $this->realPayments($payment))
             ->get(['amount']) as $refund) {
             $refundedCents += SubscriptionPayment::toCents((string) $refund->amount);
         }
@@ -291,12 +294,12 @@ class SubscriptionManagementController extends Controller
             'paymentHistory' => $paymentHistory,
             'refundHistory' => $refundHistory,
             'summary' => [
-                'total_subscriptions' => RestaurantSubscription::query()->count(),
-                'active_subscriptions' => RestaurantSubscription::query()->where('status', 'active')
+                'total_subscriptions' => $this->realSubscriptions(RestaurantSubscription::query())->count(),
+                'active_subscriptions' => $this->realSubscriptions(RestaurantSubscription::query())->where('status', 'active')
                     ->where('starts_at', '<=', $databaseNow)->where('expires_at', '>=', $databaseNow)->count(),
-                'pending_payments' => RestaurantSubscription::query()->where('status', 'pending_payment')->count(),
+                'pending_payments' => $this->realSubscriptions(RestaurantSubscription::query())->where('status', 'pending_payment')->count(),
                 'pending_approvals' => (clone $realPayments)->where('status', 'pending')->count(),
-                'expired_subscriptions' => RestaurantSubscription::query()->where(function ($builder) use ($databaseNow): void {
+                'expired_subscriptions' => $this->realSubscriptions(RestaurantSubscription::query())->where(function ($builder) use ($databaseNow): void {
                     $builder->where('status', 'expired')
                         ->orWhere(fn ($legacy) => $legacy->whereIn('status', ['active', 'trial'])->where('expires_at', '<', $databaseNow));
                 })->count(),
@@ -310,5 +313,24 @@ class SubscriptionManagementController extends Controller
     private function actor(): SuperAdmin
     {
         return Auth::guard('super_admin')->user();
+    }
+
+    private function realSubscriptions(Builder $query): Builder
+    {
+        return $query->whereHas('restaurant', fn (Builder $restaurant) => $restaurant
+            ->where('slug', 'not like', 'demo-tb-2026-%'));
+    }
+
+    private function realPayments(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $nested) => $nested
+            ->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%'))
+            ->whereHas('restaurant', fn (Builder $restaurant) => $restaurant
+                ->where('slug', 'not like', 'demo-tb-2026-%'));
+    }
+
+    private function ensureBusinessSubscription(RestaurantSubscription $subscription): void
+    {
+        abort_if(str_starts_with((string) $subscription->restaurant?->slug, 'demo-tb-2026-'), 404);
     }
 }

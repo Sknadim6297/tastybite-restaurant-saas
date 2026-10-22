@@ -633,14 +633,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const count = notificationMenu.querySelector('[data-notification-count]');
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
         const notificationIndexUrl = notificationMenu.querySelector('.notification-dropdown-heading a').href;
-        const notificationFeedPath = new URL(notificationMenu.dataset.feedUrl, window.location.href).pathname;
+        const normalizePath = (path) => path.replace(/\/+$/, '') || '/';
+        const notificationFeedPath = normalizePath(new URL(notificationMenu.dataset.feedUrl, window.location.href).pathname);
         const pollingIntervalMs = 30000;
         const notificationDestination = (url) => {
             try {
                 const destination = new URL(url || notificationIndexUrl, window.location.href);
                 if (
                     destination.origin !== window.location.origin
-                    || destination.pathname === notificationFeedPath
+                    || normalizePath(destination.pathname) === notificationFeedPath
                 ) {
                     return new URL(notificationIndexUrl, window.location.href);
                 }
@@ -705,6 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.append(title, description, time);
                     item.addEventListener('click', async (event) => {
                         event.preventDefault();
+                        event.stopPropagation();
                         try {
                             const template = notificationMenu.dataset.readUrlTemplate;
                             const response = await fetch(template.replace('__ID__', encodeURIComponent(notification.id)), {

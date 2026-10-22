@@ -22,8 +22,7 @@
         <form method="GET" action="{{ route('super-admin.payments.index') }}" class="payment-filters" data-auto-filter>
             <input class="toolbar-search" type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Search reference, restaurant, owner or plan" aria-label="Search payments">
             <select class="toolbar-search" name="restaurant_id" aria-label="Filter by restaurant"><option value="">All restaurants</option>@foreach($restaurants as $restaurant)<option value="{{ $restaurant->id }}" @selected((string) ($filters['restaurant_id'] ?? '') === (string) $restaurant->id)>{{ $restaurant->name }}</option>@endforeach</select>
-            <select class="toolbar-search" name="status" aria-label="Filter by status"><option value="">All statuses</option>@foreach(['pending','approved','rejected','refunded'] as $status)<option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ ucfirst($status) }}</option>@endforeach</select>
-            <select class="toolbar-search" name="scope" aria-label="Filter demo records"><option value="all" @selected(($filters['scope'] ?? 'all') === 'all')>All records</option><option value="real" @selected(($filters['scope'] ?? '') === 'real')>Real records</option><option value="demo" @selected(($filters['scope'] ?? '') === 'demo')>Demo records</option></select>
+            <select class="toolbar-search" name="status" aria-label="Filter by status"><option value="">All statuses</option>@foreach(['pending','approved','rejected','refunded'] as $status)<option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ \App\Support\StatusPresenter::label($status) }}</option>@endforeach</select>
             <input class="toolbar-search" type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}" aria-label="From date">
             <input class="toolbar-search" type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}" aria-label="To date">
             <a class="button button-secondary" href="{{ route('super-admin.payments.index') }}" data-auto-filter-reset>Reset</a>
@@ -37,12 +36,12 @@
             <tbody>
                 @forelse($payments as $payment)
                     <tr>
-                        <td>{{ $payment->formatted_id ?? '—' }} @if($payment->isDemo())<span class="meta-label">Demo</span>@endif</td>
+                        <td>{{ $payment->formatted_id ?? '—' }}</td>
                         <td><strong>{{ $payment->restaurant?->name ?? '—' }}</strong><br><span class="field-hint">{{ $payment->restaurant?->owners->first()?->name ?? 'No owner listed' }}</span></td>
                         <td>{{ $payment->plan_name ?: ($payment->subscription?->plan_name ?: ($payment->plan?->name ?? '—')) }}</td>
                         <td>{{ $payment->currency && $payment->amount !== null ? $payment->currency.' '.number_format((float) $payment->amount, 2) : '—' }}</td>
                         <td>{{ $payment->payment_method_label ?? '—' }}<br><span class="field-hint">{{ $payment->transaction_reference ?: '—' }}</span></td>
-                        <td>@if($payment->status)<span class="status-pill status-{{ $payment->status }}">{{ ucfirst($payment->status) }}</span>@else—@endif</td>
+                        <td><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($payment->status) }}">{{ \App\Support\StatusPresenter::label($payment->status) }}</span></td>
                         <td>{{ $payment->paid_at?->timezone(config('app.timezone'))->format('M j, Y') ?? '—' }}</td>
                         <td><a class="button button-secondary" href="{{ route('super-admin.payments.show', $payment) }}">View</a></td>
                     </tr>

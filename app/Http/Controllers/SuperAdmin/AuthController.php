@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RestaurantAuditLog;
 use App\Models\SuperAdmin;
 use App\Services\LoginSecurityAuditService;
-use App\Services\RestaurantSupportAccessService;
+use App\Services\RestaurantDashboardAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -72,11 +72,8 @@ class AuthController extends Controller
     public function logout(Request $request): RedirectResponse
     {
         $admin = Auth::guard('super_admin')->user();
-        if ($admin instanceof SuperAdmin && $request->session()->has(RestaurantSupportAccessService::SESSION_REQUEST_ID)) {
-            app(RestaurantSupportAccessService::class)->end($request, $admin);
-        }
         if ($admin instanceof SuperAdmin) {
-            app(RestaurantSupportAccessService::class)->clearDirectAccessForLogout($request, $admin);
+            app(RestaurantDashboardAccessService::class)->clearForLogout($request, $admin);
         }
         if ($admin !== null) {
             RestaurantAuditLog::create([

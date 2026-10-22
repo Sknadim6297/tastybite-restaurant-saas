@@ -182,7 +182,7 @@ class SupportTicketService
             }
 
             if ($before['status'] !== $ticket->status) {
-                $this->notifyOwners($ticket, 'support-ticket-status:'.$ticket->id.':'.$ticket->status.':'.now()->timestamp, 'Ticket status updated', 'Ticket '.$ticket->ticket_number.' is now '.str_replace('_', ' ', $ticket->status).'.');
+                $this->notifyOwners($ticket, 'support-ticket-status:'.$ticket->id.':'.$ticket->status.':'.now()->timestamp, 'Ticket status updated', 'Ticket '.$ticket->ticket_number.' is now '.\App\Support\StatusPresenter::label($ticket->status).'.');
             }
         });
     }

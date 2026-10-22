@@ -268,32 +268,35 @@ class SuperAdminPaymentManagementTest extends TestCase
             ->assertHeader('content-type', 'text/csv; charset=UTF-8');
     }
 
-    public function test_demo_payments_are_marked_and_excluded_from_real_financial_summaries(): void
+    public function test_demo_payments_are_hidden_from_super_admin_business_views(): void
     {
         $admin = $this->actingAsSuperAdmin();
         $restaurant = $this->createRestaurant();
         $plan = $this->createPlan();
         $this->createSubscription($restaurant, $plan, $admin);
         $demoPayment = SubscriptionPayment::create($this->paymentAttributes($restaurant, $plan, $admin, [
-            'status' => 'approved',
+            'status' => 'pending',
             'notes' => 'DEMO DATA ONLY - not actual money',
         ]));
 
         $this->get(route('super-admin.payments.index', ['scope' => 'demo']))
             ->assertOk()
-            ->assertSee($demoPayment->formatted_id)
-            ->assertSee('Demo');
+            ->assertDontSee($demoPayment->formatted_id)
+            ->assertDontSee('Demo records');
         $this->get(route('super-admin.payments.reports'))
             ->assertOk()
-            ->assertSee('Gross approved payments (real scope)')
+            ->assertSee('Gross approved payments')
             ->assertSee('INR 0.00');
         $this->get(route('super-admin.payments.reports', ['scope' => 'demo']))
             ->assertOk()
-            ->assertSee('Gross approved payments (demo scope)')
-            ->assertSee('INR 1,299.50');
+            ->assertSee('Gross approved payments')
+            ->assertSee('INR 0.00')
+            ->assertDontSee('demo scope');
         $this->get(route('super-admin.payments.show', $demoPayment))
-            ->assertOk()
-            ->assertSee('DEMO ONLY — NOT ACTUAL MONEY');
+            ->assertNotFound();
+        $this->post(route('super-admin.payments.approve', $demoPayment))
+            ->assertNotFound();
+        $this->assertSame('pending', $demoPayment->fresh()->status);
     }
 
     public function test_payment_proof_is_stored_in_private_local_disk(): void

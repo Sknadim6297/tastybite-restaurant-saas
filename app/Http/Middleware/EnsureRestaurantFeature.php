@@ -13,7 +13,7 @@ class EnsureRestaurantFeature
 {
     public function handle(Request $request, Closure $next, string $featureCode): Response
     {
-        $user = request()->attributes->get('restaurant_support_owner')
+        $user = request()->attributes->get('restaurant_admin_access_owner')
             ?? Auth::guard('web')->user();
         if (! $user instanceof User || ! $user->restaurant) {
             return response()->json(['message' => 'A valid restaurant account is required.'], 403);

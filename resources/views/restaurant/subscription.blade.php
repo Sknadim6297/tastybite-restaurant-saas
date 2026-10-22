@@ -6,7 +6,7 @@
 @section('content')
     <div class="page-heading">
         <div><span class="eyebrow">ACCOUNT ACCESS</span><h1>Subscription &amp; billing</h1><p>Plans, payment verification, and receipts for {{ $restaurant->name }}.</p></div>
-        @if($subscriptionStatus)<span class="status-pill status-{{ str_replace('_', '-', $subscriptionStatus) }}">{{ str_replace('_', ' ', ucfirst($subscriptionStatus)) }}</span>@endif
+        @if($subscriptionStatus)<span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($subscriptionStatus) }}">{{ \App\Support\StatusPresenter::label($subscriptionStatus) }}</span>@endif
     </div>
 
     @if(session('status'))
@@ -18,7 +18,7 @@
         <section class="panel-card subscription-billing-card">
             <div class="section-heading">
                 <div><h2>{{ $restaurantSubscription->plan_name }}</h2><p>{{ $restaurantSubscription->formatted_id }} · {{ $restaurantSubscription->plan_code }}</p></div>
-                <span class="status-pill status-{{ str_replace('_', '-', $restaurantSubscription->effectiveStatus()) }}">{{ str_replace('_', ' ', ucfirst($restaurantSubscription->effectiveStatus())) }}</span>
+                <span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($restaurantSubscription->effectiveStatus()) }}">{{ \App\Support\StatusPresenter::label($restaurantSubscription->effectiveStatus()) }}</span>
             </div>
             <div class="detail-grid">
                 <div class="detail-item"><span>Plan price</span><strong>{{ $restaurantSubscription->currency }} {{ number_format((float) $restaurantSubscription->price, 2) }}</strong></div>
@@ -95,7 +95,7 @@
                                 <td>{{ $payment->formatted_id }}</td>
                                 <td>{{ $payment->currency }} {{ number_format((float) $payment->amount, 2) }}</td>
                                 <td>{{ $payment->payment_method_label ?? '—' }}<br><span class="meta-label">{{ $payment->transaction_reference ?: '—' }}</span></td>
-                                <td><span class="status-pill status-{{ $payment->status }}">{{ ucfirst($payment->status) }}</span></td>
+                                <td><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($payment->status) }}">{{ \App\Support\StatusPresenter::label($payment->status) }}</span></td>
                                 <td>{{ $payment->paid_at?->timezone(config('app.timezone'))->format('M j, Y H:i') ?? '—' }}</td>
                                 <td>{{ $payment->rejection_reason ?: '—' }}</td>
                                 <td>@if($payment->invoice)<a class="button button-secondary" href="{{ route('restaurant.subscription.invoices.pdf', $payment->invoice) }}">Download receipt</a>@else—@endif</td>

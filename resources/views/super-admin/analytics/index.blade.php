@@ -17,17 +17,10 @@
         <form method="GET" action="{{ route('super-admin.analytics.index') }}" class="toolbar-actions" style="flex:1;" data-auto-filter>
             <label class="form-field"><span>From</span><input class="toolbar-search" type="date" name="date_from" value="{{ $filters['date_from'] }}"></label>
             <label class="form-field"><span>To</span><input class="toolbar-search" type="date" name="date_to" value="{{ $filters['date_to'] }}"></label>
-            <label class="form-field"><span>Data scope</span>
-                <select class="toolbar-search" name="scope">
-                    @foreach (['real' => 'Real records only', 'demo' => 'Demo records only', 'all' => 'All records'] as $scope => $label)
-                        <option value="{{ $scope }}" @selected($filters['scope'] === $scope)>{{ $label }}</option>
-                    @endforeach
-                </select>
-            </label>
         </form>
     </div>
 
-    <div class="report-scope-note"><strong>Scope: {{ ucfirst($filters['scope']) }}.</strong> Trends use the selected date range. Revenue is approved and refunded payment record value, shown separately by currency without conversion; it is not confirmation of funds received.</div>
+    <div class="report-scope-note">Trends use the selected date range. Revenue is approved and refunded payment record value, shown separately by currency without conversion; it is not confirmation of funds received.</div>
 
     <section class="summary-row report-summary" aria-label="Platform analytics summary">
         <article class="summary-tile"><span>New restaurants</span><strong>{{ number_format($summary['new_restaurants']) }}</strong><small>{{ number_format($summary['previous_restaurants']) }} in the previous equal-length period</small></article>
@@ -45,7 +38,7 @@
                 <span>{{ number_format($month->total) }}</span><div><i style="height: {{ $height }}%"></i></div><small>{{ $month->period }}</small>
             </div>
         @empty
-            <div class="empty-state"><h3>No restaurant growth in this range</h3><p>Change the date range or data scope to view recorded account creation.</p></div>
+            <div class="empty-state"><h3>No restaurant growth in this range</h3><p>Change the date range to view recorded account creation.</p></div>
         @endforelse
     </section>
 
@@ -71,7 +64,7 @@
                     <thead><tr><th>Status</th><th>Records</th></tr></thead>
                     <tbody>
                         @forelse ($paymentStatuses as $status)
-                            <tr><td>{{ ucfirst($status->status) }}</td><td>{{ number_format($status->total) }}</td></tr>
+                            <tr><td>{{ \App\Support\StatusPresenter::label($status->status) }}</td><td>{{ number_format($status->total) }}</td></tr>
                         @empty
                             <tr><td colspan="2"><div class="empty-state"><h3>No payment records</h3><p>No dated payments match this range.</p></div></td></tr>
                         @endforelse
@@ -88,7 +81,7 @@
                         @forelse ($activePlanMix as $plan)
                             <tr><td>{{ $plan->plan_name }}</td><td>{{ number_format($plan->total) }}</td></tr>
                         @empty
-                            <tr><td colspan="2"><div class="empty-state"><h3>No active subscriptions</h3><p>No valid active or trial subscriptions match this scope.</p></div></td></tr>
+                            <tr><td colspan="2"><div class="empty-state"><h3>No active subscriptions</h3><p>No valid active or trial subscriptions match this date range.</p></div></td></tr>
                         @endforelse
                     </tbody>
                 </table>

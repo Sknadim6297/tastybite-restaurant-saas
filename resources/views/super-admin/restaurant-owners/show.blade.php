@@ -22,9 +22,9 @@
     </div>
 
     <div class="summary-row">
-        <div class="summary-tile"><strong>{{ ucfirst($owner->status) }}</strong><span>Owner account status</span></div>
-        <div class="summary-tile"><strong>{{ ucfirst($owner->restaurant?->status ?? 'unassigned') }}</strong><span>Restaurant status</span></div>
-        <div class="summary-tile"><strong>{{ $subscription?->effectiveStatus() ? ucfirst($subscription->effectiveStatus()) : 'None' }}</strong><span>Subscription status</span></div>
+        <div class="summary-tile"><strong>{{ \App\Support\StatusPresenter::label($owner->status) }}</strong><span>Owner account status</span></div>
+        <div class="summary-tile"><strong>{{ \App\Support\StatusPresenter::label($owner->restaurant?->status) }}</strong><span>Restaurant status</span></div>
+        <div class="summary-tile"><strong>{{ $subscription ? \App\Support\StatusPresenter::label($subscription->effectiveStatus()) : 'None' }}</strong><span>Subscription status</span></div>
     </div>
 
     <div class="form-card">
@@ -34,8 +34,8 @@
             <div class="detail-item"><span>Mobile number</span><strong>{{ $owner->mobile ?: 'Not provided' }}</strong></div>
             <div class="detail-item"><span>Restaurant</span><strong>{{ $owner->restaurant?->name ?? 'Unassigned' }}</strong></div>
             <div class="detail-item"><span>Role</span><strong>{{ ucfirst($owner->role) }}</strong></div>
-            <div class="detail-item"><span>Account status</span><strong>{{ ucfirst($owner->status) }}</strong></div>
-            <div class="detail-item"><span>Restaurant status</span><strong>{{ ucfirst($owner->restaurant?->status ?? 'unassigned') }}</strong></div>
+            <div class="detail-item"><span>Account status</span><strong>{{ \App\Support\StatusPresenter::label($owner->status) }}</strong></div>
+            <div class="detail-item"><span>Restaurant status</span><strong>{{ \App\Support\StatusPresenter::label($owner->restaurant?->status) }}</strong></div>
             <div class="detail-item"><span>Account created</span><strong>{{ $owner->created_at?->format('F j, Y H:i') ?? '—' }}</strong></div>
             <div class="detail-item"><span>Last successful login</span><strong>{{ $owner->last_login_at?->format('F j, Y H:i') ?? 'No recorded login' }}</strong></div>
             <div class="detail-item"><span>Subscription plan</span><strong>{{ $subscription?->plan_name ?? 'No subscription assigned' }}</strong></div>

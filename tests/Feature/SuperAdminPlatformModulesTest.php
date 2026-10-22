@@ -22,22 +22,32 @@ class SuperAdminPlatformModulesTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_demo_data_management_is_super_admin_only_and_read_only_outside_local(): void
+    public function test_demo_data_management_routes_are_removed_without_changing_records(): void
     {
-        $this->get(route('super-admin.demo-data.index'))->assertRedirect(route('super-admin.login'));
-
-        $this->actingAsSuperAdmin();
-        $this->get(route('super-admin.demo-data.index'))
-            ->assertOk()
-            ->assertSee('Dry-run summary')
-            ->assertSee('Generation is disabled here')
-            ->assertDontSee('Generate local demo records');
-
-        $this->post(route('super-admin.demo-data.generate'), [
-            'confirmation' => 'GENERATE DEMO DATA',
-        ])->assertForbidden();
+        $this->get('/super-admin/demo-data')->assertNotFound();
+        $this->post('/super-admin/demo-data/generate')->assertNotFound();
         $this->assertDatabaseCount('restaurants', 0);
         $this->assertDatabaseCount('subscription_payments', 0);
+    }
+
+    public function test_support_access_request_routes_are_removed(): void
+    {
+        $this->actingAsSuperAdmin();
+        $this->get(route('super-admin.dashboard'))
+            ->assertOk()
+            ->assertDontSee('Support Access');
+
+        foreach ([
+            '/super-admin/support-access',
+            '/super-admin/support-access/create',
+            '/super-admin/support-access/1',
+        ] as $url) {
+            $this->get($url)->assertNotFound();
+        }
+
+        $this->post('/super-admin/support-access')->assertNotFound();
+        $this->post('/super-admin/support-access/1/decision')->assertNotFound();
+        $this->post('/super-admin/support-access/1/cancel')->assertNotFound();
     }
 
     public function test_platform_report_requires_super_admin_and_uses_exact_decimal_totals(): void
@@ -68,14 +78,16 @@ class SuperAdminPlatformModulesTest extends TestCase
             ->assertDontSee('INR 299999899.97');
         $this->get(route('super-admin.reports.payments', ['scope' => 'demo']))
             ->assertOk()
-            ->assertSee('REPORT-DEMO')
-            ->assertDontSee('REPORT-1');
+            ->assertSee('REPORT-1')
+            ->assertDontSee('REPORT-DEMO')
+            ->assertDontSee('Data scope');
         $export = $this->get(route('super-admin.reports.export', ['type' => 'revenue', 'scope' => 'real']))
             ->assertOk()
             ->assertHeader('content-type', 'text/csv; charset=UTF-8');
         $this->assertStringContainsString('REPORT-1', $export->streamedContent());
         $this->assertStringNotContainsString('REPORT-PENDING', $export->streamedContent());
         $this->assertStringNotContainsString('REPORT-DEMO', $export->streamedContent());
+        $this->assertStringNotContainsString('Demo Record', $export->streamedContent());
         $this->assertDatabaseHas('subscription_payments', ['id' => $pending->id, 'status' => 'pending']);
         $this->assertSame('99999999.99', $second->amount);
     }
@@ -87,24 +99,35 @@ class SuperAdminPlatformModulesTest extends TestCase
 
         $service->businessEvent('restaurant_registered', 'restaurant-created:77', 'New restaurant', 'Restaurant was registered.');
         $service->businessEvent('restaurant_registered', 'restaurant-created:77', 'New restaurant', 'Restaurant was registered.');
+        SuperAdminNotification::create([
+            'super_admin_id' => auth('super_admin')->id(),
+            'event_key' => 'demo-notification-fixture',
+            'category' => 'demo_data',
+            'title' => 'Demo fixture notice',
+            'description' => 'This fixture notice is not user-facing.',
+        ]);
 
-        $this->assertDatabaseCount('super_admin_notifications', 1);
-        $notification = SuperAdminNotification::query()->firstOrFail();
+        $this->assertDatabaseCount('super_admin_notifications', 2);
+        $notification = SuperAdminNotification::query()->where('category', 'restaurant_registered')->firstOrFail();
         $this->assertNull($notification->read_at);
         $this->get(route('super-admin.notifications.feed'))
             ->assertOk()
             ->assertJsonPath('unread_count', 1)
-            ->assertJsonPath('notifications.0.title', 'New restaurant');
+            ->assertJsonPath('notifications.0.title', 'New restaurant')
+            ->assertJsonCount(1, 'notifications');
 
         $this->post(route('super-admin.notifications.read', $notification))->assertRedirect();
         $this->assertNotNull($notification->fresh()->read_at);
         $this->post(route('super-admin.notifications.read-all'))->assertRedirect();
+        $this->assertNull(SuperAdminNotification::query()->where('category', 'demo_data')->firstOrFail()->read_at);
 
         $script = file_get_contents(public_path('assets/super-admin.js'));
         $this->assertIsString($script);
         $this->assertStringContainsString('const pollingIntervalMs = 30000;', $script);
         $this->assertStringContainsString('window.setInterval(loadNotifications, pollingIntervalMs);', $script);
         $this->assertStringContainsString("document.addEventListener('visibilitychange', loadNotifications);", $script);
+        $this->assertStringContainsString('normalizePath(destination.pathname) === notificationFeedPath', $script);
+        $this->assertStringContainsString('event.stopPropagation();', $script);
     }
 
     public function test_notification_feed_never_returns_its_own_endpoint_as_a_navigation_destination(): void
@@ -122,6 +145,25 @@ class SuperAdminPlatformModulesTest extends TestCase
         $this->get(route('super-admin.notifications.feed'))
             ->assertOk()
             ->assertJsonPath('notifications.0.url', route('super-admin.notifications.index'));
+    }
+
+    public function test_super_admin_header_uses_accessible_bell_icon_and_hides_zero_badge(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $html = $this->get(route('super-admin.dashboard'))
+            ->assertOk()
+            ->assertSee('class="notification-bell-icon"', false)
+            ->assertSee('aria-expanded="false"', false)
+            ->assertSee('data-notification-count', false)
+            ->assertDontSee('Demo Data')
+            ->assertDontSee('♧')
+            ->getContent();
+
+        $this->assertStringContainsString('hidden>0</span>', $html);
+        $script = file_get_contents(public_path('assets/super-admin.js'));
+        $this->assertIsString($script);
+        $this->assertStringContainsString('count.hidden = data.unread_count === 0;', $script);
     }
 
     public function test_expiry_alert_command_is_safe_to_repeat(): void
@@ -189,7 +231,6 @@ class SuperAdminPlatformModulesTest extends TestCase
             route('super-admin.payments.reports'),
             route('super-admin.invoices.index'),
             route('super-admin.support-tickets.index'),
-            route('super-admin.support-access.index'),
             route('super-admin.announcements.index'),
             route('super-admin.activity-logs.index'),
             route('super-admin.reports.restaurants'),

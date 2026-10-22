@@ -79,9 +79,9 @@ Platform analytics are available at `/super-admin/analytics` with date and real/
 
 The Security Center at `/super-admin/security-center` shows effective session and password-reset settings, account state, and recorded authentication events. Failed credential checks store a keyed account fingerprint rather than a submitted email or password; malformed and rate-limited requests are not included. System Health at `/super-admin/system-health` performs a read-only database ping and reports pending migration filenames and configured service drivers. It does not run migrations, probe external mail/cache/queue delivery, or verify scheduler execution.
 
-Support Access at `/super-admin/support-access` records requests and independent approval/denial decisions in an audit history. No impersonation or cross-guard tenant-entry mechanism is implemented; approving a request does not grant access to restaurant data.
+Super Admins use **Restaurants → Go to Dashboard** for temporary direct access to eligible restaurant dashboards. The Super Admin identity remains active, tenant data stays scoped, access/actions are audited, and **Return to Super Admin** or logout clears the temporary session.
 
-The additive schema for feature management, support tickets, invoices, restaurant approvals, announcements, and support-access requests is provided by migrations `2026_10_13_000007` through `2026_10_13_000012`. The migrations have been applied to this local development MySQL database after verifying a full backup. PHPUnit forces an isolated in-memory SQLite database and does not modify development MySQL.
+The former support-access request workflow has been retired. Its historical `support_access_requests` and `support_access_request_events` tables, records, and `support_access_request` audit entries are retained without request or approval routes. Review these structures separately before any future schema cleanup; this change does not migrate or delete their data. The additive schema for feature management, support tickets, invoices, restaurant approvals, announcements, and support-access history is provided by migrations `2026_10_13_000007` through `2026_10_13_000012`. PHPUnit forces an isolated in-memory SQLite database and does not modify development MySQL.
 
 ## About Laravel
 
@@ -140,5 +140,6 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-#   t a s t y b i t e - r e s t a u r a n t - s a a s  
+#   t a s t y b i t e - r e s t a u r a n t - s a a s 
+ 
  

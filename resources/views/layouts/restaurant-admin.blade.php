@@ -12,12 +12,9 @@
 
 <body class="admin-page">
     @php
-        $supportRequest = request()->attributes->get('restaurant_support_request');
-        $supportAdmin = request()->attributes->get('restaurant_support_admin');
-        $supportMode = $supportRequest !== null && $supportAdmin !== null;
+        $adminAccessAdmin = request()->attributes->get('restaurant_admin_access_admin');
         $adminAccessRestaurant = request()->attributes->get('restaurant_admin_access_restaurant');
-        $adminMode = $adminAccessRestaurant !== null && $supportAdmin !== null;
-        $restrictedMode = $supportMode || $adminMode;
+        $adminMode = $adminAccessRestaurant !== null && $adminAccessAdmin !== null;
     @endphp
     <div class="admin-shell">
         <aside class="admin-sidebar" id="admin-sidebar">
@@ -29,16 +26,14 @@
                 <a href="{{ route('restaurant.dashboard') }}" class="sidebar-link @if(request()->routeIs('restaurant.dashboard')) is-active @endif">
                     <span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span>
                 </a>
-                @unless ($supportMode)
-                    <a href="{{ route('pos.index') }}" class="sidebar-link @if(request()->routeIs('pos.index')) is-active @endif"><span class="nav-icon" aria-hidden="true">▣</span><span>POS Billing</span></a>
-                    <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">◫</span><span>Orders</span><span class="nav-soon">Soon</span></span>
-                    <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">♨</span><span>Kitchen / KOT</span><span class="nav-soon">Soon</span></span>
-                    <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">▤</span><span>Table Management</span><span class="nav-soon">Soon</span></span>
-                @endunless
+                <a href="{{ route('pos.index') }}" class="sidebar-link @if(request()->routeIs('pos.index')) is-active @endif"><span class="nav-icon" aria-hidden="true">▣</span><span>POS Billing</span></a>
+                <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">◫</span><span>Orders</span><span class="nav-soon">Soon</span></span>
+                <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">♨</span><span>Kitchen / KOT</span><span class="nav-soon">Soon</span></span>
+                <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">▤</span><span>Table Management</span><span class="nav-soon">Soon</span></span>
                 <a href="{{ route('restaurant.menu.categories.index') }}" class="sidebar-link @if(request()->routeIs('restaurant.menu.categories.*', 'restaurant.menu.products.*')) is-active @endif"><span class="nav-icon" aria-hidden="true">☰</span><span>Menu Management</span></a>
                 <a href="{{ route('restaurant.menu.categories.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.menu.categories.*')) is-active @endif"><span class="nav-icon" aria-hidden="true">◦</span><span>Categories</span></a>
                 <a href="{{ route('restaurant.menu.products.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.menu.products.*')) is-active @endif"><span class="nav-icon" aria-hidden="true">◦</span><span>Products</span></a>
-                @unless ($restrictedMode)
+                @unless ($adminMode)
                     <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">◫</span><span>Inventory</span><span class="nav-soon">Soon</span></span>
                     <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">◧</span><span>Purchases</span><span class="nav-soon">Soon</span></span>
                     <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true">♙</span><span>Staff Management</span><span class="nav-soon">Soon</span></span>
@@ -67,9 +62,9 @@
                     <span aria-hidden="true">☰</span>
                 </button>
                 <div class="breadcrumb"><span>Restaurant Admin</span><span aria-hidden="true">/</span><strong>@yield('section', 'Dashboard')</strong></div>
-                @if ($restrictedMode)
-                    <div class="profile-menu" aria-label="Super Admin support session">
-                        <span class="avatar" aria-hidden="true">{{ strtoupper(substr($supportAdmin->name, 0, 1)) }}</span>
+                @if ($adminMode)
+                    <div class="profile-menu" aria-label="Super Admin administrative access">
+                        <span class="avatar" aria-hidden="true">{{ strtoupper(substr($adminAccessAdmin->name, 0, 1)) }}</span>
                         <span class="profile-trigger-name">Super Admin</span>
                     </div>
                 @else
@@ -93,15 +88,11 @@
                 @endif
             </header>
             <main class="admin-content">
-                @if ($supportMode || $adminMode)
+                @if ($adminMode)
                     <div class="notice-card" role="status" style="position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;margin-bottom:18px;">
                         <div>
                             <strong>Super Admin Access — Viewing: {{ $restaurant->name }}</strong>
-                            @if ($supportMode)
-                                <p style="margin:4px 0 0;">Access expires {{ $supportRequest->access_expires_at?->timezone(config('app.timezone'))->format('M j, Y H:i') ?? 'soon' }}.</p>
-                            @else
-                                <p style="margin:4px 0 0;">Temporary administrative access is active.</p>
-                            @endif
+                            <p style="margin:4px 0 0;">Temporary administrative access is active.</p>
                         </div>
                         <form method="POST" action="{{ route('super-admin.restaurants.dashboard.return') }}">
                             @csrf

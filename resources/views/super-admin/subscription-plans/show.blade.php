@@ -14,7 +14,7 @@
     <section class="panel-card">
         <div class="detail-grid">
             <div class="detail-item"><span>Name / Code</span><strong>{{ $plan->name }} · {{ $plan->code }}</strong></div>
-            <div class="detail-item"><span>Status</span><strong>{{ ucfirst($plan->status) }}</strong></div>
+            <div class="detail-item"><span>Status</span><strong>{{ \App\Support\StatusPresenter::label($plan->status) }}</strong></div>
             <div class="detail-item"><span>Price</span><strong>{{ $plan->currency }} {{ number_format((float) $plan->price, 2) }}</strong></div>
             <div class="detail-item"><span>Billing period</span><strong>{{ ucfirst($plan->billing_period) }}@if($plan->billing_period === 'custom') ({{ $plan->duration_months ? $plan->duration_months.' months' : $plan->duration_days.' days' }})@endif</strong></div>
             <div class="detail-item"><span>Trial</span><strong>{{ $plan->trial_available ? $plan->trial_duration_days.' days' : 'Not available' }}</strong></div>
@@ -33,7 +33,7 @@
                         <td>{{ $subscription->restaurant?->name ?? 'Restaurant unavailable' }}</td>
                         <td>{{ $subscription->starts_at->timezone(config('app.timezone'))->format('M j, Y') }}</td>
                         <td>{{ $subscription->expires_at->timezone(config('app.timezone'))->format('M j, Y') }}</td>
-                        <td><span class="status-pill status-{{ $effectiveStatus }}">{{ ucfirst($effectiveStatus) }}</span></td>
+                        <td><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($effectiveStatus) }}">{{ \App\Support\StatusPresenter::label($effectiveStatus) }}</span></td>
                         <td><a class="button button-secondary" href="{{ route('super-admin.subscriptions.show', $subscription) }}">View</a></td>
                     </tr>
                 @empty

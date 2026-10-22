@@ -458,6 +458,10 @@ form[data-plan-duration-form] .form-field[hidden] {
     font-size: 17px;
     line-height: 1;
 }
+.nav-icon-svg {
+    width: 18px;
+    height: 18px;
+}
 .sidebar-link.is-active .nav-icon {
     color: var(--orange);
 }
@@ -649,8 +653,12 @@ form[data-plan-duration-form] .form-field[hidden] {
 }
 .notification-menu {
     position: relative;
+    flex: 0 0 auto;
     margin-left: auto;
     margin-right: 12px;
+}
+.notification-menu[open] {
+    z-index: 1;
 }
 .notification-trigger {
     position: relative;
@@ -664,8 +672,24 @@ form[data-plan-duration-form] .form-field[hidden] {
     color: #475467;
     cursor: pointer;
     list-style: none;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 .notification-trigger::-webkit-details-marker { display: none; }
+.notification-trigger:hover {
+    border-color: #f0bd86;
+    background: #fff4e8;
+    color: #9b5600;
+}
+.notification-trigger:focus-visible {
+    outline: 3px solid rgba(236, 125, 36, 0.32);
+    outline-offset: 2px;
+}
+.notification-bell-icon {
+    display: block;
+    width: 21px;
+    height: 21px;
+    flex: 0 0 auto;
+}
 .notification-count {
     position: absolute;
     top: -5px;
@@ -681,6 +705,7 @@ form[data-plan-duration-form] .form-field[hidden] {
     font-weight: 750;
     line-height: 13px;
     text-align: center;
+    z-index: 1;
 }
 .notification-count[hidden] { display: none; }
 .notification-dropdown {
@@ -920,7 +945,7 @@ form[data-plan-duration-form] .form-field[hidden] {
 @media (max-width: 460px) {
     .report-filters { grid-template-columns: 1fr; }
     .notification-menu { margin-right: 5px; }
-    .notification-dropdown { right: -54px; }
+    .notification-dropdown { right: 0; width: min(360px, calc(100vw - 24px)); }
     .brand-asset-preview { align-items: flex-start; flex-direction: column; }
 }
 .profile-trigger {
@@ -1173,6 +1198,12 @@ form[data-plan-duration-form] .form-field[hidden] {
     background: #f7f8fa;
     color: #64748b;
     font-size: 17px;
+}
+.module-icon-svg {
+    width: 34px;
+    height: 34px;
+    padding: 7px;
+    box-sizing: border-box;
 }
 .module-card h3 {
     margin: 1px 0 5px;

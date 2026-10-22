@@ -3,7 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\SuperAdmin;
-use App\Services\RestaurantSupportAccessService;
+use App\Services\RestaurantDashboardAccessService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,8 +23,8 @@ class EnsureSuperAdmin
             || ! is_string($sessionPasswordVersion)
             || ! hash_equals(hash('sha256', $superAdmin->getAuthPassword()), $sessionPasswordVersion)
         ) {
-            if ($request->session()->has(RestaurantSupportAccessService::SESSION_ADMIN_ACCESS_RESTAURANT_ID)) {
-                app(RestaurantSupportAccessService::class)->terminateInvalidDirectSession(
+            if ($request->session()->has(RestaurantDashboardAccessService::SESSION_RESTAURANT_ID)) {
+                app(RestaurantDashboardAccessService::class)->terminateInvalidSession(
                     $request,
                     $superAdmin instanceof SuperAdmin ? $superAdmin : null,
                 );

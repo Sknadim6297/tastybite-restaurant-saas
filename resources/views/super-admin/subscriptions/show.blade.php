@@ -11,7 +11,7 @@
             <h1>{{ $subscription->restaurant->name }}</h1>
             <p>{{ $subscription->plan_name }} · {{ $subscription->plan_code }} · {{ $subscription->currency }} {{ number_format((float) $subscription->price, 2) }}</p>
         </div>
-        <span class="status-pill status-{{ str_replace('_', '-', $effectiveStatus) }}">{{ str_replace('_', ' ', ucfirst($effectiveStatus)) }}</span>
+        <span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($effectiveStatus) }}">{{ \App\Support\StatusPresenter::label($effectiveStatus) }}</span>
     </div>
 
     <section class="panel-card">
@@ -41,7 +41,7 @@
                         <td>{{ $payment->formatted_id }}</td>
                         <td>{{ $payment->currency }} {{ number_format((float) $payment->amount, 2) }}</td>
                         <td>{{ $payment->payment_method_label ?? '—' }}<br><span class="meta-label">{{ $payment->transaction_reference ?: '—' }}</span></td>
-                        <td><span class="status-pill status-{{ $payment->status }}">{{ ucfirst($payment->status) }}</span></td>
+                        <td><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($payment->status) }}">{{ \App\Support\StatusPresenter::label($payment->status) }}</span></td>
                         <td>{{ $payment->paid_at?->timezone(config('app.timezone'))->format('M j, Y H:i') ?? '—' }}</td>
                         <td>
                             @if($payment->invoice)
@@ -102,14 +102,14 @@
     <div class="section-heading"><div><h2>History</h2><p>Append-only audit entries for this subscription.</p></div><a class="button button-secondary" href="{{ route('super-admin.subscriptions.history') }}">All history</a></div>
     <div class="table-shell">
         <table class="data-table">
-            <thead><tr><th>Event</th><th>Actor</th><th>Previous</th><th>New</th><th>Recorded</th></tr></thead>
+            <thead><tr><th>Event</th><th>Actor</th><th>Previous Status</th><th>New Status</th><th>Recorded</th></tr></thead>
             <tbody>
                 @forelse($subscription->events as $event)
                     <tr>
-                        <td>{{ ucfirst(str_replace('_', ' ', $event->action)) }}</td>
+                        <td>{{ \App\Support\StatusPresenter::label($event->action) }}</td>
                         <td>{{ $event->actor?->name ?? 'Platform admin account unavailable' }}</td>
-                        <td>{{ $event->previous_status ? ucfirst($event->previous_status) : '—' }}</td>
-                        <td>{{ $event->new_status ? ucfirst($event->new_status) : '—' }}</td>
+                        <td>{{ \App\Support\StatusPresenter::label($event->previous_status) }}</td>
+                        <td>{{ \App\Support\StatusPresenter::label($event->new_status) }}</td>
                         <td>{{ $event->created_at->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</td>
                     </tr>
                 @empty

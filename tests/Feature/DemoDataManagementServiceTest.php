@@ -139,63 +139,55 @@ class DemoDataManagementServiceTest extends TestCase
 
         $this->actingAs($admin, 'super_admin');
         $this->app['session']->put('super_admin_password_version', hash('sha256', $admin->getAuthPassword()));
-        $this->get(route('super-admin.reports.payments', ['scope' => 'demo']))
+        $paymentReportResponse = $this->get(route('super-admin.reports.payments', ['scope' => 'demo']))
             ->assertOk()
-            ->assertSee('Demo records')
-            ->assertSee('DEMO-');
-        $this->get(route('super-admin.reports.payments', ['scope' => 'real']))
+            ->assertDontSee('Data scope')
+            ->assertDontSee('Demo records');
+        $paymentReport = $paymentReportResponse->viewData('payments');
+        $this->assertSame(1, $paymentReport->total());
+        $this->assertSame('REAL-KEEP', $paymentReport->first()->transaction_reference);
+
+        $overview = $this->get(route('super-admin.reports.index', ['scope' => 'demo']))
             ->assertOk()
-            ->assertSee('REAL-KEEP')
-            ->assertDontSee('DEMO-');
-        $this->get(route('super-admin.reports.index', ['scope' => 'demo']))
-            ->assertOk()
-            ->assertSee('15 demo restaurants')
-            ->assertSee('Demo records');
-        $this->get(route('super-admin.reports.index', ['scope' => 'all']))
-            ->assertOk()
-            ->assertSee('All records');
+            ->assertDontSee('Demo records');
+        $this->assertSame(1, $overview->viewData('counts')['restaurants']);
+        $this->assertSame(1, $overview->viewData('counts')['active_subscriptions']);
 
         $scheduledSubscriptions = $this->get(route('super-admin.reports.subscriptions', [
             'scope' => 'demo',
             'subscription_status' => 'scheduled',
         ]))->assertOk()->viewData('subscriptions');
-        $this->assertSame(2, $scheduledSubscriptions->total());
+        $this->assertSame(0, $scheduledSubscriptions->total());
         $activeSubscriptions = $this->get(route('super-admin.reports.subscriptions', [
             'scope' => 'demo',
             'subscription_status' => 'active',
         ]))->assertOk()->viewData('subscriptions');
-        $this->assertSame(8, $activeSubscriptions->total());
+        $this->assertSame(1, $activeSubscriptions->total());
 
         $pendingPayments = $this->get(route('super-admin.reports.payments', [
             'scope' => 'demo',
             'status' => 'pending',
         ]))->assertOk()->viewData('payments');
-        $this->assertSame(10, $pendingPayments->total());
-        $secondPaymentPage = $this->get(route('super-admin.reports.payments', [
-            'scope' => 'demo',
-            'page' => 2,
-        ]))->assertOk()->viewData('payments');
-        $this->assertSame(4, $secondPaymentPage->lastPage());
-        $this->assertSame(2, $secondPaymentPage->currentPage());
+        $this->assertSame(0, $pendingPayments->total());
         $dateFilteredPayments = $this->get(route('super-admin.reports.payments', [
             'scope' => 'demo',
             'date_from' => now()->subDays(40)->format('Y-m-d'),
             'date_to' => now()->format('Y-m-d'),
         ]))->assertOk()->viewData('payments');
-        $this->assertGreaterThan(0, $dateFilteredPayments->total());
-        $this->assertLessThan(60, $dateFilteredPayments->total());
+        $this->assertSame(1, $dateFilteredPayments->total());
         $revenueReport = $this->get(route('super-admin.reports.revenue', ['scope' => 'demo']))->assertOk();
-        $this->assertGreaterThan(0, (float) $revenueReport->viewData('gross'));
-        $this->assertSame(5, $revenueReport->viewData('byPlan')->count());
-        $overviewMonths = $this->get(route('super-admin.reports.index', ['scope' => 'demo']))
-            ->assertOk()->viewData('months');
+        $this->assertSame('499.00', $revenueReport->viewData('gross'));
+        $this->assertSame(1, $revenueReport->viewData('byPlan')->count());
+        $overviewMonths = $overview->viewData('months');
         $this->assertCount(12, $overviewMonths);
         $this->assertGreaterThan(0, array_sum(array_map(fn (array $month): float => (float) $month['gross'], $overviewMonths)));
 
         $export = $this->get(route('super-admin.reports.export', ['type' => 'payments', 'scope' => 'demo']))
             ->assertOk()
             ->assertHeader('content-type', 'text/csv; charset=UTF-8');
-        $this->assertStringContainsString('Yes; not actual money', $export->streamedContent());
+        $this->assertStringContainsString('Real Test Restaurant', $export->streamedContent());
+        $this->assertStringNotContainsString('DEMO-', $export->streamedContent());
+        $this->assertStringNotContainsString('Demo Record', $export->streamedContent());
 
         $cleanupPreview = $service->cleanup($admin);
         $this->assertSame(15, $cleanupPreview['restaurants']);

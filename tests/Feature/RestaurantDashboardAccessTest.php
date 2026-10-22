@@ -10,13 +10,13 @@ use App\Models\SaasFeature;
 use App\Models\SubscriptionPlan;
 use App\Models\SuperAdmin;
 use App\Models\User;
-use App\Services\RestaurantSupportAccessService;
+use App\Services\RestaurantDashboardAccessService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
-class RestaurantSupportDashboardAccessTest extends TestCase
+class RestaurantDashboardAccessTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -115,6 +115,21 @@ class RestaurantSupportDashboardAccessTest extends TestCase
         $this->post(route('restaurant.support.store'))->assertForbidden();
     }
 
+    public function test_demo_fixture_tenants_cannot_be_opened_in_either_panel(): void
+    {
+        $demoRestaurant = $this->createRestaurant('Fixture Restaurant', 'demo-tb-2026-fixture');
+        $demoOwner = $this->createOwner($demoRestaurant, 'fixture-owner@example.test');
+
+        $this->signInSuperAdmin();
+        $this->post(route('super-admin.restaurants.dashboard', $demoRestaurant))->assertForbidden();
+
+        $this->actingAs($demoOwner, 'web');
+        $this->withSession([
+            'restaurant_user_password_version' => hash('sha256', $demoOwner->getAuthPassword()),
+        ]);
+        $this->get(route('restaurant.dashboard'))->assertRedirect(route('restaurant.login'));
+    }
+
     public function test_super_admin_can_switch_restaurants_and_return_without_logging_out_or_changing_owner_identity(): void
     {
         $this->signInSuperAdmin();
@@ -168,7 +183,7 @@ class RestaurantSupportDashboardAccessTest extends TestCase
 
         $this->get(route('restaurant.menu.products.edit', $otherProduct))->assertNotFound();
         $this->get(route('restaurant.profile'))->assertForbidden();
-        $this->assertSame($this->restaurant->id, session(RestaurantSupportAccessService::SESSION_ADMIN_ACCESS_RESTAURANT_ID));
+        $this->assertSame($this->restaurant->id, session(RestaurantDashboardAccessService::SESSION_RESTAURANT_ID));
     }
 
     public function test_access_expires_and_ineligible_restaurants_cannot_be_entered(): void
@@ -200,7 +215,7 @@ class RestaurantSupportDashboardAccessTest extends TestCase
             ->assertRedirect(route('super-admin.login'));
 
         $this->assertFalse(Auth::guard('super_admin')->check());
-        $this->assertFalse(session()->has(RestaurantSupportAccessService::SESSION_ADMIN_ACCESS_RESTAURANT_ID));
+        $this->assertFalse(session()->has(RestaurantDashboardAccessService::SESSION_RESTAURANT_ID));
         $this->assertDatabaseHas('restaurant_audit_logs', [
             'actor_id' => $this->admin->id,
             'action' => 'super_admin_restaurant_access_ended',

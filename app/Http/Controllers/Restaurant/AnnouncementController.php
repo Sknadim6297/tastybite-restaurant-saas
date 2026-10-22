@@ -61,6 +61,7 @@ class AnnouncementController extends Controller
     private function visibleQuery(User $owner): Builder
     {
         return PlatformAnnouncement::query()
+            ->whereRaw('substr(title, 1, 14) != ?', ['[DEMO-TB-2026]'])
             ->where('status', 'published')
             ->where('published_at', '<=', now())
             ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))

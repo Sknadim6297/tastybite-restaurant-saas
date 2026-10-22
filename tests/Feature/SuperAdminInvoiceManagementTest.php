@@ -44,6 +44,7 @@ class SuperAdminInvoiceManagementTest extends TestCase
             ->assertOk()
             ->assertSee('Non-tax payment receipt')
             ->assertSee('Tax registration details')
+            ->assertDontSee('DEMO ONLY')
             ->assertSee($invoice->invoice_number);
         $this->get(route('super-admin.invoices.print', $invoice))
             ->assertOk()
@@ -66,7 +67,7 @@ class SuperAdminInvoiceManagementTest extends TestCase
     public function test_refund_records_change_net_receipt_totals_without_claiming_external_return(): void
     {
         $this->actingAsSuperAdmin();
-        $payment = $this->createPendingPayment($this->admin(), ['notes' => 'DEMO DATA ONLY - test fixture']);
+        $payment = $this->createPendingPayment($this->admin());
         $this->post(route('super-admin.payments.approve', $payment))->assertRedirect();
         $invoice = SubscriptionInvoice::query()->firstOrFail();
 
@@ -92,8 +93,29 @@ class SuperAdminInvoiceManagementTest extends TestCase
         $this->assertSame('0.00', $invoice->fresh()->netRetainedAmount());
         $this->get(route('super-admin.invoices.show', $invoice))
             ->assertOk()
-            ->assertSee('DEMO ONLY — NOT ACTUAL MONEY')
+            ->assertDontSee('DEMO ONLY')
             ->assertSee('do not confirm that funds were returned');
+    }
+
+    public function test_demo_marked_invoice_is_hidden_without_deleting_its_record(): void
+    {
+        $admin = $this->actingAsSuperAdmin();
+        $payment = $this->createPendingPayment($admin, [
+            'status' => 'approved',
+            'notes' => 'DEMO DATA ONLY - retained fixture',
+        ]);
+        $invoice = app(InvoiceManagementService::class)->issueForApprovedPayment(
+            $payment,
+            $payment->subscription()->firstOrFail(),
+            $admin,
+        );
+
+        $this->get(route('super-admin.invoices.show', $invoice))->assertNotFound();
+        $this->get(route('super-admin.invoices.print', $invoice))->assertNotFound();
+        $this->get(route('super-admin.invoices.pdf', $invoice))->assertNotFound();
+        $this->get(route('super-admin.invoices.index'))->assertDontSee($invoice->invoice_number);
+        $this->assertDatabaseHas('subscription_invoices', ['id' => $invoice->id]);
+        $this->assertDatabaseHas('subscription_payments', ['id' => $payment->id, 'status' => 'approved']);
     }
 
     public function test_invoice_search_status_date_filters_and_csv_export_use_the_same_records(): void

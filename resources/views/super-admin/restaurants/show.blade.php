@@ -37,7 +37,7 @@
 
     <div class="summary-row">
         <div class="summary-tile">
-            <strong>{{ ucfirst($restaurant->status) }}</strong>
+            <strong>{{ \App\Support\StatusPresenter::label($restaurant->status) }}</strong>
             <span>Restaurant status</span>
         </div>
         <div class="summary-tile">
@@ -57,7 +57,7 @@
             <div class="detail-item"><span>Email</span><strong>{{ $restaurant->email }}</strong></div>
             <div class="detail-item"><span>Phone</span><strong>{{ $restaurant->phone ?? '—' }}</strong></div>
             <div class="detail-item full-span"><span>Address</span><strong>{{ $restaurant->address ?? '—' }}</strong></div>
-            <div class="detail-item"><span>Status</span><strong>{{ ucfirst($restaurant->status) }}</strong></div>
+            <div class="detail-item"><span>Status</span><strong>{{ \App\Support\StatusPresenter::label($restaurant->status) }}</strong></div>
             <div class="detail-item"><span>Created</span><strong>{{ $restaurant->created_at->format('F j, Y') }}</strong></div>
         </div>
     </div>
@@ -73,7 +73,7 @@
                 <div class="detail-item"><span>Email</span><strong>{{ $owner->email }}</strong></div>
                 <div class="detail-item"><span>Mobile number</span><strong>{{ $owner->mobile ?: 'Not provided' }}</strong></div>
                 <div class="detail-item"><span>Role</span><strong>{{ ucfirst($owner->role) }}</strong></div>
-                <div class="detail-item"><span>Status</span><strong>{{ ucfirst($owner->status) }}</strong></div>
+                <div class="detail-item"><span>Status</span><strong>{{ \App\Support\StatusPresenter::label($owner->status) }}</strong></div>
             </div>
             <div class="page-tools" style="margin-top:24px; margin-bottom:0; justify-content:flex-end;">
                 <a class="button button-secondary" href="{{ route('super-admin.restaurant-owners.edit', $owner) }}">Edit owner details</a>

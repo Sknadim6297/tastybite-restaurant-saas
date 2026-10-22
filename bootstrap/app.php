@@ -4,7 +4,6 @@ use App\Console\Commands\CreateSuperAdmin;
 use App\Console\Commands\DisableSuperAdmin;
 use App\Console\Commands\NotifyExpiringSubscriptions;
 use App\Console\Commands\ReconcileRestaurantSubscriptions;
-use App\Console\Commands\SeedDemoRestaurantMenu;
 use App\Http\Middleware\ApplyPlatformSettings;
 use App\Http\Middleware\EnsureRestaurantSubscription;
 use App\Http\Middleware\EnsureRestaurantFeature;
@@ -29,7 +28,6 @@ return Application::configure(basePath: dirname(__DIR__))
         DisableSuperAdmin::class,
         NotifyExpiringSubscriptions::class,
         ReconcileRestaurantSubscriptions::class,
-        SeedDemoRestaurantMenu::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([

@@ -1,7 +1,7 @@
 <section class="panel-card invoice-receipt-card">
     <div class="invoice-receipt-heading">
         <div><span class="eyebrow">{{ $platformSettings['platform_name'] ?? 'TastyBite' }}</span><h2>Non-tax payment receipt</h2><p>{{ $invoice->invoice_number }}</p></div>
-        <span class="status-pill status-{{ $invoice->payment->status }}">{{ ucfirst($invoice->payment->status) }}</span>
+        <span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($invoice->payment->status) }}">{{ \App\Support\StatusPresenter::label($invoice->payment->status) }}</span>
     </div>
     <div class="detail-grid">
         <div class="detail-item"><span>Restaurant</span><strong>{{ $invoice->payment->restaurant->name }}</strong></div>
@@ -18,7 +18,6 @@
             <tr><th>Subtotal</th><td>{{ $invoice->payment->currency }} {{ $invoice->subtotal }}</td></tr>
             <tr><th>Tax</th><td>{{ $invoice->payment->currency }} {{ $invoice->tax_amount }} <span class="meta-label">Not configured</span></td></tr>
             <tr><th>Total received</th><td><strong>{{ $invoice->payment->currency }} {{ $invoice->total }}</strong></td></tr>
-            @if($invoice->payment->isDemo())<tr><th>Demo-data warning</th><td><strong>Not actual collected money</strong></td></tr>@endif
         </tbody></table>
     </div>
     <p class="invoice-disclaimer">Non-tax payment receipt only. This document does not claim legal tax-invoice status, include an unconfigured tax charge, or verify a refund transfer.</p>

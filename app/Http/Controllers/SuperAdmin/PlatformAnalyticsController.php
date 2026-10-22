@@ -12,7 +12,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -26,7 +25,6 @@ class PlatformAnalyticsController extends Controller
                 ['nullable', 'date_format:Y-m-d'],
                 $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
             ),
-            'scope' => ['nullable', Rule::in(['real', 'demo', 'all'])],
         ]);
         $timezone = config('app.timezone');
         $to = CarbonImmutable::parse($filters['date_to'] ?? now($timezone)->toDateString(), $timezone)->endOfDay();
@@ -35,19 +33,16 @@ class PlatformAnalyticsController extends Controller
             throw ValidationException::withMessages(['date_from' => 'The start date must be on or before the end date.']);
         }
 
-        $scope = $filters['scope'] ?? 'real';
         $rangeDays = $from->diffInDays($to) + 1;
         $previousTo = $from->subSecond();
         $previousFrom = $previousTo->subDays($rangeDays - 1)->startOfDay();
         $now = CarbonImmutable::now($timezone)->utc();
 
-        $restaurants = Restaurant::query();
-        $this->restaurantScope($restaurants, $scope);
+        $restaurants = $this->realRestaurants(Restaurant::query());
         $newRestaurants = (clone $restaurants)->whereBetween('created_at', [$from->utc(), $to->utc()])->count();
         $previousRestaurants = (clone $restaurants)->whereBetween('created_at', [$previousFrom->utc(), $previousTo->utc()])->count();
 
-        $subscriptions = RestaurantSubscription::query();
-        $this->subscriptionScope($subscriptions, $scope);
+        $subscriptions = $this->realSubscriptions(RestaurantSubscription::query());
         $newSubscriptions = (clone $subscriptions)->whereBetween('created_at', [$from->utc(), $to->utc()])->count();
         $previousSubscriptions = (clone $subscriptions)->whereBetween('created_at', [$previousFrom->utc(), $previousTo->utc()])->count();
         $activeSubscriptions = (clone $subscriptions)->whereIn('status', ['active', 'trial'])
@@ -55,12 +50,10 @@ class PlatformAnalyticsController extends Controller
         $cancellationEvents = RestaurantSubscriptionEvent::query()
             ->where('action', 'cancelled')
             ->whereBetween('created_at', [$from->utc(), $to->utc()]);
-        if ($scope !== 'all') {
-            $cancellationEvents->whereHas('restaurant', fn (Builder $restaurant) => $this->restaurantScope($restaurant, $scope));
-        }
+        $cancellationEvents->whereHas('restaurant', fn (Builder $restaurant) => $this->realRestaurants($restaurant));
         $cancelledSubscriptions = $cancellationEvents->count();
 
-        $payments = $this->paymentScope(SubscriptionPayment::query(), $scope)
+        $payments = $this->realPayments(SubscriptionPayment::query())
             ->whereIn('status', ['approved', 'refunded'])
             ->whereBetween('paid_at', [$from->utc(), $to->utc()]);
         $grossByCurrency = (clone $payments)
@@ -85,7 +78,7 @@ class PlatformAnalyticsController extends Controller
             ];
         })->values();
 
-        $paymentStatuses = $this->paymentScope(SubscriptionPayment::query(), $scope)
+        $paymentStatuses = $this->realPayments(SubscriptionPayment::query())
             ->whereBetween('paid_at', [$from->utc(), $to->utc()])
             ->select('status')->selectRaw('COUNT(*) AS total')->groupBy('status')->orderBy('status')->get();
         $activePlanMix = (clone $subscriptions)
@@ -93,8 +86,7 @@ class PlatformAnalyticsController extends Controller
             ->select('plan_name')->selectRaw('COUNT(*) AS total')
             ->groupBy('plan_name')->orderByDesc('total')->orderBy('plan_name')->limit(8)->get();
 
-        $trendQuery = Restaurant::query();
-        $this->restaurantScope($trendQuery, $scope);
+        $trendQuery = $this->realRestaurants(Restaurant::query());
         $driver = DB::connection()->getDriverName();
         $monthExpression = $driver === 'sqlite'
             ? "strftime('%Y-%m', created_at)"
@@ -107,7 +99,6 @@ class PlatformAnalyticsController extends Controller
             'filters' => [
                 'date_from' => $from->toDateString(),
                 'date_to' => $to->toDateString(),
-                'scope' => $scope,
             ],
             'summary' => [
                 'new_restaurants' => $newRestaurants,
@@ -124,34 +115,21 @@ class PlatformAnalyticsController extends Controller
         ]);
     }
 
-    private function restaurantScope(Builder $query, string $scope): void
+    private function realRestaurants(Builder $query): Builder
     {
-        if ($scope === 'real') {
-            $query->where('slug', 'not like', 'demo-tb-2026-%');
-        } elseif ($scope === 'demo') {
-            $query->where('slug', 'like', 'demo-tb-2026-%');
-        }
+        return $query->where('slug', 'not like', 'demo-tb-2026-%');
     }
 
-    private function subscriptionScope(Builder $query, string $scope): void
+    private function realSubscriptions(Builder $query): Builder
     {
-        if ($scope !== 'all') {
-            $query->whereHas('restaurant', fn (Builder $restaurant) => $this->restaurantScope($restaurant, $scope));
-        }
+        return $query->whereHas('restaurant', fn (Builder $restaurant) => $this->realRestaurants($restaurant));
     }
 
-    private function paymentScope(Builder $query, string $scope): Builder
+    private function realPayments(Builder $query): Builder
     {
-        if ($scope === 'demo') {
-            return $query->where('notes', 'like', 'DEMO DATA ONLY%');
-        }
-        if ($scope === 'real') {
-            $query->where(fn (Builder $nested) => $nested
-                ->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%'));
-            $query->whereHas('restaurant', fn (Builder $restaurant) => $this->restaurantScope($restaurant, 'real'));
-        }
-
-        return $query;
+        return $query->where(fn (Builder $nested) => $nested
+            ->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%'))
+            ->whereHas('restaurant', fn (Builder $restaurant) => $this->realRestaurants($restaurant));
     }
 
     private function formatSignedCents(int $cents): string

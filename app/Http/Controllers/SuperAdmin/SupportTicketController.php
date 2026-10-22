@@ -20,16 +20,16 @@ class SupportTicketController extends Controller
 {
     public function index(Request $request): View
     {
-        $query = SupportTicket::query()->with(['restaurant', 'creator', 'assignedAdmin']);
+        $query = $this->businessTickets(SupportTicket::query())->with(['restaurant', 'creator', 'assignedAdmin']);
         $this->applyFilters($query, $request);
 
         return view('super-admin.support-tickets.index', [
             'tickets' => $query->orderByDesc('last_activity_at')->paginate(20)->withQueryString(),
-            'counts' => SupportTicket::query()
+            'counts' => $this->businessTickets(SupportTicket::query())
                 ->selectRaw('status, count(*) as aggregate')
                 ->groupBy('status')
                 ->pluck('aggregate', 'status'),
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurants' => Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')->orderBy('name')->get(['id', 'name']),
             'admins' => SuperAdmin::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'filters' => $request->only(['search', 'status', 'priority', 'restaurant_id', 'assigned_admin_id']),
         ]);
@@ -37,6 +37,7 @@ class SupportTicketController extends Controller
 
     public function show(SupportTicket $ticket): View
     {
+        $this->ensureBusinessTicket($ticket);
         $ticket->load([
             'restaurant',
             'creator',
@@ -53,6 +54,7 @@ class SupportTicketController extends Controller
 
     public function update(Request $request, SupportTicket $ticket, SupportTicketService $service): RedirectResponse
     {
+        $this->ensureBusinessTicket($ticket);
         $validated = $request->validate([
             'status' => ['required', Rule::in(['open', 'in_progress', 'waiting_for_restaurant', 'resolved', 'closed'])],
             'priority' => ['required', Rule::in(['low', 'normal', 'high', 'urgent'])],
@@ -80,6 +82,7 @@ class SupportTicketController extends Controller
 
     public function reply(Request $request, SupportTicket $ticket, SupportTicketService $service): RedirectResponse
     {
+        $this->ensureBusinessTicket($ticket);
         $validated = $request->validate([
             'body' => ['required', 'string', 'min:1', 'max:10000'],
             'visibility' => ['required', Rule::in(['public', 'internal'])],
@@ -105,6 +108,7 @@ class SupportTicketController extends Controller
 
     public function attachment(SupportTicket $ticket, SupportTicketMessage $message)
     {
+        $this->ensureBusinessTicket($ticket);
         abort_unless($message->support_ticket_id === $ticket->id && $message->attachment_path, 404);
 
         return $this->download($message);
@@ -145,5 +149,16 @@ class SupportTicketController extends Controller
                 $query->where($field, (int) $request->input($field));
             }
         }
+    }
+
+    private function businessTickets(Builder $query): Builder
+    {
+        return $query->whereHas('restaurant', fn (Builder $restaurant) => $restaurant
+            ->where('slug', 'not like', 'demo-tb-2026-%'));
+    }
+
+    private function ensureBusinessTicket(SupportTicket $ticket): void
+    {
+        abort_if(str_starts_with((string) $ticket->restaurant?->slug, 'demo-tb-2026-'), 404);
     }
 }

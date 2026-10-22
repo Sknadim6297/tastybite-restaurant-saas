@@ -65,7 +65,7 @@
     <section class="subscription-overview" aria-label="Current subscription">
         @if ($subscription)
             <div><span class="meta-label">CURRENT PLAN</span><strong>{{ $subscription->plan_name }}</strong></div>
-            <div><span class="meta-label">STATUS</span><strong class="status-pill status-{{ $subscriptionStatus }}">{{ ucfirst($subscriptionStatus) }}</strong></div>
+            <div><span class="meta-label">STATUS</span><strong class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($subscriptionStatus) }}">{{ \App\Support\StatusPresenter::label($subscriptionStatus) }}</strong></div>
             <div><span class="meta-label">START DATE</span><strong>{{ $subscription->starts_at->timezone(config('app.timezone'))->format('M j, Y') }}</strong></div>
             <div><span class="meta-label">EXPIRY DATE</span><strong>{{ $subscription->expires_at->timezone(config('app.timezone'))->format('M j, Y') }}</strong></div>
             <div><span class="meta-label">DAYS REMAINING</span><strong>{{ $daysRemaining }}</strong></div>

@@ -4,11 +4,11 @@
 @section('section', 'Payments')
 
 @section('content')
-    <div class="page-heading"><div><span class="eyebrow">PAYMENT RECORD {{ $payment->formatted_id ?? '—' }} @if($payment->isDemo()) · DEMO ONLY — NOT ACTUAL MONEY @endif</span><h1>{{ $payment->restaurant?->name ?? '—' }}</h1><p>{{ $payment->plan_name ?: ($payment->subscription?->plan_name ?: ($payment->plan?->name ?? '—')) }} · {{ $payment->currency && $payment->amount !== null ? $payment->currency.' '.number_format((float) $payment->amount, 2) : '—' }}</p></div>@if($payment->status)<span class="status-pill status-{{ $payment->status }}">{{ ucfirst($payment->status) }}</span>@else<span class="status-pill">—</span>@endif</div>
+    <div class="page-heading"><div><span class="eyebrow">PAYMENT RECORD {{ $payment->formatted_id ?? '—' }}</span><h1>{{ $payment->restaurant?->name ?? '—' }}</h1><p>{{ $payment->plan_name ?: ($payment->subscription?->plan_name ?: ($payment->plan?->name ?? '—')) }} · {{ $payment->currency && $payment->amount !== null ? $payment->currency.' '.number_format((float) $payment->amount, 2) : '—' }}</p></div><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($payment->status) }}">{{ \App\Support\StatusPresenter::label($payment->status) }}</span></div>
 
     <section class="panel-card"><div class="detail-grid">
         <div class="detail-item"><span>Payment ID</span><strong>{{ $payment->formatted_id ?? '—' }}</strong></div>
-        <div class="detail-item"><span>Restaurant / Owner</span><strong>{{ $payment->restaurant?->name ?? '—' }} · {{ $payment->restaurant?->owners->first()?->name ?? 'No owner listed' }} · {{ $payment->restaurant?->status ? ucfirst($payment->restaurant->status) : '—' }}</strong></div>
+        <div class="detail-item"><span>Restaurant / Owner</span><strong>{{ $payment->restaurant?->name ?? '—' }} · {{ $payment->restaurant?->owners->first()?->name ?? 'No owner listed' }} · {{ \App\Support\StatusPresenter::label($payment->restaurant?->status) }}</strong></div>
         <div class="detail-item"><span>Restaurant contact</span><strong>{{ $payment->restaurant?->email ?: '—' }} · {{ $payment->restaurant?->phone ?: '—' }}</strong></div>
         <div class="detail-item"><span>Plan</span><strong>{{ $payment->plan_name ?: ($payment->subscription?->plan_name ?: ($payment->plan?->name ?? '—')) }}{{ $payment->plan_code ? ' ('.$payment->plan_code.')' : '' }}</strong></div>
         <div class="detail-item"><span>Amount / Method</span><strong>{{ $payment->currency && $payment->amount !== null ? $payment->currency.' '.number_format((float) $payment->amount, 2) : '—' }} · {{ $payment->payment_method_label ?? '—' }}</strong></div>

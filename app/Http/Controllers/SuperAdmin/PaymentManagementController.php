@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -33,7 +34,7 @@ class PaymentManagementController extends Controller
 
     public function index(Request $request): View
     {
-        $filters = $this->filters($request, 'all');
+        $filters = $this->filters($request);
         $query = $this->filteredPayments($filters);
 
         $payments = $query->with(['restaurant.owners', 'plan', 'subscription'])
@@ -49,7 +50,7 @@ class PaymentManagementController extends Controller
 
         return view('super-admin.payments.index', [
             'payments' => $payments,
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurants' => Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')->orderBy('name')->get(['id', 'name']),
             'filters' => $filters,
             'summary' => [
                 'total_collected' => $this->subtractCents($approved, $refundTotal),
@@ -76,11 +77,12 @@ class PaymentManagementController extends Controller
         $subscriptionBelongsToRestaurant = $restaurantId > 0 && $subscriptionId > 0
             && RestaurantSubscription::query()
                 ->where('restaurant_id', $restaurantId)
+                ->whereHas('restaurant', fn (Builder $restaurant) => $restaurant->where('slug', 'not like', 'demo-tb-2026-%'))
                 ->whereKey($subscriptionId)
                 ->exists();
 
         return view('super-admin.payments.create', [
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurants' => Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')->orderBy('name')->get(['id', 'name']),
             'paidAt' => CarbonImmutable::now(config('app.timezone'))->format('Y-m-d\TH:i'),
             'paymentPreferences' => $preferences,
             'selectedRestaurantId' => $subscriptionBelongsToRestaurant ? $restaurantId : null,
@@ -90,6 +92,8 @@ class PaymentManagementController extends Controller
 
     public function restaurantSubscriptions(Restaurant $restaurant): JsonResponse
     {
+        abort_if(str_starts_with($restaurant->slug, 'demo-tb-2026-'), 404);
+
         $owner = $restaurant->owners()->orderBy('id')->first(['id', 'name', 'email', 'mobile']);
         $subscriptions = $restaurant->subscriptions()
             ->orderByDesc('starts_at')
@@ -169,6 +173,17 @@ class PaymentManagementController extends Controller
             'proof' => [$preferences['proof_required'] ? 'required' : 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
         ]);
 
+        $subscriptionExists = RestaurantSubscription::query()
+            ->whereKey($validated['restaurant_subscription_id'])
+            ->where('restaurant_id', $validated['restaurant_id'])
+            ->whereHas('restaurant', fn (Builder $restaurant) => $restaurant->where('slug', 'not like', 'demo-tb-2026-%'))
+            ->exists();
+        if (! $subscriptionExists) {
+            throw ValidationException::withMessages([
+                'restaurant_subscription_id' => 'Select a valid subscription for a business restaurant.',
+            ]);
+        }
+
         $payment = $this->payments->create($validated, $this->actor(), $request->file('proof'));
 
         return redirect()->route('super-admin.payments.show', $payment)
@@ -177,6 +192,8 @@ class PaymentManagementController extends Controller
 
     public function show(SubscriptionPayment $payment): View
     {
+        $this->ensureBusinessPayment($payment);
+
         $payment->load([
             'restaurant.owners',
             'plan',
@@ -199,6 +216,7 @@ class PaymentManagementController extends Controller
 
     public function approve(SubscriptionPayment $payment): RedirectResponse
     {
+        $this->ensureBusinessPayment($payment);
         $this->payments->approve($payment, $this->actor());
 
         return redirect()->route('super-admin.payments.show', $payment)
@@ -207,6 +225,7 @@ class PaymentManagementController extends Controller
 
     public function reject(Request $request, SubscriptionPayment $payment): RedirectResponse
     {
+        $this->ensureBusinessPayment($payment);
         $validated = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:2000']]);
         $this->payments->reject($payment, $this->actor(), $validated['reason']);
 
@@ -215,6 +234,7 @@ class PaymentManagementController extends Controller
 
     public function refund(Request $request, SubscriptionPayment $payment): RedirectResponse
     {
+        $this->ensureBusinessPayment($payment);
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:99999999.99'],
             'method' => ['required', Rule::in(['cash', 'bank_transfer', 'upi', 'other'])],
@@ -235,6 +255,7 @@ class PaymentManagementController extends Controller
 
     public function proof(SubscriptionPayment $payment): StreamedResponse|BinaryFileResponse
     {
+        $this->ensureBusinessPayment($payment);
         abort_unless($payment->proof_path && Storage::disk('local')->exists($payment->proof_path), 404);
 
         return Storage::disk('local')->download($payment->proof_path, 'payment-proof-'.$payment->id);
@@ -242,7 +263,7 @@ class PaymentManagementController extends Controller
 
     public function reports(Request $request): View
     {
-        $filters = $this->filters($request, 'real');
+        $filters = $this->filters($request);
         $base = $this->filteredPayments($filters);
         $filteredPaymentIds = (clone $base)->select('subscription_payments.id');
         $refundTotal = SubscriptionPaymentRefund::query()
@@ -274,7 +295,7 @@ class PaymentManagementController extends Controller
 
         return view('super-admin.payments.reports', [
             'filters' => $filters,
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurants' => Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')->orderBy('name')->get(['id', 'name']),
             'byRestaurant' => $byRestaurant,
             'byPlan' => $byPlan,
             'byStatus' => $byStatus,
@@ -291,14 +312,14 @@ class PaymentManagementController extends Controller
 
     public function export(Request $request): StreamedResponse
     {
-        $filters = $this->filters($request, 'all');
+        $filters = $this->filters($request);
         $payments = $this->filteredPayments($filters)
             ->with(['restaurant.owners', 'plan', 'refunds'])
             ->orderByDesc('paid_at')->orderByDesc('id');
 
         return response()->streamDownload(static function () use ($payments): void {
             $output = fopen('php://output', 'w');
-            fputcsv($output, ['Payment ID', 'Restaurant', 'Restaurant Owner', 'Subscription Plan', 'Amount', 'Currency', 'Method', 'Transaction Reference', 'Status', 'Payment Date', 'Refunded Amount', 'Demo Record']);
+            fputcsv($output, ['Payment ID', 'Restaurant', 'Restaurant Owner', 'Subscription Plan', 'Amount', 'Currency', 'Method', 'Transaction Reference', 'Status', 'Payment Date', 'Refunded Amount']);
 
             foreach ($payments->lazy(500) as $payment) {
                 $row = [
@@ -313,7 +334,6 @@ class PaymentManagementController extends Controller
                     $payment->status,
                     $payment->paid_at?->toIso8601String(),
                     $payment->refunds->sum('amount'),
-                    $payment->isDemo() ? 'Yes — not actual money' : 'No',
                 ];
                 fputcsv($output, array_map(static function ($value) {
                     $value = (string) ($value ?? '');
@@ -326,7 +346,7 @@ class PaymentManagementController extends Controller
         }, 'tastybite-payments.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    private function filters(Request $request, string $defaultScope): array
+    private function filters(Request $request): array
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
@@ -337,17 +357,14 @@ class PaymentManagementController extends Controller
                 ['nullable', 'date_format:Y-m-d'],
                 $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
             ),
-            'scope' => ['nullable', Rule::in(['all', 'real', 'demo'])],
         ]);
-
-        $filters['scope'] ??= $defaultScope;
 
         return $filters;
     }
 
     private function filteredPayments(array $filters): Builder
     {
-        return SubscriptionPayment::query()
+        return $this->excludeDemoNotes(SubscriptionPayment::query())
             ->when($filters['search'] ?? null, function (Builder $query, string $search): void {
                 $query->where(function (Builder $nested) use ($search): void {
                     $nested->where('transaction_reference', 'like', "%{$search}%")
@@ -361,8 +378,6 @@ class PaymentManagementController extends Controller
             })
             ->when($filters['restaurant_id'] ?? null, fn (Builder $query, int $id) => $query->where('subscription_payments.restaurant_id', $id))
             ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query->where('subscription_payments.status', $status))
-            ->when(($filters['scope'] ?? 'all') === 'demo', fn (Builder $query) => $query->where('subscription_payments.notes', 'like', 'DEMO DATA ONLY%'))
-            ->when(($filters['scope'] ?? 'all') === 'real', fn (Builder $query) => $this->excludeDemoNotes($query))
             ->when($filters['date_from'] ?? null, function (Builder $query, string $date): void {
                 $from = CarbonImmutable::createFromFormat('!Y-m-d', $date, config('app.timezone'))->utc();
                 $query->where('paid_at', '>=', $from);
@@ -382,12 +397,21 @@ class PaymentManagementController extends Controller
     {
         return $query->where(function (Builder $nested): void {
             $nested->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
-        });
+        })->whereHas('restaurant', fn (Builder $restaurant) => $restaurant
+            ->where('slug', 'not like', 'demo-tb-2026-%'));
     }
 
     private function actor(): SuperAdmin
     {
         return Auth::guard('super_admin')->user();
+    }
+
+    private function ensureBusinessPayment(SubscriptionPayment $payment): void
+    {
+        abort_if(
+            $payment->isDemo() || str_starts_with((string) $payment->restaurant?->slug, 'demo-tb-2026-'),
+            404,
+        );
     }
 
     private function sumCents(Builder $query): string

@@ -667,6 +667,35 @@ class SubscriptionManagementTest extends TestCase
         );
     }
 
+    public function test_subscription_history_renders_human_readable_statuses_and_null_placeholders(): void
+    {
+        $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant('Status House', 'status-house');
+        RestaurantSubscriptionEvent::create([
+            'restaurant_id' => $restaurant->id,
+            'action' => 'payment_submitted',
+            'previous_status' => 'pending_payment',
+            'new_status' => 'pending_approval',
+        ]);
+        RestaurantSubscriptionEvent::create([
+            'restaurant_id' => $restaurant->id,
+            'action' => 'assigned',
+            'previous_status' => null,
+            'new_status' => 'active',
+        ]);
+
+        $this->get(route('super-admin.subscriptions.history'))
+            ->assertOk()
+            ->assertSee('Previous Status')
+            ->assertSee('New Status')
+            ->assertSee('Pending Payment')
+            ->assertSee('Pending Approval')
+            ->assertSee('Active')
+            ->assertSee('—')
+            ->assertDontSee('pending_payment')
+            ->assertDontSee('pending_approval');
+    }
+
     private function createHistoryEvent(Restaurant $restaurant): RestaurantSubscriptionEvent
     {
         return RestaurantSubscriptionEvent::create([

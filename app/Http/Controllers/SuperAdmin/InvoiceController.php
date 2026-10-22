@@ -10,7 +10,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response as BaseResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -30,7 +29,7 @@ class InvoiceController extends Controller
         return view('super-admin.invoices.index', [
             'invoices' => $invoices,
             'filters' => $filters,
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurants' => Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -86,7 +85,6 @@ class InvoiceController extends Controller
                 'Net Retained',
                 'Payment Status',
                 'Issue Date',
-                'Demo Data',
             ]);
             foreach ($query->lazyById(500) as $invoice) {
                 if (! $invoice instanceof SubscriptionInvoice) {
@@ -111,7 +109,6 @@ class InvoiceController extends Controller
                     $invoice->netRetainedAmount(),
                     $payment->status,
                     $invoice->issue_date->timezone(config('app.timezone'))->toDateTimeString(),
-                    $payment->isDemo() ? 'YES - NOT ACTUAL MONEY' : 'NO',
                 ]);
             }
 
@@ -135,7 +132,6 @@ class InvoiceController extends Controller
                 ['nullable', 'date'],
                 $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
             ),
-            'scope' => ['nullable', Rule::in(['all', 'real', 'demo'])],
         ]);
     }
 
@@ -153,6 +149,12 @@ class InvoiceController extends Controller
             : null;
 
         return SubscriptionInvoice::query()
+            ->whereHas('payment', function (Builder $payment): void {
+                $payment->where(fn (Builder $nested) => $nested
+                    ->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%'))
+                    ->whereHas('restaurant', fn (Builder $restaurant) => $restaurant
+                        ->where('slug', 'not like', 'demo-tb-2026-%'));
+            })
             ->when($filters['search'] ?? null, function (Builder $query, string $search): void {
                 $search = trim($search);
                 $query->where(function (Builder $builder) use ($search): void {
@@ -168,24 +170,6 @@ class InvoiceController extends Controller
             ->when($filters['restaurant_id'] ?? null, fn (Builder $query, string $id) => $query->where('restaurant_id', $id))
             ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query
                 ->whereHas('payment', fn (Builder $payment) => $payment->where('status', $status)))
-            ->when(($filters['scope'] ?? 'all') !== 'all', function (Builder $query) use ($filters): void {
-                $query->whereHas('payment', function (Builder $payment) use ($filters): void {
-                    if (($filters['scope'] ?? 'all') === 'demo') {
-                        $payment->where(function (Builder $demo): void {
-                            $demo->where('notes', 'like', 'DEMO DATA ONLY%')
-                                ->orWhereHas('restaurant', fn (Builder $restaurant) => $restaurant
-                                    ->where('slug', 'like', 'demo-tb-2026-%'));
-                        });
-
-                        return;
-                    }
-
-                    $payment->where(function (Builder $real): void {
-                        $real->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
-                    })->whereHas('restaurant', fn (Builder $restaurant) => $restaurant
-                        ->where('slug', 'not like', 'demo-tb-2026-%'));
-                });
-            })
             ->when($from, fn (Builder $query, CarbonImmutable $date) => $query->where('issue_date', '>=', $date))
             ->when($to, fn (Builder $query, CarbonImmutable $date) => $query->where('issue_date', '<=', $date));
     }
@@ -200,5 +184,10 @@ class InvoiceController extends Controller
             'payment.refunds.administrator',
             'payment.approver',
         ]);
+
+        abort_if(
+            $invoice->payment->isDemo() || str_starts_with((string) $invoice->payment->restaurant?->slug, 'demo-tb-2026-'),
+            404,
+        );
     }
 }

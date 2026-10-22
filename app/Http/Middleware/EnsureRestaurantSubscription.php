@@ -12,7 +12,7 @@ class EnsureRestaurantSubscription
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $user = request()->attributes->get('restaurant_support_owner')
+        $user = request()->attributes->get('restaurant_admin_access_owner')
             ?? Auth::guard('web')->user();
 
         if (! $user instanceof User || ! $user->restaurant) {

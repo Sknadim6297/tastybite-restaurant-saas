@@ -16,7 +16,7 @@ class PlatformAnalyticsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_analytics_uses_date_scope_and_decimal_payment_refund_records(): void
+    public function test_analytics_uses_real_records_and_decimal_payment_refund_totals(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-13 12:00:00', config('app.timezone')));
         $admin = $this->actingAsSuperAdmin();
@@ -61,7 +61,6 @@ class PlatformAnalyticsTest extends TestCase
         $realResponse = $this->get(route('super-admin.analytics.index', [
             'date_from' => '2026-10-01',
             'date_to' => '2026-10-13',
-            'scope' => 'real',
         ]))->assertOk();
         $realResponse->assertViewHas('summary', fn (array $summary): bool => $summary['new_restaurants'] === 1
             && $summary['new_subscriptions'] === 1
@@ -73,14 +72,16 @@ class PlatformAnalyticsTest extends TestCase
             'net' => '80.00',
         ]));
 
-        $demoResponse = $this->get(route('super-admin.analytics.index', [
+        $scopeAttemptResponse = $this->get(route('super-admin.analytics.index', [
             'date_from' => '2026-10-01',
             'date_to' => '2026-10-13',
             'scope' => 'demo',
-        ]))->assertOk();
-        $demoResponse->assertViewHas('summary', fn (array $summary): bool => $summary['new_restaurants'] === 1
-            && $summary['new_subscriptions'] === 0);
-        $demoResponse->assertViewHas('revenue', fn ($rows): bool => $rows->contains(fn (array $row): bool => $row['gross'] === '200.00'));
+        ]))->assertOk()->assertDontSee('Data scope')->assertDontSee('Demo records');
+        $scopeAttemptResponse->assertViewHas('summary', fn (array $summary): bool => $summary['new_restaurants'] === 1
+            && $summary['new_subscriptions'] === 1
+            && $summary['active_subscriptions'] === 1);
+        $scopeAttemptResponse->assertViewHas('revenue', fn ($rows): bool => $rows->contains(fn (array $row): bool => $row['gross'] === '99.99')
+            && ! $rows->contains(fn (array $row): bool => $row['gross'] === '200.00'));
 
         $this->get(route('super-admin.analytics.index', ['date_to' => '2026-10-13']))
             ->assertOk()

@@ -37,13 +37,14 @@ class ActivityLogController extends Controller
             'logs' => $logs,
             'filters' => $filters,
             'admins' => SuperAdmin::query()->orderBy('name')->get(['id', 'name']),
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurants' => Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')->orderBy('name')->get(['id', 'name']),
             'modules' => self::MODULES,
         ]);
     }
 
     public function show(RestaurantAuditLog $activityLog): View
     {
+        abort_if($activityLog->target_type === 'demo_data' || data_get($activityLog->details, 'demo_marker'), 404);
         $activityLog->load(['actor', 'restaurant']);
 
         return view('super-admin.activity-logs.show', [
@@ -104,6 +105,8 @@ class ActivityLogController extends Controller
     private function query(array $filters): Builder
     {
         return RestaurantAuditLog::query()
+            ->where('target_type', '!=', 'demo_data')
+            ->whereNull('details->demo_marker')
             ->when($filters['date_from'] ?? null, fn (Builder $query, string $date) => $query->whereDate('created_at', '>=', $date))
             ->when($filters['date_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('created_at', '<=', $date))
             ->when($filters['actor_id'] ?? null, fn (Builder $query, int $id) => $query->where('actor_id', $id))
@@ -133,7 +136,6 @@ class ActivityLogController extends Controller
             'restaurant_subscription' => $log->target_id ? route('super-admin.subscriptions.show', $log->target_id) : null,
             'subscription_payment' => $log->target_id ? route('super-admin.payments.show', $log->target_id) : null,
             'announcement' => $log->target_id ? route('super-admin.announcements.show', $log->target_id) : null,
-            'support_access_request' => $log->target_id ? route('super-admin.support-access.show', $log->target_id) : null,
             default => null,
         };
     }

@@ -14,7 +14,7 @@
     </div>
 
     <div class="summary-row">
-        <div class="summary-tile"><strong>{{ ucfirst($announcement->status) }}</strong><span>Status</span></div>
+        <div class="summary-tile"><strong>{{ \App\Support\StatusPresenter::label($announcement->status) }}</strong><span>Status</span></div>
         <div class="summary-tile"><strong>{{ $recipientCount }}</strong><span>Eligible restaurant recipients</span></div>
         <div class="summary-tile"><strong>{{ $readCount }}</strong><span>Restaurants marked read</span></div>
         <div class="summary-tile"><strong>{{ $announcement->expires_at?->format('M j, Y H:i') ?? 'Never' }}</strong><span>Expiry</span></div>

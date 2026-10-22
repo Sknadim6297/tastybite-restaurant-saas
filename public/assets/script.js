@@ -395,7 +395,6 @@ function calculateTotals() {
     const discountAmount = subtotal * discountPercent / 100;
     const taxableAmount = subtotal - discountAmount;
 
-    // Demo tax rates: verify applicable tax setup before production.
     const cgst = taxableAmount * 0.025;
     const sgst = taxableAmount * 0.025;
     const grandTotal = taxableAmount + cgst + sgst;
@@ -636,32 +635,6 @@ function resumeHeldOrder(id, checked) {
 }
 
 
-
-// Generate demo bill
-function generateBill() {
-    if (!cart.size) {
-        alert("Please add at least one food item.");
-        return;
-    }
-
-    const items = [...cart.values()].map(item =>
-        `${item.name} x ${item.qty} = ${money(item.price * item.qty)}`
-    ).join("\n");
-
-    alert(
-        "DEMO BILL\n\n" +
-        "Order Type: " + orderType + "\n" +
-        (orderType === "Dine In"
-            ? "Table: " +
-              (document.getElementById("tableNo")?.value || "") + "\n"
-            : "") +
-        "Guest: " +
-        (document.getElementById("guestNo")?.value || "") + "\n\n" +
-        items + "\n\nGrand Total: " +
-        (document.getElementById("grandTotal")?.textContent || money(0)) +
-        "\n\nConnect a backend to save and finalize this bill."
-    );
-}
 
 // Sidebar active state
 document.querySelectorAll(".side-link").forEach(link => {

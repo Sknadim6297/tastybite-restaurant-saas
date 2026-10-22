@@ -82,7 +82,7 @@
                         <td>{{ $owner->last_login_at?->format('M j, Y H:i') ?? 'Never' }}</td>
                         <td>
                             @if ($owner->restaurant)
-                                <span class="status-pill {{ $owner->restaurant->status === 'active' ? 'status-active' : ($owner->restaurant->status === 'suspended' ? 'status-suspended' : 'status-inactive') }}">{{ ucfirst($owner->restaurant->status) }}</span>
+                                <span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($owner->restaurant->status) }}">{{ \App\Support\StatusPresenter::label($owner->restaurant->status) }}</span>
                             @else
                                 <span class="status-pill status-inactive">Unassigned</span>
                             @endif

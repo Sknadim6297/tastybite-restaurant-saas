@@ -34,6 +34,7 @@ class RestaurantOwnerController extends Controller
 
         $stats = User::query()
             ->where('role', 'owner')
+            ->whereHas('restaurant', fn ($restaurant) => $restaurant->where('slug', 'not like', 'demo-tb-2026-%'))
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as active")
             ->selectRaw("COALESCE(SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END), 0) as inactive")
@@ -41,6 +42,7 @@ class RestaurantOwnerController extends Controller
 
         $query = User::query()
             ->where('users.role', 'owner')
+            ->whereHas('restaurant', fn ($restaurant) => $restaurant->where('slug', 'not like', 'demo-tb-2026-%'))
             ->with('restaurant');
 
         if (! empty($validated['search'])) {
@@ -75,7 +77,7 @@ class RestaurantOwnerController extends Controller
 
         return view('super-admin.restaurant-owners.index', [
             'owners' => $owners,
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurants' => Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')->orderBy('name')->get(['id', 'name']),
             'stats' => $stats,
             'filters' => $validated,
             'sort' => $sort,
@@ -182,6 +184,7 @@ class RestaurantOwnerController extends Controller
     private function findOwner(User $user): User
     {
         abort_unless($user->role === 'owner', 404);
+        abort_if(str_starts_with((string) $user->restaurant?->slug, 'demo-tb-2026-'), 404);
 
         return $user;
     }

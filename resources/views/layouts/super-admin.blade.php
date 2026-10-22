@@ -64,19 +64,12 @@
                 <a href="{{ route('super-admin.announcements.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.announcements.*')])>
                     <span class="nav-icon" aria-hidden="true">▣</span><span>Announcements</span>
                 </a>
-                <a href="{{ route('super-admin.support-access.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.support-access.*')])>
-                    <span class="nav-icon" aria-hidden="true">♧</span><span>Support Access</span>
-                </a>
-                <a href="{{ route('super-admin.demo-data.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.demo-data.*')])>
-                    <span class="nav-icon" aria-hidden="true">◇</span><span>Demo Data</span>
-                </a>
-
                 <span class="sidebar-caption">INSIGHTS &amp; SECURITY</span>
                 <a href="{{ route('super-admin.analytics.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.analytics.*')])>
                     <span class="nav-icon" aria-hidden="true">▤</span><span>Analytics</span>
                 </a>
                 <a href="{{ route('super-admin.reports.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.reports.*')])><span class="nav-icon" aria-hidden="true">▤</span><span>Reports</span></a>
-                <a href="{{ route('super-admin.notifications.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.notifications.*')])><span class="nav-icon" aria-hidden="true">♧</span><span>Notifications</span></a>
+                <a href="{{ route('super-admin.notifications.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.notifications.*')])><x-icons.bell class="nav-icon nav-icon-svg" /><span>Notifications</span></a>
                 <a href="{{ route('super-admin.activity-logs.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.activity-logs.*')])><span class="nav-icon" aria-hidden="true">≡</span><span>Activity Logs</span></a>
                 <a href="{{ route('super-admin.security-center.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.security-center.*')])>
                     <span class="nav-icon" aria-hidden="true">⚿</span><span>Security Center</span>
@@ -103,10 +96,10 @@
                 </button>
                 <div class="breadcrumb"><span>Super Admin</span><span aria-hidden="true">/</span><strong>@yield('section', 'Dashboard')</strong></div>
                 <details class="notification-menu" data-notification-menu data-feed-url="{{ route('super-admin.notifications.feed') }}" data-read-all-url="{{ route('super-admin.notifications.read-all') }}" data-read-url-template="{{ route('super-admin.notifications.read', ['notification' => '__ID__']) }}">
-                    <summary class="icon-button notification-trigger" aria-label="Notifications">
-                        <span aria-hidden="true">♧</span><span class="notification-count" data-notification-count aria-live="polite">0</span>
+                    <summary class="icon-button notification-trigger" aria-label="Notifications" aria-expanded="false" aria-controls="notification-dropdown">
+                        <x-icons.bell class="notification-bell-icon" /><span class="notification-count" data-notification-count aria-live="polite" hidden>0</span>
                     </summary>
-                    <div class="notification-dropdown">
+                    <div class="notification-dropdown" id="notification-dropdown">
                         <div class="notification-dropdown-heading"><strong>Notifications</strong><a href="{{ route('super-admin.notifications.index') }}">View all</a></div>
                         <div class="notification-preview-list" data-notification-list aria-live="polite"><p class="notification-empty">Loading notifications…</p></div>
                         <button type="button" class="notification-read-all" data-notification-read-all>Mark all as read</button>

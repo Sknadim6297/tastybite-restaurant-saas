@@ -21,43 +21,36 @@ class PlatformReportController extends Controller
     public function index(Request $request): View
     {
         $now = CarbonImmutable::now(config('app.timezone'));
-        $scope = $request->validate([
-            'scope' => ['nullable', Rule::in(['real', 'demo', 'all'])],
-        ])['scope'] ?? 'real';
-        $counts = [];
-
-        foreach (['real', 'demo', 'all'] as $dataScope) {
-            $restaurants = $this->restaurantsForScope(Restaurant::query(), $dataScope);
-            $subscriptions = $this->subscriptionsForScope(RestaurantSubscription::query(), $dataScope);
-            $payments = $this->paymentsForScope(SubscriptionPayment::query(), $dataScope);
-            $counts[$dataScope] = [
-                'restaurants' => (clone $restaurants)->count(),
-                'active_restaurants' => (clone $restaurants)->where('status', 'active')->count(),
-                'owners' => User::query()->where('role', 'owner')->where('status', 'active')
-                    ->whereIn('restaurant_id', (clone $restaurants)->select('id'))->count(),
-                'active_subscriptions' => (clone $subscriptions)->whereIn('status', ['active', 'trial'])
-                    ->where('starts_at', '<=', $now->utc())->where('expires_at', '>=', $now->utc())->count(),
-                'expiring_subscriptions' => (clone $subscriptions)->whereIn('status', ['active', 'trial'])
-                    ->where('starts_at', '<=', $now->utc())->whereBetween('expires_at', [$now->utc(), $now->addDays(30)->utc()])->count(),
-                'expired_subscriptions' => (clone $subscriptions)->whereIn('status', ['active', 'trial'])
-                    ->where('expires_at', '<', $now->utc())->count(),
-                'pending_payments' => (clone $payments)->where('status', 'pending')->count(),
-                'gross' => $this->gross($payments),
-                'refunds' => $this->refundsForPayments($payments),
-            ];
-            $counts[$dataScope]['net'] = $this->subtract($counts[$dataScope]['gross'], $counts[$dataScope]['refunds']);
-        }
+        $restaurants = $this->realRestaurants(Restaurant::query());
+        $subscriptions = $this->realSubscriptions(RestaurantSubscription::query());
+        $payments = $this->realPayments(SubscriptionPayment::query());
+        $counts = [
+            'restaurants' => (clone $restaurants)->count(),
+            'active_restaurants' => (clone $restaurants)->where('status', 'active')->count(),
+            'owners' => User::query()->where('role', 'owner')->where('status', 'active')
+                ->whereIn('restaurant_id', (clone $restaurants)->select('id'))->count(),
+            'active_subscriptions' => (clone $subscriptions)->whereIn('status', ['active', 'trial'])
+                ->where('starts_at', '<=', $now->utc())->where('expires_at', '>=', $now->utc())->count(),
+            'expiring_subscriptions' => (clone $subscriptions)->whereIn('status', ['active', 'trial'])
+                ->where('starts_at', '<=', $now->utc())->whereBetween('expires_at', [$now->utc(), $now->addDays(30)->utc()])->count(),
+            'expired_subscriptions' => (clone $subscriptions)->whereIn('status', ['active', 'trial'])
+                ->where('expires_at', '<', $now->utc())->count(),
+            'pending_payments' => (clone $payments)->where('status', 'pending')->count(),
+            'gross' => $this->gross($payments),
+            'refunds' => $this->refundsForPayments($payments),
+        ];
+        $counts['net'] = $this->subtract($counts['gross'], $counts['refunds']);
 
         $months = [];
         for ($offset = 11; $offset >= 0; $offset--) {
             $month = $now->startOfMonth()->subMonths($offset);
             $start = $month->utc();
             $end = $month->endOfMonth()->utc();
-            $gross = $this->gross($this->paymentsForScope(SubscriptionPayment::query(), $scope)
+            $gross = $this->gross($this->realPayments(SubscriptionPayment::query())
                 ->whereBetween('paid_at', [$start, $end]));
             $refundQuery = SubscriptionPaymentRefund::query()
                 ->whereBetween('refunded_at', [$start, $end])
-                ->whereHas('payment', fn (Builder $query) => $this->paymentsForScope($query, $scope));
+                ->whereHas('payment', fn (Builder $query) => $this->realPayments($query));
             $refunds = $this->sumCents($refundQuery, 'amount');
             $months[] = [
                 'label' => $month->format('M y'),
@@ -67,13 +60,13 @@ class PlatformReportController extends Controller
             ];
         }
 
-        return view('super-admin.reports.index', compact('counts', 'months', 'scope'));
+        return view('super-admin.reports.index', compact('counts', 'months'));
     }
 
     public function restaurants(Request $request): View
     {
         $filters = $this->filters($request);
-        $query = $this->restaurantsForScope(Restaurant::query()->with(['owners']), $filters['scope']);
+        $query = $this->realRestaurants(Restaurant::query()->with(['owners']));
         $query->when($filters['date_from'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('created_at', '>=', $date))
             ->when($filters['date_to'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('created_at', '<=', $date))
             ->when($filters['status'] ?? null, fn (Builder $builder, string $status) => $builder->where('status', $status))
@@ -88,7 +81,7 @@ class PlatformReportController extends Controller
 
         return view('super-admin.reports.restaurants', [
             'restaurants' => $restaurants,
-            'plans' => SubscriptionPlan::query()->orderBy('name')->get(['id', 'name']),
+            'plans' => SubscriptionPlan::query()->where('code', 'not like', 'DEMO-TB-2026-%')->orderBy('name')->get(['id', 'name']),
             'filters' => $filters,
         ]);
     }
@@ -96,7 +89,7 @@ class PlatformReportController extends Controller
     public function subscriptions(Request $request): View
     {
         $filters = $this->filters($request);
-        $query = $this->subscriptionsForScope(RestaurantSubscription::query()->with(['restaurant', 'events']), $filters['scope'])
+        $query = $this->realSubscriptions(RestaurantSubscription::query()->with(['restaurant', 'events']))
             ->when($filters['plan_id'] ?? null, fn (Builder $builder, int $plan) => $builder->where('subscription_plan_id', $plan))
             ->when($filters['subscription_status'] ?? null, fn (Builder $builder, string $status) => $this->subscriptionStatusFilter($builder, $status))
             ->when($filters['date_from'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('starts_at', '>=', $date))
@@ -111,7 +104,7 @@ class PlatformReportController extends Controller
 
         return view('super-admin.reports.subscriptions', [
             'subscriptions' => $subscriptions,
-            'plans' => SubscriptionPlan::query()->orderBy('name')->get(['id', 'name']),
+            'plans' => SubscriptionPlan::query()->where('code', 'not like', 'DEMO-TB-2026-%')->orderBy('name')->get(['id', 'name']),
             'filters' => $filters,
         ]);
     }
@@ -119,7 +112,7 @@ class PlatformReportController extends Controller
     public function payments(Request $request): View
     {
         $filters = $this->filters($request);
-        $query = $this->paymentsForScope(SubscriptionPayment::query()->with(['restaurant', 'plan', 'refunds']), $filters['scope'])
+        $query = $this->realPayments(SubscriptionPayment::query()->with(['restaurant', 'plan', 'refunds']))
             ->when($filters['restaurant_id'] ?? null, fn (Builder $builder, int $id) => $builder->where('restaurant_id', $id))
             ->when($filters['plan_id'] ?? null, fn (Builder $builder, int $id) => $builder->where('subscription_plan_id', $id))
             ->when($filters['status'] ?? null, fn (Builder $builder, string $status) => $builder->where('status', $status))
@@ -128,7 +121,7 @@ class PlatformReportController extends Controller
 
         return view('super-admin.reports.payments', [
             'payments' => $query->orderByDesc('paid_at')->orderByDesc('id')->paginate(15)->withQueryString(),
-            'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name']),
+            'restaurants' => $this->realRestaurants(Restaurant::query())->orderBy('name')->get(['id', 'name']),
             'filters' => $filters,
         ]);
     }
@@ -136,7 +129,7 @@ class PlatformReportController extends Controller
     public function revenue(Request $request): View
     {
         $filters = $this->filters($request);
-        $query = $this->paymentsForScope(SubscriptionPayment::query(), $filters['scope'])
+        $query = $this->realPayments(SubscriptionPayment::query())
             ->whereIn('subscription_payments.status', ['approved', 'refunded'])
             ->when($filters['restaurant_id'] ?? null, fn (Builder $builder, int $id) => $builder->where('restaurant_id', $id))
             ->when($filters['plan_id'] ?? null, fn (Builder $builder, int $id) => $builder->where('subscription_plan_id', $id))
@@ -171,7 +164,6 @@ class PlatformReportController extends Controller
     {
         $validated = $request->validate([
             'type' => ['required', Rule::in(['restaurants', 'subscriptions', 'payments', 'revenue'])],
-            'scope' => ['nullable', Rule::in(['real', 'demo', 'all'])],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => array_merge(
                 ['nullable', 'date_format:Y-m-d'],
@@ -183,11 +175,10 @@ class PlatformReportController extends Controller
             'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id'],
             'expiring_days' => ['nullable', 'integer', 'min:1', 'max:365'],
         ]);
-        $scope = $validated['scope'] ?? 'real';
         $type = $validated['type'];
 
         if ($type === 'restaurants') {
-            $query = $this->restaurantsForScope(Restaurant::query()->with('owners'), $scope)
+            $query = $this->realRestaurants(Restaurant::query()->with('owners'))
                 ->when($validated['status'] ?? null, fn (Builder $builder, string $status) => $builder->where('status', $status))
                 ->when($validated['date_from'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('created_at', '>=', $date))
                 ->when($validated['date_to'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('created_at', '<=', $date));
@@ -200,7 +191,7 @@ class PlatformReportController extends Controller
                 $restaurant->id, $restaurant->name, $restaurant->owners->first()?->name, $restaurant->status, $restaurant->created_at?->toIso8601String(),
             ]);
         } elseif ($type === 'subscriptions') {
-            $query = $this->subscriptionsForScope(RestaurantSubscription::query()->with('restaurant'), $scope)
+            $query = $this->realSubscriptions(RestaurantSubscription::query()->with('restaurant'))
                 ->when($validated['plan_id'] ?? null, fn (Builder $builder, int $id) => $builder->where('subscription_plan_id', $id))
                 ->when($validated['subscription_status'] ?? null, fn (Builder $builder, string $status) => $this->subscriptionStatusFilter($builder, $status))
                 ->when($validated['date_from'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('starts_at', '>=', $date))
@@ -211,7 +202,7 @@ class PlatformReportController extends Controller
                 $subscription->expires_at?->toIso8601String(), $subscription->effectiveStatus(), $subscription->renewal_of_id,
             ]);
         } else {
-            $query = $this->paymentsForScope(SubscriptionPayment::query()->with(['restaurant', 'refunds']), $scope)
+            $query = $this->realPayments(SubscriptionPayment::query()->with(['restaurant', 'refunds']))
                 ->when($validated['restaurant_id'] ?? null, fn (Builder $builder, int $id) => $builder->where('restaurant_id', $id))
                 ->when($validated['plan_id'] ?? null, fn (Builder $builder, int $id) => $builder->where('subscription_plan_id', $id))
                 ->when($validated['status'] ?? null, fn (Builder $builder, string $status) => $builder->where('status', $status))
@@ -219,7 +210,7 @@ class PlatformReportController extends Controller
                 ->when($validated['date_to'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('paid_at', '<=', $date));
             if ($type === 'revenue') {
                 $query->whereIn('status', ['approved', 'refunded']);
-                $headers = ['Payment ID', 'Restaurant', 'Plan', 'Transaction Reference', 'Gross Amount', 'Currency', 'Payment Date', 'Refunds Recorded', 'Net Recorded', 'Demo Record'];
+                $headers = ['Payment ID', 'Restaurant', 'Plan', 'Transaction Reference', 'Gross Amount', 'Currency', 'Payment Date', 'Refunds Recorded', 'Net Recorded'];
                 $rows = $query->orderByDesc('id')->lazy(500)->map(function (SubscriptionPayment $payment): array {
                     $refunds = $this->sumCents($payment->refunds()->getQuery(), 'amount');
 
@@ -227,16 +218,14 @@ class PlatformReportController extends Controller
                         $payment->id, $payment->restaurant->name, $payment->plan_name, $payment->transaction_reference, $payment->amount, $payment->currency,
                         $payment->paid_at?->toIso8601String(), $refunds,
                         $this->subtract((string) $payment->amount, $refunds),
-                        $payment->isDemo() ? 'Yes; not actual money' : 'No',
                     ];
                 });
             } else {
-                $headers = ['Payment ID', 'Restaurant', 'Plan', 'Amount', 'Currency', 'Status', 'Method', 'Paid At', 'Recorded Refunds', 'Demo Record'];
+                $headers = ['Payment ID', 'Restaurant', 'Plan', 'Amount', 'Currency', 'Status', 'Method', 'Paid At', 'Recorded Refunds'];
                 $rows = $query->orderByDesc('id')->lazy(500)->map(fn (SubscriptionPayment $payment) => [
                     $payment->id, $payment->restaurant->name, $payment->plan_name, $payment->amount, $payment->currency, $payment->status,
                     $payment->payment_method, $payment->paid_at?->toIso8601String(),
                     $this->sumCents($payment->refunds()->getQuery(), 'amount'),
-                    $payment->isDemo() ? 'Yes; not actual money' : 'No',
                 ]);
             }
         }
@@ -258,7 +247,6 @@ class PlatformReportController extends Controller
     private function filters(Request $request): array
     {
         return $request->validate([
-            'scope' => ['nullable', Rule::in(['real', 'demo', 'all'])],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => array_merge(
                 ['nullable', 'date_format:Y-m-d'],
@@ -269,32 +257,24 @@ class PlatformReportController extends Controller
             'plan_id' => ['nullable', 'integer', 'exists:subscription_plans,id'],
             'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id'],
             'expiring_days' => ['nullable', 'integer', 'min:1', 'max:365'],
-        ]) + ['scope' => $request->input('scope', 'real')];
+        ]);
     }
 
-    private function restaurantsForScope(Builder $query, string $scope): Builder
+    private function realRestaurants(Builder $query): Builder
     {
-        return $query->when($scope === 'real', fn (Builder $builder) => $builder->where('slug', 'not like', 'demo-tb-2026-%'))
-            ->when($scope === 'demo', fn (Builder $builder) => $builder->where('slug', 'like', 'demo-tb-2026-%'));
+        return $query->where('slug', 'not like', 'demo-tb-2026-%');
     }
 
-    private function subscriptionsForScope(Builder $query, string $scope): Builder
+    private function realSubscriptions(Builder $query): Builder
     {
-        return $query->when($scope !== 'all', fn (Builder $builder) => $builder->whereHas('restaurant', fn (Builder $restaurant) => $this->restaurantsForScope($restaurant, $scope)));
+        return $query->whereHas('restaurant', fn (Builder $restaurant) => $this->realRestaurants($restaurant));
     }
 
-    private function paymentsForScope(Builder $query, string $scope): Builder
+    private function realPayments(Builder $query): Builder
     {
-        return $query->when($scope !== 'all', function (Builder $builder) use ($scope): void {
-            if ($scope === 'demo') {
-                $builder->where('notes', 'like', 'DEMO DATA ONLY%');
-            } else {
-                $builder->where(function (Builder $nested): void {
-                    $nested->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%');
-                });
-                $builder->whereHas('restaurant', fn (Builder $restaurant) => $this->restaurantsForScope($restaurant, 'real'));
-            }
-        });
+        return $query->where(fn (Builder $nested) => $nested
+            ->whereNull('notes')->orWhere('notes', 'not like', 'DEMO DATA ONLY%'))
+            ->whereHas('restaurant', fn (Builder $restaurant) => $this->realRestaurants($restaurant));
     }
 
     private function gross(Builder $payments): string

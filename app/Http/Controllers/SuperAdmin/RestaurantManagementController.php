@@ -28,14 +28,15 @@ class RestaurantManagementController extends Controller
 
     public function index(Request $request): View
     {
-        $restaurantStats = Restaurant::query()
+        $restaurantStats = Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as active")
             ->selectRaw("COALESCE(SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END), 0) as suspended")
             ->selectRaw("COALESCE(SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END), 0) as inactive")
             ->first();
 
-        $query = Restaurant::query()->with(['owners' => fn ($owners) => $owners->orderBy('created_at', 'desc')]);
+        $query = Restaurant::query()->where('slug', 'not like', 'demo-tb-2026-%')
+            ->with(['owners' => fn ($owners) => $owners->orderBy('created_at', 'desc')]);
 
         if ($request->filled('search')) {
             $term = trim($request->input('search'));
@@ -145,6 +146,7 @@ class RestaurantManagementController extends Controller
 
     public function show(Restaurant $restaurant): View
     {
+        $this->ensureBusinessRestaurant($restaurant);
         $restaurant->load([
             'owners' => fn ($query) => $query->orderBy('created_at', 'desc'),
             'auditLogs' => fn ($query) => $query->with('actor')->limit(10),
@@ -158,6 +160,7 @@ class RestaurantManagementController extends Controller
 
     public function edit(Restaurant $restaurant): View
     {
+        $this->ensureBusinessRestaurant($restaurant);
         $restaurant->load('owners');
 
         return view('super-admin.restaurants.edit', [
@@ -168,6 +171,7 @@ class RestaurantManagementController extends Controller
 
     public function update(Request $request, Restaurant $restaurant): RedirectResponse
     {
+        $this->ensureBusinessRestaurant($restaurant);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9-]+$/', Rule::unique('restaurants', 'slug')->ignore($restaurant->id)],
@@ -197,6 +201,7 @@ class RestaurantManagementController extends Controller
 
     public function toggleStatus(Request $request, Restaurant $restaurant): RedirectResponse
     {
+        $this->ensureBusinessRestaurant($restaurant);
         $validated = $request->validate([
             'status' => ['required', 'in:active,suspended,inactive'],
         ]);
@@ -240,6 +245,7 @@ class RestaurantManagementController extends Controller
 
     public function toggleOwnerStatus(Request $request, Restaurant $restaurant, User $user): RedirectResponse
     {
+        $this->ensureBusinessRestaurant($restaurant);
         $owner = $this->findRestaurantOwner($restaurant, $user);
         $validated = $request->validate([
             'status' => ['required', 'in:active,inactive'],
@@ -271,6 +277,7 @@ class RestaurantManagementController extends Controller
 
     public function resetOwnerPassword(Restaurant $restaurant, User $user): RedirectResponse
     {
+        $this->ensureBusinessRestaurant($restaurant);
         $owner = $this->findRestaurantOwner($restaurant, $user);
         $setupResult = $this->passwordSetupService->send($owner);
 
@@ -303,6 +310,11 @@ class RestaurantManagementController extends Controller
             ->whereKey($user->getKey())
             ->where('role', 'owner')
             ->firstOrFail();
+    }
+
+    private function ensureBusinessRestaurant(Restaurant $restaurant): void
+    {
+        abort_if(str_starts_with($restaurant->slug, 'demo-tb-2026-'), 404);
     }
 
     protected function recordAudit(?SuperAdmin $actor, string $action, string $targetType, ?int $targetId, array $details = []): void

@@ -5,7 +5,7 @@
 
 @section('content')
     <div class="page-heading">
-        <div><span class="eyebrow">NON-TAX PAYMENT RECEIPT @if($invoice->payment->isDemo()) · DEMO ONLY — NOT ACTUAL MONEY @endif</span><h1>{{ $invoice->invoice_number }}</h1><p>Issued {{ $invoice->issue_date->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</p></div>
+        <div><span class="eyebrow">NON-TAX PAYMENT RECEIPT</span><h1>{{ $invoice->invoice_number }}</h1><p>Issued {{ $invoice->issue_date->timezone(config('app.timezone'))->format('M j, Y H:i T') }}</p></div>
         <div class="toolbar-actions"><a class="button button-secondary" href="{{ route('super-admin.invoices.print', $invoice) }}">Print</a><a class="button button-primary" href="{{ route('super-admin.invoices.pdf', $invoice) }}">Download PDF</a></div>
     </div>
 

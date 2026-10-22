@@ -25,7 +25,7 @@
             <select class="toolbar-search" name="status" aria-label="Filter by status" style="max-width:180px;">
                 <option value="">All statuses</option>
                 @foreach (['draft', 'published', 'archived'] as $status)
-                    <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ ucfirst($status) }}</option>
+                    <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ \App\Support\StatusPresenter::label($status) }}</option>
                 @endforeach
             </select>
         </form>
@@ -40,7 +40,7 @@
                     <tr>
                         <td><strong>{{ $announcement->title }}</strong><br><span class="meta-label">{{ Str::limit(strip_tags($announcement->body), 90) }}</span></td>
                         <td>{{ $announcement->audience === 'all' ? 'All active restaurants' : $announcement->restaurants_count.' selected restaurants' }}</td>
-                        <td><span class="status-pill status-{{ $announcement->status === 'published' ? 'approved' : ($announcement->status === 'draft' ? 'pending' : 'disabled') }}">{{ ucfirst($announcement->status) }}</span></td>
+                        <td><span class="status-pill status-{{ \App\Support\StatusPresenter::badgeClass($announcement->status) }}">{{ \App\Support\StatusPresenter::label($announcement->status) }}</span></td>
                         <td>{{ $announcement->audience === 'all' ? 'All' : $announcement->restaurants_count }}</td>
                         <td>{{ $announcement->reads_count }}</td>
                         <td>{{ $announcement->created_at->format('M j, Y') }}</td>
