@@ -15,7 +15,7 @@
     />
     <link rel="stylesheet" href="{{ asset('assets/style.css') }}?v={{ hash_file('sha256', public_path('assets/style.css')) }}" />
   </head>
-  <body>
+  <body class="pos-page">
     @if (request()->attributes->has('restaurant_admin_access_restaurant'))
       @php($adminAccessToken = request()->attributes->get('restaurant_admin_access_token'))
       <div role="status" style="position:sticky;top:0;z-index:1100;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:10px 18px;background:#fff4e8;border-bottom:1px solid #f2c28d;color:#763d0b;">

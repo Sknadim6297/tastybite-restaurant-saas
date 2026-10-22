@@ -113,6 +113,10 @@ class RestaurantDashboardAccessTest extends TestCase
             ->assertOk()
             ->assertSee('Super Admin Access — Viewing: Access House')
             ->assertSee('Admin Product');
+        $this->get($this->restaurantAccessUrl('pos.orders.index', $token))
+            ->assertOk()
+            ->assertSee('Order history')
+            ->assertSee('Super Admin Access — Viewing: Access House');
 
         $this->assertSame($this->restaurant->id, $product->restaurant_id);
         $this->assertDatabaseHas('restaurant_audit_logs', [

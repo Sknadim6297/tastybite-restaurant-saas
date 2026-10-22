@@ -20,15 +20,9 @@
         @endif
         <div class="brand-text">
           <h2>{{ $restaurantName }}</h2>
-          <small>Restaurant POS</small>
+          <small>Restaurant Admin <span aria-hidden="true">/</span> POS Billing</small>
         </div>
       </a>
-
-      <nav class="header-nav" aria-label="POS navigation">
-        <a href="{{ route('pos.index') }}" class="active" aria-current="page">Billing</a>
-        <a href="{{ route('pos.orders.index') }}">Order history</a>
-        <a href="{{ route('restaurant.dashboard') }}">Dashboard</a>
-      </nav>
 
       <div class="header-search">
         <input
@@ -53,6 +47,10 @@
           <span class="header-date-separator" aria-hidden="true">|</span>
           <span id="currentTime">--:--:-- --</span>
         </div>
+
+        <a class="pos-notifications" href="{{ route('restaurant.announcements.index') }}" aria-label="Announcements">
+          <i class="bi bi-bell" aria-hidden="true"></i>
+        </a>
 
         @if ($adminAccess)
           <div class="admin-profile" aria-label="Super Admin account">
@@ -88,49 +86,62 @@
       </div>
     </header>
 
-    <div class="app-layout">
-      <aside class="sidebar">
-        <a href="#" class="side-link active">
-          <i class="bi bi-cart-fill"></i> Billing (POS)
-        </a>
-
-        <a href="#" class="side-link">
-          <i class="bi bi-layout-three-columns"></i> Table Management
-        </a>
-
-        <a href="#" class="side-link"> <i class="bi bi-receipt"></i> Orders </a>
-
-        <a href="#" class="side-link">
-          <i class="bi bi-journal-text"></i> Menu Items
-        </a>
-
-        <a href="#" class="side-link">
-          <i class="bi bi-box-seam"></i> Inventory
-        </a>
-
-        <a href="#" class="side-link">
-          <i class="bi bi-people"></i> Customers
-        </a>
-
-        <a href="#" class="side-link">
-          <i class="bi bi-bar-chart-line"></i> Reports
-        </a>
-
-        <a href="#" class="side-link">
-          <i class="bi bi-cash-coin"></i> Expenses
-        </a>
-
-        <a href="#" class="side-link"> <i class="bi bi-gear"></i> Settings </a>
-
-        <div class="sidebar-bottom">
-          <strong>{{ $restaurantName }} POS</strong>
-          Restaurant Billing System
-        </div>
-      </aside>
-
-      <main class="main-content">
+    <main class="main-content">
         <div class="pos-layout" id="posLayout">
           <section class="menu-panel">
+            <section class="pos-order-controls" aria-label="Current order details">
+              <div class="pos-control-heading">
+                <div>
+                  <h2>New Order</h2>
+                  <span>Choose order type and table details</span>
+                </div>
+                <span class="pos-live-indicator"><i aria-hidden="true"></i> Live order</span>
+              </div>
+              <div class="pos-order-control-grid">
+                <div class="pos-control-group">
+                  <span class="pos-control-label">Order Type</span>
+                  <div class="order-type" role="group" aria-label="Order type">
+                    <button type="button" class="active" data-type="Dine In" aria-pressed="true">
+                      <i class="bi bi-cup-straw" aria-hidden="true"></i> Dine In
+                    </button>
+                    <button type="button" data-type="Take Away" aria-pressed="false">
+                      <i class="bi bi-bag" aria-hidden="true"></i> Take Away
+                    </button>
+                    <button type="button" data-type="Delivery" aria-pressed="false">
+                      <i class="bi bi-bicycle" aria-hidden="true"></i> Delivery
+                    </button>
+                  </div>
+                </div>
+                <div class="pos-order-selects">
+                  <div id="tableField">
+                    <label for="tableNo">Table</label>
+                    <select id="tableNo">
+                      <option>1</option><option>2</option><option>3</option>
+                      <option>4</option><option selected>5</option>
+                      <option>6</option><option>7</option><option>8</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="guestNo">Guests</label>
+                    <select id="guestNo">
+                      <option>1</option><option>2</option><option>3</option>
+                      <option selected>4</option><option>5</option>
+                      <option>6</option><option>7</option><option>8</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div class="menu-section-heading">
+              <div>
+                <h2>Menu</h2>
+                <span>Browse categories and add items</span>
+              </div>
+              <a class="pos-history-link" href="{{ route('pos.orders.index') }}">
+                <i class="bi bi-clock-history" aria-hidden="true"></i> Order history
+              </a>
+            </div>
             <div class="category-scroller" id="categoryScroller">
               <button class="cat-arrow cat-prev" type="button" data-cat-scroll="-1" aria-label="Scroll categories left"><i class="bi bi-chevron-left"></i></button>
             <div class="category-list" id="categoryList">
@@ -198,100 +209,25 @@
             </div>
           </section>
 
-          <aside class="billing-panel" id="billingPanel" aria-label="Restaurant checkout" aria-hidden="true" inert>
-            <section class="checkout-dialog" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
+          <aside class="billing-panel" id="billingPanel" aria-label="Current order and billing">
+            <section class="checkout-dialog" aria-labelledby="checkoutTitle">
               <header class="checkout-header">
                 <div>
-                  <h2 id="checkoutTitle">Restaurant Checkout</h2>
-                  <p>Review your order and complete billing</p>
+                  <h2 id="checkoutTitle"><i class="bi bi-receipt" aria-hidden="true"></i> Current Order</h2>
+                  <p>Review items and complete billing</p>
                 </div>
-                <button class="checkout-close" id="billingClose" type="button" aria-label="Close checkout">
-                  <i class="bi bi-x-lg" aria-hidden="true"></i>
+                <button class="clear-order-button" type="button" onclick="clearCart()">
+                  <i class="bi bi-trash3" aria-hidden="true"></i> Clear
                 </button>
               </header>
 
               <div class="checkout-body">
-                <section class="checkout-details" aria-label="Order details">
-                  <div class="checkout-section">
-                    <h3>Order Type</h3>
-                    <div class="order-type">
-                      <button type="button" class="active" data-type="Dine In">
-                        <i class="bi bi-cup-straw" aria-hidden="true"></i> Dine In
-                      </button>
-                      <button type="button" data-type="Take Away">
-                        <i class="bi bi-bag" aria-hidden="true"></i> Take Away
-                      </button>
-                      <button type="button" data-type="Delivery">
-                        <i class="bi bi-bicycle" aria-hidden="true"></i> Delivery
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="checkout-section">
-                    <h3>Table Details</h3>
-                    <div class="table-fields">
-                      <div id="tableField">
-                        <label for="tableNo">Table No.</label>
-                        <select id="tableNo">
-                          <option>1</option><option>2</option><option>3</option>
-                          <option>4</option><option selected>5</option>
-                          <option>6</option><option>7</option><option>8</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label for="guestNo">Guest Count</label>
-                        <select id="guestNo">
-                          <option>1</option><option>2</option><option>3</option>
-                          <option selected>4</option><option>5</option>
-                          <option>6</option><option>7</option><option>8</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="checkout-section">
-                    <h3>Payment Method</h3>
-                    <div class="payment-methods" role="group" aria-label="Payment method">
-                      <button type="button" class="payment-method active" data-payment-method="Cash" aria-pressed="true">
-                        <i class="bi bi-cash-coin" aria-hidden="true"></i><span>Cash</span>
-                      </button>
-                      <button type="button" class="payment-method" data-payment-method="Card" aria-pressed="false">
-                        <i class="bi bi-credit-card" aria-hidden="true"></i><span>Card</span>
-                      </button>
-                      <button type="button" class="payment-method" data-payment-method="UPI" aria-pressed="false">
-                        <i class="bi bi-qr-code" aria-hidden="true"></i><span>UPI</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="checkout-section">
-                    <h3>Payment Details</h3>
-                    <p class="payment-notice" id="paymentNotice" aria-live="polite">
-                      <i class="bi bi-info-circle" aria-hidden="true"></i>
-                      <span>Payment is not processed here. Completing a sale records the order and consumes configured recipe stock.</span>
-                    </p>
-                  </div>
-                  <div class="checkout-section">
-                    <p class="payment-notice">Menu products without an active recipe can be sold, but do not deduct inventory.</p>
-                  </div>
-
-                  <div class="checkout-section">
-                    <h3>Order Notes <span>(Optional)</span></h3>
-                    <textarea
-                      id="orderNotes"
-                      class="order-notes"
-                      placeholder="Add a note for the kitchen or cashier..."
-                      rows="2"
-                    ></textarea>
-                  </div>
-                </section>
-
                 <section class="checkout-summary" aria-labelledby="summaryTitle">
-                  <h3 id="summaryTitle">Order Summary</h3>
+                  <h3 id="summaryTitle">Order Summary <span class="cart-item-count" id="nextBillingCount">0 items</span></h3>
                   <div class="cart-heading">
                     <span>Item</span><span>Qty</span><span>Price</span><span>Total</span><span></span>
                   </div>
-                  <div class="cart-items" id="cartItems">
+                  <div class="cart-items" id="cartItems" aria-live="polite">
                     <div class="empty-cart">
                       <i class="bi bi-cart3" aria-hidden="true"></i>
                       Add food items to start billing
@@ -327,29 +263,61 @@
                     </div>
                   </div>
                 </section>
-              </div>
 
-              <footer class="checkout-footer">
-                <button class="billing-back-button" id="billingBack" type="button">
-                  <i class="bi bi-arrow-left" aria-hidden="true"></i><span>Back to Products</span>
-                </button>
-                <div class="checkout-footer-actions">
-                  <button class="action-btn hold-btn" type="button" onclick="holdOrder()">
-                    <i class="bi bi-pause-fill" aria-hidden="true"></i> Hold
-                  </button>
-                  <button class="action-btn clear-btn" type="button" onclick="clearCart()">
-                    <i class="bi bi-trash3" aria-hidden="true"></i> Clear
-                  </button>
-                  <button class="action-btn complete-sale-btn" id="completeSale" type="button">
-                    <i class="bi bi-check2-circle" aria-hidden="true"></i> Complete Sale
-                  </button>
-                </div>
-              </footer>
+                <section class="pos-billing-options" aria-label="Payment and order notes">
+                  <h3>Payment Method</h3>
+                  <div class="payment-methods" role="group" aria-label="Payment method">
+                    <button type="button" class="payment-method active" data-payment-method="Cash" aria-pressed="true">
+                      <i class="bi bi-cash-coin" aria-hidden="true"></i><span>Cash</span>
+                    </button>
+                    <button type="button" class="payment-method" data-payment-method="Card" aria-pressed="false">
+                      <i class="bi bi-credit-card" aria-hidden="true"></i><span>Card</span>
+                    </button>
+                    <button type="button" class="payment-method" data-payment-method="UPI" aria-pressed="false">
+                      <i class="bi bi-qr-code" aria-hidden="true"></i><span>UPI</span>
+                    </button>
+                  </div>
+                  <p class="payment-notice" id="paymentNotice" aria-live="polite">
+                    <i class="bi bi-info-circle" aria-hidden="true"></i>
+                    <span>Cash selected. Payment is not recorded or processed by this POS.</span>
+                  </p>
+                  <label for="orderNotes">Order Notes <span>(Optional)</span></label>
+                  <textarea id="orderNotes" class="order-notes" placeholder="Add a note for the kitchen or cashier..." rows="2"></textarea>
+                </section>
+
+                <p class="recipe-stock-notice">
+                  <i class="bi bi-info-circle" aria-hidden="true"></i>
+                  Completing records the sale and consumes configured recipe stock. Items without an active recipe do not deduct inventory.
+                </p>
+
+                <footer class="checkout-footer">
+                  <div class="checkout-footer-actions">
+                    <button class="action-btn hold-btn" type="button" id="holdOrderButton">
+                      <i class="bi bi-pause-fill" aria-hidden="true"></i> Hold Bill
+                    </button>
+                    <button class="action-btn print-btn" type="button" id="printBillButton">
+                      <i class="bi bi-printer" aria-hidden="true"></i> Print Bill
+                    </button>
+                    <button class="action-btn complete-sale-btn" id="completeSale" type="button">
+                      <i class="bi bi-check2-circle" aria-hidden="true"></i> Complete Sale
+                    </button>
+                  </div>
+                </footer>
+
+                <section class="held-orders-section" aria-labelledby="heldOrdersTitle">
+                  <div class="held-orders-heading">
+                    <h3 id="heldOrdersTitle">Held Bills</h3>
+                    <span id="heldOrderCount">0</span>
+                  </div>
+                  <div id="heldOrdersList" class="held-orders-list">
+                    <p class="held-orders-empty">No held bills.</p>
+                  </div>
+                </section>
+              </div>
             </section>
           </aside>
         </div>
-      </main>
-    </div>
+    </main>
 
     @if(session('status'))
       <div class="pos-status-message" role="status">{{ session('status') }}</div>
@@ -362,46 +330,5 @@
       <input type="hidden" name="discount_percent" id="posDiscountPercent">
       <input type="hidden" name="notes" id="posOrderNotes">
     </form>
-
-    <button class="next-billing-button" id="nextBilling" type="button" aria-controls="billingPanel" aria-expanded="false">
-      <span>Next: Billing</span>
-      <span class="next-billing-count" id="nextBillingCount" aria-label="0 items">0</span>
-      <i class="bi bi-arrow-right" aria-hidden="true"></i>
-    </button>
-
-    <div
-      class="modal fade"
-      id="holdOrdersModal"
-      tabindex="-1"
-      aria-labelledby="holdOrdersTitle"
-      aria-hidden="true"
-    >
-      <div
-        class="modal-dialog modal-dialog-centered modal-dialog-scrollable"
-        style="max-width: 450px"
-      >
-        <div class="modal-content rounded-4 shadow border-0">
-          <div class="modal-header bg-primary text-white">
-            <h5 class="modal-title fw-bold" id="holdOrdersTitle">
-              <i class="bi bi-pause-circle me-2"></i>
-              Held Orders
-            </h5>
-
-            <button
-              type="button"
-              class="btn-close btn-close-white"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
-          </div>
-
-          <div class="modal-body">
-            <div id="heldOrdersList">
-              <p class="text-center text-muted py-3">No held orders.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
 @endsection

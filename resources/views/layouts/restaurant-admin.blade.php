@@ -17,6 +17,7 @@
         $adminAccessRestaurant = request()->attributes->get('restaurant_admin_access_restaurant');
         $adminAccessToken = request()->attributes->get('restaurant_admin_access_token');
         $adminMode = $adminAccessRestaurant !== null && $adminAccessAdmin !== null;
+        $user = app(\App\Services\RestaurantAccessContext::class)->owner();
     @endphp
     <div class="admin-shell">
         <aside class="admin-sidebar" id="admin-sidebar">

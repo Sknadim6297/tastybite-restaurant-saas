@@ -13,17 +13,6 @@ const money = value => "₹" + (Number(value) || 0).toLocaleString("en-IN", {
     maximumFractionDigits: 2
 });
 
-// Escape HTML
-function holdEscape(value) {
-    return String(value ?? "").replace(/[&<>"']/g, ch => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-    })[ch]);
-}
-
 // Clock
 const dateEl = document.getElementById("currentDate");
 const timeEl = document.getElementById("currentTime");
@@ -75,55 +64,7 @@ document.querySelectorAll(".category-btn").forEach(button => {
 const menuSearch = document.getElementById("menuSearch");
 const searchClear = document.querySelector("[data-search-clear]");
 const noMatchingProducts = document.getElementById("noMatchingProducts");
-const posLayout = document.getElementById("posLayout");
-const billingPanel = document.getElementById("billingPanel");
-const nextBilling = document.getElementById("nextBilling");
 const nextBillingCount = document.getElementById("nextBillingCount");
-const billingBack = document.getElementById("billingBack");
-const billingClose = document.getElementById("billingClose");
-
-function setBillingOpen(isOpen) {
-    if (!posLayout || !billingPanel || !nextBilling) {
-        return;
-    }
-
-    posLayout.classList.toggle("is-billing-open", isOpen);
-    document.body.classList.toggle("pos-billing-open", isOpen);
-    billingPanel.setAttribute("aria-hidden", String(!isOpen));
-    billingPanel.inert = !isOpen;
-    nextBilling.setAttribute("aria-expanded", String(isOpen));
-    if (isOpen) {
-        billingClose?.focus();
-    } else {
-        nextBilling.focus();
-    }
-}
-
-if (nextBilling) {
-    nextBilling.addEventListener("click", () => setBillingOpen(true));
-}
-
-if (billingBack) {
-    billingBack.addEventListener("click", () => setBillingOpen(false));
-}
-
-if (billingClose) {
-    billingClose.addEventListener("click", () => setBillingOpen(false));
-}
-
-if (billingPanel) {
-    billingPanel.addEventListener("click", event => {
-        if (event.target === billingPanel) {
-            setBillingOpen(false);
-        }
-    });
-}
-
-document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && billingPanel && !billingPanel.inert) {
-        setBillingOpen(false);
-    }
-});
 
 const paymentNotice = document.getElementById("paymentNotice");
 const paymentMethodNotices = {
@@ -156,7 +97,7 @@ function updateCartItemCount() {
     }
 
     const itemCount = [...cart.values()].reduce((total, item) => total + item.qty, 0);
-    nextBillingCount.textContent = String(itemCount);
+    nextBillingCount.textContent = `${itemCount} ${itemCount === 1 ? "item" : "items"}`;
     nextBillingCount.setAttribute("aria-label", `${itemCount} ${itemCount === 1 ? "item" : "items"}`);
 }
 
@@ -428,10 +369,13 @@ if (discountInput) {
 // Order type
 document.querySelectorAll(".order-type button").forEach(button => {
     button.addEventListener("click", () => {
-        document.querySelectorAll(".order-type button")
-            .forEach(btn => btn.classList.remove("active"));
+        document.querySelectorAll(".order-type button").forEach(btn => {
+            btn.classList.remove("active");
+            btn.setAttribute("aria-pressed", "false");
+        });
 
         button.classList.add("active");
+        button.setAttribute("aria-pressed", "true");
         orderType = button.dataset.type || "Dine In";
 
         const tableField = document.getElementById("tableField");
@@ -462,124 +406,82 @@ function clearCart() {
 
 // Hold current order
 function holdOrder() {
-    const modalEl = document.getElementById("holdOrdersModal");
-
-    if (!modalEl) {
-        alert("HTML-e holdOrdersModal ID-er modal paoa jacche na.");
+    if (cart.size === 0) {
+        alert("Add at least one menu item before holding this bill.");
         return;
     }
 
-    if (cart.size > 0) {
-        const order = {
-            id: holdOrderCounter++,
-            orderType: orderType,
-            tableNo: document.getElementById("tableNo")?.value || "",
-            guestNo: document.getElementById("guestNo")?.value || "",
-            mobile: document.getElementById("customerMobile")?.value || "",
-            notes: document.getElementById("orderNotes")?.value || "",
-            discount: document.getElementById("discount")?.value || "0",
-            items: [...cart.values()].map(item => ({ ...item }))
-        };
+    heldOrders.push({
+        id: holdOrderCounter++,
+        orderType,
+        tableNo: document.getElementById("tableNo")?.value || "",
+        guestNo: document.getElementById("guestNo")?.value || "",
+        notes: document.getElementById("orderNotes")?.value || "",
+        discount: document.getElementById("discount")?.value || "0",
+        items: [...cart.values()].map(item => ({ ...item }))
+    });
 
-        heldOrders.push(order);
-
-        cart.clear();
-
-        const discount = document.getElementById("discount");
-        const notes = document.getElementById("orderNotes");
-
-        if (discount) discount.value = "0";
-        if (notes) notes.value = "";
-
-        renderCart();
-    }
-
+    cart.clear();
+    document.getElementById("discount").value = "0";
+    document.getElementById("orderNotes").value = "";
+    renderCart();
     renderHeldOrders();
-
-    if (window.bootstrap && bootstrap.Modal) {
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
-    } else {
-        alert("Bootstrap bundle JavaScript not loaded.");
-    }
 }
 
 // Render held orders
 function renderHeldOrders() {
     const list = document.getElementById("heldOrdersList");
     if (!list) return;
+    const count = document.getElementById("heldOrderCount");
+    if (count) count.textContent = String(heldOrders.length);
 
     if (heldOrders.length === 0) {
-        list.innerHTML = `
-            <div class="text-center text-muted py-4">
-                No held orders.
-            </div>`;
+        list.innerHTML = '<p class="held-orders-empty">No held bills.</p>';
         return;
     }
 
-    list.innerHTML = heldOrders.map(order => {
-        const subtotal = order.items.reduce(
-            (sum, item) => sum + item.price * item.qty, 0
-        );
-
-        const discountPercent = Math.max(
-            0,
-            Math.min(100, Number(order.discount) || 0)
-        );
-
+    list.replaceChildren();
+    heldOrders.forEach(order => {
+        const subtotal = order.items.reduce((sum, item) => sum + item.price * item.qty, 0);
+        const discountPercent = Math.max(0, Math.min(100, Number(order.discount) || 0));
         const taxable = subtotal - subtotal * discountPercent / 100;
-        const amount = taxable + taxable * 0.025 + taxable * 0.025;
+        const total = taxable * 1.05;
 
-        const itemsHtml = order.items.map(item => `
-            <div>
-                ${holdEscape(item.name)} × ${item.qty}
-                — ${money(item.price * item.qty)}
-            </div>
-        `).join("");
+        const card = document.createElement("article");
+        card.className = "held-order-card";
+        const details = document.createElement("div");
+        details.className = "held-order-details";
+        const title = document.createElement("strong");
+        title.textContent = `${order.orderType} · Table ${order.tableNo || "—"} · ${order.items.length} item${order.items.length === 1 ? "" : "s"}`;
+        const amount = document.createElement("span");
+        amount.textContent = money(total);
+        details.append(title, amount);
 
-        return `
-            <div class="border rounded-3 p-3 mb-3">
-                <label class="d-flex align-items-start gap-3"
-                       style="cursor:pointer">
-
-                    <input type="checkbox"
-                           class="form-check-input mt-1"
-                           onchange="resumeHeldOrder(${order.id}, this.checked)">
-
-                    <span class="flex-grow-1">
-                        <strong>
-                            ${holdEscape(order.orderType)}
-                            — Table No: ${holdEscape(order.tableNo || "-")}
-                        </strong>
-
-                        <div>
-                            Customer Mobile:
-                            ${holdEscape(order.mobile || "-")}
-                        </div>
-
-                        <div>
-                            Order: ${holdEscape(order.guestNo || "-")}
-                        </div>
-
-                        <div class="fw-semibold text-primary mt-1">
-                            Amount: ${money(amount)}
-                        </div>
-
-                        <hr class="my-2">
-
-                        
-                    </span>
-                </label>
-            </div>`;
-    }).join("");
+        const actions = document.createElement("div");
+        actions.className = "held-order-actions";
+        const restore = document.createElement("button");
+        restore.type = "button";
+        restore.className = "held-order-restore";
+        restore.textContent = "Restore";
+        restore.addEventListener("click", () => resumeHeldOrder(order.id));
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "held-order-remove";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => {
+            heldOrders = heldOrders.filter(held => held.id !== order.id);
+            renderHeldOrders();
+        });
+        actions.append(restore, remove);
+        card.append(details, actions);
+        list.append(card);
+    });
 }
 
 // Restore selected held order
-function resumeHeldOrder(id, checked) {
-    if (!checked) return;
-
+function resumeHeldOrder(id) {
     if (cart.size > 0) {
-        alert("Current cart-e items ache. Age current order Hold ba Clear koro.");
-        renderHeldOrders();
+        alert("This bill already has items. Hold or clear it before restoring another bill.");
         return;
     }
 
@@ -600,10 +502,9 @@ function resumeHeldOrder(id, checked) {
     orderType = order.orderType || "Dine In";
 
     document.querySelectorAll(".order-type button").forEach(btn => {
-        btn.classList.toggle(
-            "active",
-            btn.dataset.type === orderType
-        );
+        const isSelected = btn.dataset.type === orderType;
+        btn.classList.toggle("active", isSelected);
+        btn.setAttribute("aria-pressed", String(isSelected));
     });
 
     const tableField = document.getElementById("tableField");
@@ -631,12 +532,22 @@ function resumeHeldOrder(id, checked) {
     renderCart();
     renderHeldOrders();
 
-    const modalEl = document.getElementById("holdOrdersModal");
-
-    if (window.bootstrap && modalEl) {
-        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-    }
 }
+
+document.getElementById("holdOrderButton")?.addEventListener("click", holdOrder);
+
+document.getElementById("printBillButton")?.addEventListener("click", () => {
+    if (cart.size === 0) {
+        alert("Add at least one menu item before printing this bill.");
+        return;
+    }
+
+    document.body.classList.add("pos-printing");
+    window.addEventListener("afterprint", () => {
+        document.body.classList.remove("pos-printing");
+    }, { once: true });
+    window.print();
+});
 
 const completeSaleButton = document.getElementById("completeSale");
 if (completeSaleButton) {

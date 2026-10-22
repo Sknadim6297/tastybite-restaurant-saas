@@ -96,8 +96,9 @@ class PosPageTest extends TestCase
         $this->get(route('pos.index'))
             ->assertOk()
             ->assertSee('Tasty Bite POS')
-            ->assertSee('Billing (POS)')
-            ->assertSee('Restaurant POS')
+            ->assertDontSee('Point of Sale')
+            ->assertDontSee('Select menu items to add them to the current bill.')
+            ->assertDontSee('class="pos-section-heading"', false)
             ->assertSee('data-bs-toggle="dropdown"', false)
             ->assertSee('data-search-focus', false)
             ->assertSee(route('restaurant.logout'), false)
@@ -137,7 +138,7 @@ class PosPageTest extends TestCase
         $this->get('/pos-print.html')->assertNotFound();
     }
 
-    public function test_pos_renders_the_two_step_billing_controls_without_duplicating_billing_fields(): void
+    public function test_pos_renders_a_persistent_live_billing_workspace(): void
     {
         $response = $this->get(route('pos.index'));
 
@@ -146,49 +147,49 @@ class PosPageTest extends TestCase
             ->assertSee('id="categoryScroller"', false)
             ->assertSee('data-cat-scroll="1"', false)
             ->assertSee('id="billingPanel"', false)
-            ->assertSee('aria-hidden="true" inert', false)
             ->assertSee('id="checkoutTitle"', false)
-            ->assertSee('Restaurant Checkout')
-            ->assertSee('id="nextBilling"', false)
-            ->assertSee('Next: Billing')
+            ->assertSee('Current Order')
+            ->assertSee('New Order')
+            ->assertSee('Order history')
             ->assertSee('id="nextBillingCount"', false)
-            ->assertSee('id="billingBack"', false)
-            ->assertSee('Back to Products')
             ->assertSee('Payment Method')
-            ->assertSee('Payment Details')
             ->assertSee('data-payment-method="Cash"', false)
             ->assertSee('data-payment-method="Card"', false)
             ->assertSee('data-payment-method="UPI"', false)
             ->assertSee('id="paymentNotice"', false)
-            ->assertSee('id="billingClose"', false)
-            ->assertSee('role="dialog"', false)
-            ->assertSee('aria-modal="true"', false)
             ->assertSee('id="tableNo"', false)
             ->assertSee('id="guestNo"', false)
             ->assertSee('id="orderNotes"', false)
             ->assertSee('id="discount"', false)
             ->assertSee('id="cartItems"', false)
             ->assertSee('id="grandTotal"', false)
-            ->assertSee('onclick="holdOrder()"', false)
             ->assertSee('onclick="clearCart()"', false)
+            ->assertSee('id="holdOrderButton"', false)
+            ->assertSee('id="printBillButton"', false)
+            ->assertSee('id="completeSale"', false)
+            ->assertSee('id="heldOrdersList"', false)
+            ->assertDontSee('class="sidebar"', false)
+            ->assertDontSee('holdOrdersModal')
+            ->assertDontSee('nextBilling"')
             ->assertDontSee('generateBill');
 
         $script = file_get_contents(public_path('assets/script.js'));
         $this->assertIsString($script);
         $this->assertStringContainsString('[...cart.values()].reduce((total, item) => total + item.qty, 0)', $script);
-        $this->assertStringContainsString('setBillingOpen(true)', $script);
-        $this->assertStringContainsString('setBillingOpen(false)', $script);
-        $this->assertStringContainsString('billingPanel.inert = !isOpen;', $script);
         $this->assertStringContainsString('paymentMethodNotices', $script);
         $this->assertStringContainsString('no card details are collected here', $script);
+        $this->assertStringContainsString('function holdOrder()', $script);
+        $this->assertStringContainsString('function resumeHeldOrder(id)', $script);
+        $this->assertStringContainsString('window.print();', $script);
+        $this->assertStringContainsString('form.submit();', $script);
         $this->assertStringNotContainsString('DEMO BILL', $script);
 
         $style = file_get_contents(public_path('assets/style.css'));
         $this->assertIsString($style);
-        $this->assertStringContainsString('.pos-layout.is-billing-open', $style);
-        $this->assertStringContainsString('width: min(960px, calc(100vw - 48px));', $style);
-        $this->assertStringContainsString('grid-template-columns: 55fr 45fr;', $style);
-        $this->assertStringNotContainsString('--pos-billing-width: 420px;', $style);
+        $this->assertStringContainsString('body.pos-page .pos-layout', $style);
+        $this->assertStringContainsString('position: sticky;', $style);
+        $this->assertStringContainsString('body.pos-page.pos-printing', $style);
+        $this->assertStringContainsString('grid-template-columns: minmax(0, 1.5fr) minmax(380px, 0.9fr);', $style);
         $this->assertStringContainsString('@media (max-width: 767.98px)', $style);
         $this->assertStringContainsString('prefers-reduced-motion: reduce', $style);
     }
