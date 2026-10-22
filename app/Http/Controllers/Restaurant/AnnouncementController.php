@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Restaurant;
 use App\Http\Controllers\Controller;
 use App\Models\PlatformAnnouncement;
 use App\Models\User;
+use App\Services\RestaurantAccessContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -72,11 +72,6 @@ class AnnouncementController extends Controller
 
     private function owner(): User
     {
-        $owner = Auth::guard('web')->user();
-        if (! ($owner instanceof User) || ! $owner->isOwner() || ! $owner->restaurant) {
-            abort(403);
-        }
-
-        return $owner;
+        return app(RestaurantAccessContext::class)->owner();
     }
 }

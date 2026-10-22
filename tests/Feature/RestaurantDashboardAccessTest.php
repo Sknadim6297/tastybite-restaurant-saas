@@ -53,13 +53,14 @@ class RestaurantDashboardAccessTest extends TestCase
 
         $this->get(route('super-admin.restaurants.index'))
             ->assertOk()
-            ->assertSee(route('super-admin.restaurants.dashboard', $this->restaurant));
+            ->assertSee(route('super-admin.restaurants.dashboard', $this->restaurant))
+            ->assertSee('target="_blank"', false);
         $this->get(route('super-admin.restaurants.show', $this->restaurant))
             ->assertOk()
-            ->assertSee(route('super-admin.restaurants.dashboard', $this->restaurant));
+            ->assertSee(route('super-admin.restaurants.dashboard', $this->restaurant))
+            ->assertSee('target="_blank"', false);
 
-        $this->post(route('super-admin.restaurants.dashboard', $this->restaurant))
-            ->assertRedirect(route('restaurant.dashboard'));
+        $token = $this->enterRestaurant($this->restaurant);
 
         $this->assertTrue(Auth::guard('super_admin')->check());
         $this->assertSame($this->admin->id, Auth::guard('super_admin')->id());
@@ -67,21 +68,37 @@ class RestaurantDashboardAccessTest extends TestCase
         $this->assertSame($this->owner->id, Auth::guard('web')->id());
         $this->assertDatabaseCount('support_access_requests', 0);
 
-        $this->get(route('restaurant.dashboard'))
+        $this->get($this->restaurantAccessUrl('restaurant.dashboard', $token))
             ->assertOk()
             ->assertSee('Super Admin Access — Viewing: Access House')
             ->assertSee('Return to Super Admin')
             ->assertSee('Good to see you, Super Admin.');
+        $dashboard = $this->get($this->restaurantAccessUrl('restaurant.dashboard', $token))
+            ->assertOk()
+            ->assertSee('data-access-token="'.$token.'"', false)
+            ->assertSee('restaurant-admin-access.js');
+        $dashboard->assertSee('Super Admin Access — Viewing: Access House')
+            ->assertSee('Return to Super Admin')
+            ->assertSee('Good to see you, Super Admin.');
+        $this->get($this->restaurantAccessUrl('restaurant.inventory.overview', $token))
+            ->assertOk()
+            ->assertSee('Super Admin Access — Viewing: Access House')
+            ->assertSee('Inventory Management')
+            ->assertSee('Vendor Management');
+        $this->get($this->restaurantAccessUrl('restaurant.vendors.overview', $token))
+            ->assertOk()
+            ->assertSee('Vendor Overview')
+            ->assertSee('Super Admin Access — Viewing: Access House');
 
-        $this->post(route('restaurant.menu.categories.store'), [
+        $this->post($this->restaurantAccessUrl('restaurant.menu.categories.store', $token), [
             'name' => 'Admin Created',
             'description' => '',
             'is_active' => '1',
             'sort_order' => '0',
-        ])->assertRedirect(route('restaurant.menu.categories.index'));
+        ])->assertRedirect($this->restaurantAccessUrl('restaurant.menu.categories.index', $token));
         $category = RestaurantMenuCategory::query()->where('name', 'Admin Created')->firstOrFail();
 
-        $this->post(route('restaurant.menu.products.store'), [
+        $this->post($this->restaurantAccessUrl('restaurant.menu.products.store', $token), [
             'name' => 'Admin Product',
             'category_id' => $category->id,
             'price' => '49.00',
@@ -89,10 +106,10 @@ class RestaurantDashboardAccessTest extends TestCase
             'is_available' => '1',
             'is_active' => '1',
             'sort_order' => '0',
-        ])->assertRedirect(route('restaurant.menu.products.index'));
+        ])->assertRedirect($this->restaurantAccessUrl('restaurant.menu.products.index', $token));
         $product = RestaurantMenuItem::query()->where('name', 'Admin Product')->firstOrFail();
 
-        $this->get(route('pos.index'))
+        $this->get($this->restaurantAccessUrl('pos.index', $token))
             ->assertOk()
             ->assertSee('Super Admin Access — Viewing: Access House')
             ->assertSee('Admin Product');
@@ -111,8 +128,8 @@ class RestaurantDashboardAccessTest extends TestCase
             'restaurant_id' => $this->restaurant->id,
         ]);
 
-        $this->delete(route('restaurant.menu.products.destroy', $product))->assertForbidden();
-        $this->post(route('restaurant.support.store'))->assertForbidden();
+        $this->delete($this->restaurantAccessUrl('restaurant.menu.products.destroy', $token, ['product' => $product]))->assertForbidden();
+        $this->post($this->restaurantAccessUrl('restaurant.support.store', $token))->assertForbidden();
     }
 
     public function test_demo_fixture_tenants_cannot_be_opened_in_either_panel(): void
@@ -122,6 +139,7 @@ class RestaurantDashboardAccessTest extends TestCase
 
         $this->signInSuperAdmin();
         $this->post(route('super-admin.restaurants.dashboard', $demoRestaurant))->assertForbidden();
+        Auth::guard('super_admin')->logout();
 
         $this->actingAs($demoOwner, 'web');
         $this->withSession([
@@ -137,16 +155,18 @@ class RestaurantDashboardAccessTest extends TestCase
         $this->withSession([
             'restaurant_user_password_version' => hash('sha256', $this->owner->getAuthPassword()),
         ]);
-        $this->post(route('super-admin.restaurants.dashboard', $this->restaurant))->assertRedirect();
-        $this->post(route('super-admin.restaurants.dashboard', $this->otherRestaurant))->assertRedirect();
+        $firstToken = $this->enterRestaurant($this->restaurant);
+        $secondToken = $this->enterRestaurant($this->otherRestaurant);
 
-        $this->get(route('restaurant.dashboard'))
+        $this->get($this->restaurantAccessUrl('restaurant.dashboard', $secondToken))
             ->assertOk()
             ->assertSee('Super Admin Access — Viewing: Other House')
             ->assertSee('Good to see you, Super Admin.')
             ->assertDontSee('Access Owner');
 
-        $this->post(route('super-admin.restaurants.dashboard.return'))
+        $this->post(route('super-admin.restaurants.dashboard.return', [
+            RestaurantDashboardAccessService::ACCESS_TOKEN_PARAMETER => $firstToken,
+        ]))
             ->assertRedirect(route('super-admin.restaurants.index'));
 
         $this->assertTrue(Auth::guard('super_admin')->check());
@@ -156,12 +176,16 @@ class RestaurantDashboardAccessTest extends TestCase
         $this->assertDatabaseHas('restaurant_audit_logs', [
             'actor_id' => $this->admin->id,
             'action' => 'super_admin_restaurant_access_ended',
-            'restaurant_id' => $this->otherRestaurant->id,
+            'restaurant_id' => $this->restaurant->id,
         ]);
 
         $this->get(route('restaurant.dashboard'))
             ->assertOk()
             ->assertDontSee('Super Admin Access — Viewing:');
+        $this->get($this->restaurantAccessUrl('restaurant.dashboard', $secondToken))
+            ->assertOk()
+            ->assertSee('Super Admin Access — Viewing: Other House');
+        $this->assertNotSame($firstToken, $secondToken);
     }
 
     public function test_owner_cannot_enter_admin_access_and_admin_access_cannot_cross_tenant_record_urls(): void
@@ -171,7 +195,7 @@ class RestaurantDashboardAccessTest extends TestCase
             ->assertRedirect(route('super-admin.login'));
 
         $this->signInSuperAdmin();
-        $this->post(route('super-admin.restaurants.dashboard', $this->restaurant))->assertRedirect();
+        $token = $this->enterRestaurant($this->restaurant);
         $otherProduct = $this->otherRestaurant->menuItems()->create([
             'name' => 'Private Other Product',
             'price' => '5.00',
@@ -181,18 +205,21 @@ class RestaurantDashboardAccessTest extends TestCase
             'sort_order' => 0,
         ]);
 
-        $this->get(route('restaurant.menu.products.edit', $otherProduct))->assertNotFound();
-        $this->get(route('restaurant.profile'))->assertForbidden();
-        $this->assertSame($this->restaurant->id, session(RestaurantDashboardAccessService::SESSION_RESTAURANT_ID));
+        $this->get($this->restaurantAccessUrl('restaurant.menu.products.edit', $token, ['product' => $otherProduct]))->assertNotFound();
+        $this->get($this->restaurantAccessUrl('restaurant.profile', $token))->assertForbidden();
+        $this->assertSame(
+            $this->restaurant->id,
+            session(RestaurantDashboardAccessService::SESSION_CONTEXTS)[$token]['restaurant_id'],
+        );
     }
 
     public function test_access_expires_and_ineligible_restaurants_cannot_be_entered(): void
     {
         $this->signInSuperAdmin();
-        $this->post(route('super-admin.restaurants.dashboard', $this->restaurant))->assertRedirect();
+        $token = $this->enterRestaurant($this->restaurant);
 
         Carbon::setTestNow(now()->addMinutes(61));
-        $this->get(route('restaurant.dashboard'))
+        $this->get($this->restaurantAccessUrl('restaurant.dashboard', $token))
             ->assertRedirect(route('super-admin.restaurants.index'));
         Carbon::setTestNow();
 
@@ -209,13 +236,13 @@ class RestaurantDashboardAccessTest extends TestCase
     public function test_super_admin_logout_ends_and_audits_direct_access(): void
     {
         $this->signInSuperAdmin();
-        $this->post(route('super-admin.restaurants.dashboard', $this->restaurant))->assertRedirect();
+        $this->enterRestaurant($this->restaurant);
 
         $this->post(route('super-admin.logout'))
             ->assertRedirect(route('super-admin.login'));
 
         $this->assertFalse(Auth::guard('super_admin')->check());
-        $this->assertFalse(session()->has(RestaurantDashboardAccessService::SESSION_RESTAURANT_ID));
+        $this->assertFalse(session()->has(RestaurantDashboardAccessService::SESSION_CONTEXTS));
         $this->assertDatabaseHas('restaurant_audit_logs', [
             'actor_id' => $this->admin->id,
             'action' => 'super_admin_restaurant_access_ended',
@@ -233,6 +260,67 @@ class RestaurantDashboardAccessTest extends TestCase
             ->assertOk()
             ->assertDontSee('Super Admin Access — Viewing:')
             ->assertDontSee('Return to Super Admin');
+    }
+
+    public function test_super_admin_context_can_render_all_existing_restaurant_modules_without_cross_tab_leakage(): void
+    {
+        $this->signInSuperAdmin();
+        $firstToken = $this->enterRestaurant($this->restaurant);
+        $secondToken = $this->enterRestaurant($this->otherRestaurant);
+
+        $pages = [
+            'restaurant.dashboard',
+            'pos.index',
+            'pos.orders.index',
+            'restaurant.menu.categories.index',
+            'restaurant.menu.products.index',
+            'restaurant.inventory.overview',
+            'restaurant.inventory.items.index',
+            'restaurant.inventory.categories.index',
+            'restaurant.inventory.units.index',
+            'restaurant.inventory.locations.index',
+            'restaurant.inventory.stock.create',
+            'restaurant.inventory.counts.index',
+            'restaurant.inventory.wastage.index',
+            'restaurant.inventory.ledger',
+            'restaurant.inventory.batches',
+            'restaurant.inventory.recipes.index',
+            'restaurant.inventory.vendor-mappings.index',
+            'restaurant.inventory.reports',
+            'restaurant.inventory.settings',
+            'restaurant.vendors.overview',
+            'restaurant.vendors.index',
+            'restaurant.vendors.purchase-orders.index',
+            'restaurant.vendors.goods-received.index',
+            'restaurant.subscription',
+            'restaurant.support.index',
+            'restaurant.announcements.index',
+        ];
+
+        foreach ($pages as $routeName) {
+            $parameters = $routeName === 'restaurant.inventory.stock.create'
+                ? ['kind' => 'opening']
+                : [];
+            $response = $this->get($this->restaurantAccessUrl($routeName, $firstToken, $parameters));
+            $this->assertSame(200, $response->getStatusCode(), "Restaurant direct access failed for {$routeName}.");
+        }
+
+        $this->get($this->restaurantAccessUrl('restaurant.dashboard', $secondToken))
+            ->assertOk()
+            ->assertSee('Super Admin Access — Viewing: Other House');
+        $this->get($this->restaurantAccessUrl('restaurant.dashboard', $firstToken))
+            ->assertOk()
+            ->assertSee('Super Admin Access — Viewing: Access House');
+
+        $this->post(route('super-admin.restaurants.dashboard.return', [
+            RestaurantDashboardAccessService::ACCESS_TOKEN_PARAMETER => $firstToken,
+        ]))->assertRedirect(route('super-admin.restaurants.index'));
+
+        $this->get($this->restaurantAccessUrl('restaurant.dashboard', $secondToken))
+            ->assertOk()
+            ->assertSee('Super Admin Access — Viewing: Other House');
+        $this->get($this->restaurantAccessUrl('restaurant.dashboard', $firstToken))
+            ->assertRedirect(route('super-admin.restaurants.index'));
     }
 
     private function createRestaurant(string $name, string $slug): Restaurant
@@ -274,6 +362,26 @@ class RestaurantDashboardAccessTest extends TestCase
     {
         $this->actingAs($this->admin, 'super_admin')->withSession([
             'super_admin_password_version' => hash('sha256', $this->admin->getAuthPassword()),
+        ]);
+    }
+
+    private function enterRestaurant(Restaurant $restaurant): string
+    {
+        $response = $this->post(route('super-admin.restaurants.dashboard', $restaurant));
+        $response->assertRedirect();
+        parse_str((string) parse_url((string) $response->headers->get('Location'), PHP_URL_QUERY), $query);
+        $token = $query[RestaurantDashboardAccessService::ACCESS_TOKEN_PARAMETER] ?? null;
+        $this->assertIsString($token);
+        $this->assertNotSame('', $token);
+
+        return $token;
+    }
+
+    private function restaurantAccessUrl(string $routeName, string $token, array $parameters = []): string
+    {
+        return route($routeName, [
+            ...$parameters,
+            RestaurantDashboardAccessService::ACCESS_TOKEN_PARAMETER => $token,
         ]);
     }
 

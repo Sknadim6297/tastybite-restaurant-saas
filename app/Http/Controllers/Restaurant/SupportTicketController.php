@@ -7,10 +7,10 @@ use App\Models\RestaurantSupportTicketNotification;
 use App\Models\SupportTicket;
 use App\Models\SupportTicketMessage;
 use App\Models\User;
+use App\Services\RestaurantAccessContext;
 use App\Services\SupportTicketService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -136,10 +136,7 @@ class SupportTicketController extends Controller
 
     private function owner(): User
     {
-        $user = Auth::guard('web')->user();
-        abort_unless($user instanceof User && $user->isOwner() && $user->restaurant_id, 403);
-
-        return $user;
+        return app(RestaurantAccessContext::class)->owner();
     }
 
     private function tenantTicket(SupportTicket $ticket, User $owner): SupportTicket

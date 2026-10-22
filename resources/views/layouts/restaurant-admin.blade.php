@@ -15,6 +15,7 @@
     @php
         $adminAccessAdmin = request()->attributes->get('restaurant_admin_access_admin');
         $adminAccessRestaurant = request()->attributes->get('restaurant_admin_access_restaurant');
+        $adminAccessToken = request()->attributes->get('restaurant_admin_access_token');
         $adminMode = $adminAccessRestaurant !== null && $adminAccessAdmin !== null;
     @endphp
     <div class="admin-shell">
@@ -38,7 +39,6 @@
                         <a href="{{ route('restaurant.menu.products.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.menu.products.*')) is-active @endif"><span class="nav-icon" aria-hidden="true"><i class="bi bi-egg-fried"></i></span><span>Products</span></a>
                     </div>
                 </details>
-                @unless ($adminMode)
                     <details class="sidebar-menu-group" @if(request()->routeIs('restaurant.inventory.*')) open @endif>
                         <summary @class(['sidebar-link', 'is-active' => request()->routeIs('restaurant.inventory.*')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-boxes"></i></span><span>Inventory Management</span><span class="sidebar-menu-chevron" aria-hidden="true"><i class="bi bi-chevron-down"></i></span></summary>
                         <div class="sidebar-menu-children">
@@ -68,6 +68,7 @@
                     <a href="{{ route('restaurant.support.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('restaurant.support.*')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-life-preserver"></i></span><span>Support Tickets</span></a>
                     <a href="{{ route('restaurant.announcements.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('restaurant.announcements.*')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-megaphone"></i></span><span>Announcements</span></a>
                     <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true"><i class="bi bi-gear"></i></span><span>Settings</span><span class="nav-soon">Soon</span></span>
+                @unless ($adminMode)
                     <form method="POST" action="{{ route('restaurant.logout') }}" data-confirm="Are you sure you want to sign out?">
                         @csrf
                         <button type="submit" class="sidebar-link sidebar-logout-button"><span class="nav-icon" aria-hidden="true"><i class="bi bi-box-arrow-left"></i></span><span>Logout</span></button>
@@ -124,7 +125,7 @@
                         </form>
                     </div>
                 @endif
-                @if(!$adminMode && request()->routeIs('restaurant.inventory.*'))
+                @if(request()->routeIs('restaurant.inventory.*'))
                     @include('restaurant.inventory.partials.workspace-tabs')
                 @endif
                 @yield('content')
@@ -144,7 +145,14 @@
 
     @include('components.super-admin.toasts')
     <script src="{{ asset('assets/super-admin.js') }}?v={{ filemtime(public_path('assets/super-admin.js')) }}" defer></script>
-    @if(!$adminMode && request()->routeIs('restaurant.inventory.*'))
+    @if ($adminMode)
+        <script
+            src="{{ asset('assets/restaurant-admin-access.js') }}?v={{ filemtime(public_path('assets/restaurant-admin-access.js')) }}"
+            data-access-token="{{ $adminAccessToken }}"
+            defer
+        ></script>
+    @endif
+    @if(request()->routeIs('restaurant.inventory.*'))
         <script src="{{ asset('assets/restaurant-workspace-tabs.js') }}?v={{ filemtime(public_path('assets/restaurant-workspace-tabs.js')) }}" defer></script>
     @endif
 </body>

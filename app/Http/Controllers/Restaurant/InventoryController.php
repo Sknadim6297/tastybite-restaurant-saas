@@ -792,7 +792,9 @@ class InventoryController extends Controller
         $records = DB::table('inventory_wastage_records as wastage')
             ->join('inventory_items as item', 'item.id', '=', 'wastage.inventory_item_id')
             ->join('inventory_locations as location', 'location.id', '=', 'wastage.location_id')
-            ->where('wastage.restaurant_id', $owner->restaurant_id)->latest('wastage.wasted_at')->paginate(20);
+            ->where('wastage.restaurant_id', $owner->restaurant_id)
+            ->select('wastage.*', 'item.name', 'location.name as location_name')
+            ->latest('wastage.wasted_at')->paginate(20);
 
         return view('restaurant.inventory.wastage', [
             'user' => $owner, 'restaurant' => $owner->restaurant, 'records' => $records,
@@ -927,6 +929,7 @@ class InventoryController extends Controller
             ->join('inventory_locations as location', 'location.id', '=', 'batch.location_id')
             ->leftJoin('vendors as vendor', 'vendor.id', '=', 'batch.vendor_id')
             ->where('batch.restaurant_id', $owner->restaurant_id)
+            ->select('batch.*', 'item.name', 'location.name as location_name', 'vendor.name as vendor_name')
             ->orderByRaw('batch.expires_at IS NULL')->orderBy('batch.expires_at')->paginate(30);
 
         return view('restaurant.inventory.batches', [

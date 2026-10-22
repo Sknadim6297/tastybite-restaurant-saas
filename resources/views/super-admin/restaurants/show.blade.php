@@ -14,7 +14,7 @@
             <a class="button button-secondary" href="{{ route('super-admin.restaurants.index') }}">Back to list</a>
             <a class="button button-secondary" href="{{ route('super-admin.restaurants.edit', $restaurant) }}">Edit</a>
             @if ($restaurant->status === 'active' && $restaurant->approval_status === 'approved' && $restaurant->owners->contains(fn ($restaurantOwner) => $restaurantOwner->status === 'active'))
-                <form class="inline-form" method="POST" action="{{ route('super-admin.restaurants.dashboard', $restaurant) }}">
+                <form class="inline-form" method="POST" action="{{ route('super-admin.restaurants.dashboard', $restaurant) }}" target="_blank" rel="noopener noreferrer">
                     @csrf
                     <button class="button button-primary" type="submit">Go to Dashboard</button>
                 </form>

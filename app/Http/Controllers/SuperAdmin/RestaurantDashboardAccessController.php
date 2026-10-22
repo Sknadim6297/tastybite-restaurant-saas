@@ -17,9 +17,11 @@ class RestaurantDashboardAccessController extends Controller
         Request $request,
         RestaurantDashboardAccessService $service,
     ): RedirectResponse {
-        $service->start($restaurant, $this->actor(), $request);
+        $token = $service->start($restaurant, $this->actor(), $request);
 
-        return redirect()->route('restaurant.dashboard');
+        return redirect()->route('restaurant.dashboard', [
+            RestaurantDashboardAccessService::ACCESS_TOKEN_PARAMETER => $token,
+        ]);
     }
 
     public function returnToSuperAdmin(

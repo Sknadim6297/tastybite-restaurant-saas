@@ -399,7 +399,7 @@ class RestaurantAuthenticationTest extends TestCase
         Auth::guard('web')->logout();
         $this->actingAs($superAdmin, 'super_admin')
             ->get(route('restaurant.dashboard'))
-            ->assertRedirect(route('restaurant.login'));
+            ->assertRedirect(route('super-admin.restaurants.index'));
         $this->get(route('restaurant.login'))
             ->assertOk()
             ->assertSee('Welcome back');

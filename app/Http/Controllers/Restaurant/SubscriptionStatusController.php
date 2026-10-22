@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Restaurant;
 use App\Http\Controllers\Controller;
 use App\Models\RestaurantSubscription;
 use App\Models\SubscriptionInvoice;
-use App\Models\SubscriptionPayment;
 use App\Models\User;
 use App\Services\PaymentManagementService;
 use App\Services\PlatformSettingsService;
-use Carbon\CarbonImmutable;
+use App\Services\RestaurantAccessContext;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,10 +25,9 @@ class SubscriptionStatusController extends Controller
         private readonly PlatformSettingsService $settings,
     ) {}
 
-    public function show(): View
+    public function show(RestaurantAccessContext $context): View
     {
-        $user = Auth::guard('web')->user();
-        abort_unless($user instanceof User && $user->isOwner(), 403);
+        $user = $context->owner();
 
         $restaurant = $user->restaurant;
         $now = CarbonImmutable::now(config('app.timezone'));
@@ -98,10 +97,9 @@ class SubscriptionStatusController extends Controller
             ->with('status', 'Payment details submitted for verification.');
     }
 
-    public function invoicePdf(SubscriptionInvoice $invoice): BaseResponse
+    public function invoicePdf(SubscriptionInvoice $invoice, RestaurantAccessContext $context): BaseResponse
     {
-        $user = Auth::guard('web')->user();
-        abort_unless($user instanceof User && $user->isOwner(), 403);
+        $user = $context->owner();
         abort_unless($invoice->restaurant_id === $user->restaurant_id, 404);
 
         $invoice->load([

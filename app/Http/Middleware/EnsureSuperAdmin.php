@@ -23,11 +23,8 @@ class EnsureSuperAdmin
             || ! is_string($sessionPasswordVersion)
             || ! hash_equals(hash('sha256', $superAdmin->getAuthPassword()), $sessionPasswordVersion)
         ) {
-            if ($request->session()->has(RestaurantDashboardAccessService::SESSION_RESTAURANT_ID)) {
-                app(RestaurantDashboardAccessService::class)->terminateInvalidSession(
-                    $request,
-                    $superAdmin instanceof SuperAdmin ? $superAdmin : null,
-                );
+            if ($request->session()->has(RestaurantDashboardAccessService::SESSION_CONTEXTS) && $superAdmin instanceof SuperAdmin) {
+                app(RestaurantDashboardAccessService::class)->clearForLogout($request, $superAdmin);
             }
 
             $guard->logout();

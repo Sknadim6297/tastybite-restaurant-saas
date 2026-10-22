@@ -7,110 +7,121 @@ use App\Models\RestaurantAuditLog;
 use App\Models\SuperAdmin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class RestaurantDashboardAccessService
 {
-    public const SESSION_RESTAURANT_ID = 'super_admin_restaurant_access_restaurant_id';
+    public const ACCESS_TOKEN_PARAMETER = 'admin_access';
 
-    private const SESSION_ADMIN_ID = 'super_admin_restaurant_access_admin_id';
-
-    private const SESSION_STARTED_AT = 'super_admin_restaurant_access_started_at';
-
-    private const SESSION_EXPIRES_AT = 'super_admin_restaurant_access_expires_at';
+    public const SESSION_CONTEXTS = 'super_admin_restaurant_access_contexts';
 
     private const ACCESS_DURATION_MINUTES = 60;
 
-    public function start(Restaurant $restaurant, SuperAdmin $admin, Request $request): void
+    public function start(Restaurant $restaurant, SuperAdmin $admin, Request $request): string
     {
         $this->assertEligible($restaurant);
 
-        $previousRestaurantId = $request->session()->get(self::SESSION_RESTAURANT_ID);
-        $this->clearSession($request);
-        if (is_numeric($previousRestaurantId)) {
-            $previousRestaurant = Restaurant::query()->find((int) $previousRestaurantId);
-            if ($previousRestaurant) {
-                $this->writeAudit($admin, $previousRestaurant, 'super_admin_restaurant_access_ended', [
-                    'reason' => 'switched_restaurant',
-                ]);
-            }
-        }
-
-        $request->session()->regenerate(true);
+        $token = Str::random(64);
         $startedAt = now();
         $expiresAt = $startedAt->copy()->addMinutes(self::ACCESS_DURATION_MINUTES);
         $this->writeAudit($admin, $restaurant, 'super_admin_restaurant_access_started', [
             'expires_at' => $expiresAt->toIso8601String(),
         ]);
-        $request->session()->put([
-            self::SESSION_RESTAURANT_ID => $restaurant->id,
-            self::SESSION_ADMIN_ID => $admin->id,
-            self::SESSION_STARTED_AT => $startedAt->timestamp,
-            self::SESSION_EXPIRES_AT => $expiresAt->timestamp,
-        ]);
+        $contexts = $request->session()->get(self::SESSION_CONTEXTS, []);
+        $contexts[$token] = [
+            'restaurant_id' => $restaurant->id,
+            'admin_id' => $admin->id,
+            'started_at' => $startedAt->timestamp,
+            'expires_at' => $expiresAt->timestamp,
+        ];
+        $request->session()->put(self::SESSION_CONTEXTS, $contexts);
+
+        return $token;
     }
 
     public function end(Request $request, SuperAdmin $admin): void
     {
-        $restaurantId = $request->session()->get(self::SESSION_RESTAURANT_ID);
-        $startedAt = $request->session()->get(self::SESSION_STARTED_AT);
-        $this->clearSession($request);
-        $request->session()->regenerate(true);
+        $token = $request->query(self::ACCESS_TOKEN_PARAMETER);
+        $contexts = $request->session()->get(self::SESSION_CONTEXTS, []);
+        $context = is_string($token) ? ($contexts[$token] ?? null) : null;
+        abort_unless(
+            is_array($context) && (int) ($context['admin_id'] ?? 0) === (int) $admin->id,
+            403,
+            'This administrative restaurant session is invalid.',
+        );
+        unset($contexts[$token]);
+        $this->storeContexts($request, $contexts);
 
-        if (is_numeric($restaurantId)) {
-            $restaurant = Restaurant::query()->find((int) $restaurantId);
-            if ($restaurant) {
-                $this->writeAudit($admin, $restaurant, 'super_admin_restaurant_access_ended', [
-                    'reason' => 'returned_to_super_admin',
-                    'started_at' => $startedAt,
-                ]);
-            }
+        $restaurant = Restaurant::query()->find((int) $context['restaurant_id']);
+        if ($restaurant) {
+            $this->writeAudit($admin, $restaurant, 'super_admin_restaurant_access_ended', [
+                'reason' => 'returned_to_super_admin',
+                'started_at' => $context['started_at'] ?? null,
+            ]);
         }
     }
 
     public function clearForLogout(Request $request, SuperAdmin $admin): void
     {
-        if ($request->session()->has(self::SESSION_RESTAURANT_ID)) {
-            $this->end($request, $admin);
+        $contexts = $request->session()->get(self::SESSION_CONTEXTS, []);
+        foreach ($contexts as $context) {
+            if (! is_array($context) || (int) ($context['admin_id'] ?? 0) !== (int) $admin->id) {
+                continue;
+            }
+            $restaurant = Restaurant::query()->find((int) ($context['restaurant_id'] ?? 0));
+            if ($restaurant) {
+                $this->writeAudit($admin, $restaurant, 'super_admin_restaurant_access_ended', [
+                    'reason' => 'super_admin_logout',
+                    'started_at' => $context['started_at'] ?? null,
+                ]);
+            }
         }
+        $request->session()->forget(self::SESSION_CONTEXTS);
     }
 
     public function restaurantFor(Request $request): ?Restaurant
     {
-        $restaurantId = $request->session()->get(self::SESSION_RESTAURANT_ID);
-        $sessionAdminId = $request->session()->get(self::SESSION_ADMIN_ID);
-        $expiresAt = $request->session()->get(self::SESSION_EXPIRES_AT);
+        $token = $request->query(self::ACCESS_TOKEN_PARAMETER);
+        $contexts = $request->session()->get(self::SESSION_CONTEXTS, []);
+        $context = is_string($token) ? ($contexts[$token] ?? null) : null;
         $admin = Auth::guard('super_admin')->user();
         $passwordVersion = $request->session()->get('super_admin_password_version');
 
         if (
-            ! is_numeric($restaurantId)
-            || ! is_numeric($sessionAdminId)
-            || ! is_numeric($expiresAt)
+            ! is_array($context)
+            || ! is_numeric($context['restaurant_id'] ?? null)
+            || ! is_numeric($context['admin_id'] ?? null)
+            || ! is_numeric($context['expires_at'] ?? null)
             || ! $admin instanceof SuperAdmin
             || ! $admin->is_active
-            || (int) $sessionAdminId !== (int) $admin->id
-            || (int) $expiresAt <= now()->timestamp
+            || (int) $context['admin_id'] !== (int) $admin->id
+            || (int) $context['expires_at'] <= now()->timestamp
             || ! is_string($passwordVersion)
             || ! hash_equals(hash('sha256', $admin->getAuthPassword()), $passwordVersion)
         ) {
             return null;
         }
 
-        $restaurant = Restaurant::query()->find((int) $restaurantId);
+        $restaurant = Restaurant::query()->find((int) $context['restaurant_id']);
 
         return $restaurant && $this->isEligible($restaurant) ? $restaurant : null;
     }
 
     public function terminateInvalidSession(Request $request, ?SuperAdmin $admin): void
     {
-        $restaurantId = $request->session()->get(self::SESSION_RESTAURANT_ID);
-        $expiresAt = $request->session()->get(self::SESSION_EXPIRES_AT);
-        $expired = is_numeric($expiresAt) && (int) $expiresAt <= now()->timestamp;
-        $this->clearSession($request);
-        $request->session()->regenerate(true);
+        $token = $request->query(self::ACCESS_TOKEN_PARAMETER);
+        $contexts = $request->session()->get(self::SESSION_CONTEXTS, []);
+        $context = is_string($token) ? ($contexts[$token] ?? null) : null;
+        if (is_string($token)) {
+            unset($contexts[$token]);
+            $this->storeContexts($request, $contexts);
+        }
+        $expired = is_array($context)
+            && is_numeric($context['expires_at'] ?? null)
+            && (int) $context['expires_at'] <= now()->timestamp;
 
-        if ($admin instanceof SuperAdmin && is_numeric($restaurantId)) {
-            $restaurant = Restaurant::query()->find((int) $restaurantId);
+        if ($admin instanceof SuperAdmin && is_numeric($context['restaurant_id'] ?? null)) {
+            $restaurant = Restaurant::query()->find((int) $context['restaurant_id']);
             if ($restaurant) {
                 $this->writeAudit(
                     $admin,
@@ -129,6 +140,8 @@ class RestaurantDashboardAccessService
         $allowed = [
             'restaurant.dashboard' => ['GET', 'HEAD'],
             'pos.index' => ['GET', 'HEAD'],
+            'pos.orders.index' => ['GET', 'HEAD'],
+            'restaurant.subscription' => ['GET', 'HEAD'],
             'restaurant.menu.categories.index' => ['GET', 'HEAD'],
             'restaurant.menu.categories.create' => ['GET', 'HEAD'],
             'restaurant.menu.categories.store' => ['POST'],
@@ -142,7 +155,18 @@ class RestaurantDashboardAccessService
             'restaurant.menu.products.update' => ['PUT'],
         ];
 
-        return in_array($method, $allowed[$routeName] ?? [], true);
+        if (in_array($method, $allowed[$routeName] ?? [], true)) {
+            return true;
+        }
+
+        return in_array($method, ['GET', 'HEAD'], true)
+            && (
+                str_starts_with($routeName, 'restaurant.inventory.')
+                || str_starts_with($routeName, 'restaurant.vendors.')
+                || str_starts_with($routeName, 'restaurant.support.')
+                || str_starts_with($routeName, 'restaurant.announcements.')
+                || $routeName === 'restaurant.subscription.invoices.pdf'
+            );
     }
 
     public function logAction(Restaurant $restaurant, SuperAdmin $admin, Request $request, int $status): void
@@ -171,7 +195,7 @@ class RestaurantDashboardAccessService
             'method' => $request->method(),
             'http_status' => $status,
             'resource_id' => is_numeric($resourceId) ? (int) $resourceId : null,
-            'admin_access_started_at' => $request->session()->get(self::SESSION_STARTED_AT),
+            'admin_access_started_at' => $this->currentContext($request)['started_at'] ?? null,
         ]);
     }
 
@@ -188,14 +212,31 @@ class RestaurantDashboardAccessService
             && $restaurant->owners()->where('status', 'active')->exists();
     }
 
-    private function clearSession(Request $request): void
+    /**
+     * @return array<string, mixed>
+     */
+    private function currentContext(Request $request): array
     {
-        $request->session()->forget([
-            self::SESSION_RESTAURANT_ID,
-            self::SESSION_ADMIN_ID,
-            self::SESSION_STARTED_AT,
-            self::SESSION_EXPIRES_AT,
-        ]);
+        $token = $request->query(self::ACCESS_TOKEN_PARAMETER);
+        $contexts = $request->session()->get(self::SESSION_CONTEXTS, []);
+
+        return is_string($token) && is_array($contexts[$token] ?? null)
+            ? $contexts[$token]
+            : [];
+    }
+
+    /**
+     * @param  array<string, array<string, int>>  $contexts
+     */
+    private function storeContexts(Request $request, array $contexts): void
+    {
+        if ($contexts === []) {
+            $request->session()->forget(self::SESSION_CONTEXTS);
+
+            return;
+        }
+
+        $request->session()->put(self::SESSION_CONTEXTS, $contexts);
     }
 
     private function writeAudit(SuperAdmin $admin, Restaurant $restaurant, string $action, array $details): void
