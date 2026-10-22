@@ -77,7 +77,10 @@ class RestaurantBrandingTest extends TestCase
         $this->get(route('restaurant.profile'))
             ->assertOk()
             ->assertSee('Restaurant branding')
-            ->assertSee('data-branding-image-input', false);
+            ->assertSee('data-branding-image-input', false)
+            ->assertSee('branding-image-preview', false)
+            ->assertSee('profile-branding-card', false)
+            ->assertSee('Save branding');
 
         $this->put(route('restaurant.profile.branding'), [
             'logo' => UploadedFile::fake()->image('restaurant.png', 256, 256),

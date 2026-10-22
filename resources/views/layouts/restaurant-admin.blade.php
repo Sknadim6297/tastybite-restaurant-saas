@@ -34,8 +34,8 @@
                 <details class="sidebar-menu-group" @if(request()->routeIs('restaurant.menu.categories.*', 'restaurant.menu.products.*')) open @endif>
                     <summary @class(['sidebar-link', 'is-active' => request()->routeIs('restaurant.menu.categories.*', 'restaurant.menu.products.*')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-journal-text"></i></span><span>Menu Management</span><span class="sidebar-menu-chevron" aria-hidden="true"><i class="bi bi-chevron-down"></i></span></summary>
                     <div class="sidebar-menu-children">
-                        <a href="{{ route('restaurant.menu.categories.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.menu.categories.*')) is-active @endif">Categories</a>
-                        <a href="{{ route('restaurant.menu.products.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.menu.products.*')) is-active @endif">Products</a>
+                        <a href="{{ route('restaurant.menu.categories.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.menu.categories.*')) is-active @endif"><span class="nav-icon" aria-hidden="true"><i class="bi bi-grid-3x3-gap"></i></span><span>Categories</span></a>
+                        <a href="{{ route('restaurant.menu.products.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.menu.products.*')) is-active @endif"><span class="nav-icon" aria-hidden="true"><i class="bi bi-egg-fried"></i></span><span>Products</span></a>
                     </div>
                 </details>
                 @unless ($adminMode)
@@ -53,11 +53,11 @@
                     <details class="sidebar-menu-group" @if(request()->routeIs('restaurant.vendors.*')) open @endif>
                         <summary @class(['sidebar-link', 'is-active' => request()->routeIs('restaurant.vendors.*')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-truck"></i></span><span>Vendor Management</span><span class="sidebar-menu-chevron" aria-hidden="true"><i class="bi bi-chevron-down"></i></span></summary>
                         <div class="sidebar-menu-children">
-                            <a href="{{ route('restaurant.vendors.overview') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.overview')) is-active @endif">Vendor Overview</a>
-                            <a href="{{ route('restaurant.vendors.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.index', 'restaurant.vendors.show', 'restaurant.vendors.edit')) is-active @endif">All Vendors</a>
-                            <a href="{{ route('restaurant.vendors.create') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.create')) is-active @endif">Add Vendor</a>
-                            <a href="{{ route('restaurant.vendors.purchase-orders.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.purchase-orders.*')) is-active @endif">Purchase Orders</a>
-                            <a href="{{ route('restaurant.vendors.goods-received.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.goods-received.*')) is-active @endif">Goods Received</a>
+                            <a href="{{ route('restaurant.vendors.overview') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.overview')) is-active @endif"><span class="nav-icon" aria-hidden="true"><i class="bi bi-speedometer2"></i></span><span>Vendor Overview</span></a>
+                            <a href="{{ route('restaurant.vendors.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.index', 'restaurant.vendors.show', 'restaurant.vendors.edit')) is-active @endif"><span class="nav-icon" aria-hidden="true"><i class="bi bi-people"></i></span><span>All Vendors</span></a>
+                            <a href="{{ route('restaurant.vendors.create') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.create')) is-active @endif"><span class="nav-icon" aria-hidden="true"><i class="bi bi-person-plus"></i></span><span>Add Vendor</span></a>
+                            <a href="{{ route('restaurant.vendors.purchase-orders.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.purchase-orders.*')) is-active @endif"><span class="nav-icon" aria-hidden="true"><i class="bi bi-clipboard"></i></span><span>Purchase Orders</span></a>
+                            <a href="{{ route('restaurant.vendors.goods-received.index') }}" class="sidebar-link sidebar-sublink @if(request()->routeIs('restaurant.vendors.goods-received.*')) is-active @endif"><span class="nav-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span><span>Goods Received</span></a>
                         </div>
                     </details>
                     <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true"><i class="bi bi-people"></i></span><span>Staff Management</span><span class="nav-soon">Soon</span></span>

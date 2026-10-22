@@ -69,9 +69,9 @@
             @error('sort_order')<span class="field-error">{{ $message }}</span>@enderror
         </div>
 
-        <div class="form-field checkbox-field">
+        <div class="form-field checkbox-field category-active-option">
             <input type="hidden" name="is_active" value="0">
-            <label><input type="checkbox" name="is_active" value="1" @checked((bool) old('is_active', $category->exists ? $category->is_active : true))> Active</label>
+            <label><input type="checkbox" name="is_active" value="1" @checked((bool) old('is_active', $category->exists ? $category->is_active : true))> <span>Active</span></label>
             @error('is_active')<span class="field-error">{{ $message }}</span>@enderror
         </div>
 

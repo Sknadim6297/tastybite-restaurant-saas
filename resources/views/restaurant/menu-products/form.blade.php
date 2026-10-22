@@ -53,7 +53,7 @@
                     @if(!$product->image_path) hidden @endif
                 >
                 @if($product->image_path)
-                    <label><input type="checkbox" name="remove_image" value="1" @checked((bool) old('remove_image'))> Remove current image</label>
+                    <label><input type="checkbox" name="remove_image" value="1" @checked((bool) old('remove_image'))> <span>Remove current image</span></label>
                 @endif
             </div>
         </div>
@@ -74,16 +74,18 @@
             @error('sort_order')<span class="field-error">{{ $message }}</span>@enderror
         </div>
 
-        <div class="form-field checkbox-field">
-            <input type="hidden" name="is_available" value="0">
-            <label><input type="checkbox" name="is_available" value="1" @checked((bool) old('is_available', $product->exists ? $product->is_available : true))> Available for sale</label>
-            @error('is_available')<span class="field-error">{{ $message }}</span>@enderror
-        </div>
+        <div class="form-option-grid">
+            <div class="form-field checkbox-field">
+                <input type="hidden" name="is_available" value="0">
+                <label><input type="checkbox" name="is_available" value="1" @checked((bool) old('is_available', $product->exists ? $product->is_available : true))> <span>Available for sale</span></label>
+                @error('is_available')<span class="field-error">{{ $message }}</span>@enderror
+            </div>
 
-        <div class="form-field checkbox-field">
-            <input type="hidden" name="is_active" value="0">
-            <label><input type="checkbox" name="is_active" value="1" @checked((bool) old('is_active', $product->exists ? $product->is_active : true))> Active</label>
-            @error('is_active')<span class="field-error">{{ $message }}</span>@enderror
+            <div class="form-field checkbox-field">
+                <input type="hidden" name="is_active" value="0">
+                <label><input type="checkbox" name="is_active" value="1" @checked((bool) old('is_active', $product->exists ? $product->is_active : true))> <span>Active</span></label>
+                @error('is_active')<span class="field-error">{{ $message }}</span>@enderror
+            </div>
         </div>
 
         <div class="form-actions">

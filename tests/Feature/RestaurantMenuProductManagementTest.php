@@ -236,6 +236,11 @@ class RestaurantMenuProductManagementTest extends TestCase
             ->assertOk()
             ->assertSee('data-product-image-preview', false)
             ->assertSee(asset('storage/'.$path), false)
+            ->assertSee('form-option-grid', false)
+            ->assertSee('name="is_available" value="0"', false)
+            ->assertSee('name="is_available" value="1"', false)
+            ->assertSee('name="is_active" value="0"', false)
+            ->assertSee('name="is_active" value="1"', false)
             ->assertSee('assets/menu-product.js');
     }
 

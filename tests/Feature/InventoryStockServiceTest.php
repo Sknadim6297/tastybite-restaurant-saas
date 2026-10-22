@@ -308,6 +308,23 @@ class InventoryStockServiceTest extends TestCase
                 );
                 $this->assertSame(1, $selectedTab, "Expected {$routeName} to select the {$activeTab} workspace tab.");
             }
+            if ($routeName === 'restaurant.inventory.counts.index') {
+                $response->assertSee('stock-count-fields', false)
+                    ->assertSee('id="notes"', false)
+                    ->assertSee('<textarea id="notes"', false)
+                    ->assertSee('stock-count-actions', false)
+                    ->assertSee('Start count');
+            }
+            if ($routeName === 'restaurant.inventory.recipes.index') {
+                $response->assertSee('recipe-ingredient-list', false)
+                    ->assertSee('recipe-ingredient-item', false)
+                    ->assertSee('recipe-ingredient-unit', false)
+                    ->assertSee('recipe-ingredient-quantity', false)
+                    ->assertSee('id="add-recipe-ingredient"', false)
+                    ->assertSee('class="form-actions"', false)
+                    ->assertSee('ingredients[__INDEX__][unit_id]', false)
+                    ->assertSee('remove-recipe-ingredient', false);
+            }
         }
 
         $this->get(route('restaurant.inventory.reports', ['report' => 'ingredient_costs']))
@@ -318,6 +335,35 @@ class InventoryStockServiceTest extends TestCase
             ->assertOk()->assertSee('Print ledger');
         $this->get(route('restaurant.inventory.items.export'))
             ->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+        $this->post(route('restaurant.inventory.counts.store'), [
+            'location_id' => $this->location->id,
+            'counted_at' => now()->toDateTimeString(),
+            'idempotency_key' => 'count-layout-regression',
+            'notes' => 'Count form regression check',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('inventory_stock_counts', [
+            'restaurant_id' => $this->restaurant->id,
+            'location_id' => $this->location->id,
+            'notes' => 'Count form regression check',
+        ]);
+
+        $this->post(route('restaurant.inventory.recipes.store'), [
+            'menu_item_id' => $product->id,
+            'yield_quantity' => '2.000000',
+            'preparation_notes' => 'Recipe form regression check',
+            'ingredients' => [[
+                'inventory_item_id' => $this->item->id,
+                'unit_id' => $this->unit->id,
+                'quantity' => '0.500000',
+            ]],
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('menu_recipes', [
+            'restaurant_id' => $this->restaurant->id,
+            'menu_item_id' => $product->id,
+            'version' => 2,
+            'yield_quantity' => '2.000000',
+        ]);
     }
 
     public function test_insufficient_stock_and_cross_restaurant_movements_are_rejected(): void

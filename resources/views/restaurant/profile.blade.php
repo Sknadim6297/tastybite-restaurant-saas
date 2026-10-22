@@ -12,15 +12,15 @@
         </div>
     </div>
 
-    <section class="two-column-card-grid">
-        <div class="panel-card">
-            <h2>Restaurant branding</h2>
-            <p class="meta-label">Upload a logo or restaurant photo for the POS header. Use JPG, PNG, or WebP images between 64×64 and 2048×2048 pixels, up to 5 MB.</p>
+    <section class="two-column-card-grid profile-sections">
+        <div class="panel-card profile-branding-card">
+            <h2 class="profile-section-heading">Restaurant branding</h2>
+            <p class="profile-section-description">Upload a logo or restaurant photo for the POS header. Use JPG, PNG, or WebP images between 64×64 and 2048×2048 pixels, up to 5 MB.</p>
             <form method="POST" action="{{ route('restaurant.profile.branding') }}" enctype="multipart/form-data" class="form-stack">
                 @csrf
                 @method('PUT')
-                <div class="form-field">
-                    <label for="restaurant-logo">Restaurant logo or photo</label>
+                <div class="form-field branding-upload-field">
+                    <label for="restaurant-logo">Logo image</label>
                     <input id="restaurant-logo" name="logo" type="file" accept="image/jpeg,image/png,image/webp" data-branding-image-input>
                     @error('logo')<span class="field-error">{{ $message }}</span>@enderror
                     <div class="branding-image-preview" data-branding-image-container @if(!$restaurant->logo_url) hidden @endif>
@@ -30,9 +30,12 @@
                             data-branding-image-preview
                             @if(!$restaurant->logo_url) hidden @endif
                         >
-                        @if($restaurant->logo_path)
-                            <label><input type="checkbox" name="remove_logo" value="1" @checked((bool) old('remove_logo'))> Remove current logo</label>
-                        @endif
+                        <div class="branding-preview-details">
+                            <span class="meta-label">Logo preview</span>
+                            @if($restaurant->logo_path)
+                                <label><input type="checkbox" name="remove_logo" value="1" @checked((bool) old('remove_logo'))> <span>Remove current logo</span></label>
+                            @endif
+                        </div>
                     </div>
                     @error('remove_logo')<span class="field-error">{{ $message }}</span>@enderror
                 </div>
@@ -42,7 +45,8 @@
         </div>
 
         <div class="panel-card">
-            <h2>Personal information</h2>
+            <h2 class="profile-section-heading">Personal information</h2>
+            <p class="profile-section-description">Update the name associated with your restaurant administrator account.</p>
             <form method="POST" action="{{ route('restaurant.profile.update') }}" class="form-stack" data-loading-form>
                 @csrf
                 @method('PUT')
@@ -62,7 +66,8 @@
         </div>
 
         <div class="panel-card">
-            <h2>Change password</h2>
+            <h2 class="profile-section-heading">Security settings</h2>
+            <p class="profile-section-description">Change your password to help keep this account secure.</p>
             <form method="POST" action="{{ route('restaurant.profile.password') }}" class="form-stack" data-loading-form>
                 @csrf
                 @method('PUT')

@@ -74,7 +74,12 @@ class VendorManagementTest extends TestCase
             ->assertSee('Total vendors')
             ->assertSee('No purchase orders yet')
             ->assertSee('Vendor Management')
-            ->assertSee(route('restaurant.vendors.index'));
+            ->assertSee(route('restaurant.vendors.index'))
+            ->assertSee('bi bi-speedometer2', false)
+            ->assertSee('bi bi-people', false)
+            ->assertSee('bi bi-person-plus', false)
+            ->assertSee('bi bi-clipboard', false)
+            ->assertSee('bi bi-box-seam', false);
 
         $this->get(route('restaurant.vendors.index'))
             ->assertOk()

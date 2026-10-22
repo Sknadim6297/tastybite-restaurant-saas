@@ -13,6 +13,13 @@
     padding: 22px 12px 14px;
 }
 
+.restaurant-admin-page .two-column-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 16px;
+}
+
 .restaurant-admin-page.sidebar-open {
     overflow: hidden;
 }
@@ -72,9 +79,11 @@
 }
 
 .restaurant-admin-page .nav-icon {
-    flex: 0 0 20px;
-    width: 20px;
-    font-size: 15px;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    line-height: 1;
 }
 
 .restaurant-admin-page .sidebar-menu-group > summary {
@@ -93,6 +102,7 @@
 .restaurant-admin-page .sidebar-link.sidebar-sublink {
     min-height: 34px;
     padding-left: 20px;
+    gap: 10px;
     color: #b8c3d1;
     font-size: 11px;
 }
@@ -315,6 +325,11 @@
     gap: 16px;
 }
 
+.restaurant-admin-page .form-stack > .button,
+.restaurant-admin-page .form-field > .button {
+    justify-self: start;
+}
+
 .restaurant-admin-page .form-stack > .panel-card {
     margin: 0;
 }
@@ -335,15 +350,15 @@
     font-weight: 650;
 }
 
-.restaurant-admin-page .form-field input,
+.restaurant-admin-page .form-field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+.restaurant-admin-page .filter-bar input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+.restaurant-admin-page .inline-form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+.restaurant-admin-page .data-table input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
 .restaurant-admin-page .form-field select,
 .restaurant-admin-page .form-field textarea,
-.restaurant-admin-page .filter-bar input,
 .restaurant-admin-page .filter-bar select,
 .restaurant-admin-page .toolbar-search,
-.restaurant-admin-page .inline-form input,
 .restaurant-admin-page .inline-form select,
-.restaurant-admin-page .data-table input,
 .restaurant-admin-page .data-table select {
     width: 100%;
     min-width: 0;
@@ -355,20 +370,89 @@
     font-size: 12px;
 }
 
+.restaurant-admin-page .form-field input[type="file"],
+.restaurant-admin-page .form-field input[type="checkbox"],
+.restaurant-admin-page .form-field input[type="radio"],
+.restaurant-admin-page .filter-bar input[type="checkbox"],
+.restaurant-admin-page .filter-bar input[type="radio"],
+.restaurant-admin-page .inline-form input[type="checkbox"],
+.restaurant-admin-page .inline-form input[type="radio"],
+.restaurant-admin-page .data-table input[type="checkbox"],
+.restaurant-admin-page .data-table input[type="radio"] {
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.restaurant-admin-page input[type="checkbox"],
+.restaurant-admin-page input[type="radio"] {
+    appearance: auto;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    flex: 0 0 18px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #98a2b3;
+    border-radius: 4px;
+    background: #fff;
+    accent-color: var(--orange-dark);
+    vertical-align: middle;
+}
+
+.restaurant-admin-page input[type="file"] {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    padding: 8px;
+    border: 1px dashed #cbd3df;
+    border-radius: 9px;
+    background: #fafbfc;
+    color: #344054;
+    font-size: 12px;
+}
+
+.restaurant-admin-page input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    padding: 8px 12px;
+    border: 1px solid #f3c27d;
+    border-radius: 7px;
+    background: var(--orange-soft);
+    color: var(--orange-dark);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.restaurant-admin-page input[type="file"]::file-selector-button:hover {
+    background: #ffecd1;
+}
+
 .restaurant-admin-page .form-field textarea {
     min-height: 90px;
     resize: vertical;
 }
 
-.restaurant-admin-page .form-field input:focus,
+.restaurant-admin-page .form-field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
 .restaurant-admin-page .form-field select:focus,
 .restaurant-admin-page .form-field textarea:focus,
-.restaurant-admin-page .filter-bar input:focus,
+.restaurant-admin-page .filter-bar input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
 .restaurant-admin-page .filter-bar select:focus,
+.restaurant-admin-page .inline-form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
+.restaurant-admin-page .data-table input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
 .restaurant-admin-page .toolbar-search:focus {
     border-color: var(--orange);
     box-shadow: 0 0 0 3px rgba(242, 140, 0, 0.14);
     outline: 0;
+}
+
+.restaurant-admin-page input[type="checkbox"]:focus-visible,
+.restaurant-admin-page input[type="radio"]:focus-visible,
+.restaurant-admin-page input[type="file"]:focus-visible {
+    outline: 3px solid rgba(242, 140, 0, 0.45);
+    outline-offset: 2px;
 }
 
 .restaurant-admin-page .form-field-full {
@@ -384,10 +468,208 @@
 }
 
 .restaurant-admin-page .checkbox-field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
     min-height: 40px;
     align-content: center;
     color: #344054;
     font-size: 12px;
+}
+
+.restaurant-admin-page .checkbox-field > label {
+    display: inline-flex;
+    width: auto;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.restaurant-admin-page .checkbox-field label input[type="checkbox"],
+.restaurant-admin-page .checkbox-field label input[type="radio"] {
+    flex: 0 0 18px;
+}
+
+.restaurant-admin-page .checkbox-field > input[type="hidden"] {
+    display: none;
+}
+
+.restaurant-admin-page .checkbox-field .field-error {
+    flex-basis: 100%;
+}
+
+.restaurant-admin-page .form-option-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.restaurant-admin-page .form-option-grid > .checkbox-field {
+    min-height: 54px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+}
+
+.restaurant-admin-page .form-option-grid .checkbox-field > label {
+    font-size: 12px;
+}
+
+.restaurant-admin-page .stock-count-form {
+    gap: 12px;
+}
+
+.restaurant-admin-page .stock-count-fields {
+    width: 100%;
+}
+
+.restaurant-admin-page .stock-count-actions {
+    margin-top: 0;
+}
+
+.restaurant-admin-page .recipe-editor-form {
+    gap: 18px;
+}
+
+.restaurant-admin-page .recipe-ingredients-section {
+    display: grid;
+    min-width: 0;
+    gap: 12px;
+}
+
+.restaurant-admin-page .recipe-section-heading h3 {
+    margin: 0;
+    color: #202b3c;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.restaurant-admin-page .recipe-section-heading p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.restaurant-admin-page .recipe-ingredient-list {
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+}
+
+.restaurant-admin-page .recipe-ingredient-row {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(220px, 2fr) minmax(145px, 1fr) minmax(145px, 0.9fr) auto;
+    align-items: end;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fafbfc;
+}
+
+.restaurant-admin-page .recipe-ingredient-row .form-field {
+    min-width: 0;
+}
+
+.restaurant-admin-page .recipe-ingredient-row .form-field label {
+    margin-bottom: 6px;
+}
+
+.restaurant-admin-page .recipe-ingredient-actions {
+    display: flex;
+    align-items: flex-end;
+    min-height: 42px;
+}
+
+.restaurant-admin-page .recipe-ingredient-actions .button {
+    white-space: nowrap;
+}
+
+.restaurant-admin-page .recipe-add-ingredient {
+    justify-self: start;
+}
+
+.restaurant-admin-page .recipe-editor-form > .form-actions {
+    margin-top: 0;
+}
+
+.restaurant-admin-page .profile-branding-card > h2,
+.restaurant-admin-page .profile-section-heading {
+    margin: 0 0 6px;
+    color: #202b3c;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.restaurant-admin-page .profile-section-description {
+    margin: 0 0 16px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.restaurant-admin-page .branding-upload-field {
+    gap: 2px;
+}
+
+.restaurant-admin-page .branding-image-preview {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 14px;
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fafbfc;
+}
+
+.restaurant-admin-page .branding-image-preview img {
+    flex: 0 0 84px;
+    width: 84px;
+    height: 84px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    object-fit: cover;
+}
+
+.restaurant-admin-page .branding-preview-details {
+    display: grid;
+    min-width: 0;
+    gap: 9px;
+}
+
+.restaurant-admin-page .branding-image-preview label,
+.restaurant-admin-page .product-image-preview label {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+    color: #475467;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.restaurant-admin-page .branding-image-preview[hidden],
+.restaurant-admin-page .product-image-preview[hidden] {
+    display: none !important;
+}
+
+.restaurant-admin-page .product-image-preview img {
+    width: min(100%, 260px);
+    max-height: 200px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    object-fit: cover;
 }
 
 .restaurant-admin-page .form-actions {
@@ -769,6 +1051,24 @@
 }
 
 @media (max-width: 920px) {
+    .restaurant-admin-page .recipe-ingredient-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .restaurant-admin-page .recipe-ingredient-item {
+        grid-column: 1 / -1;
+    }
+
+    .restaurant-admin-page .recipe-ingredient-actions {
+        min-height: 0;
+        align-items: center;
+    }
+
+    .restaurant-admin-page .two-column-card-grid,
+    .restaurant-admin-page .form-option-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .restaurant-admin-page .stats-grid,
     .restaurant-admin-page .report-summary {
         grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -92,7 +92,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     addButton.addEventListener('click', () => {
-        const index = rows.querySelectorAll('.recipe-ingredient-row').length;
+        const index = Number(rows.dataset.nextIndex);
+        rows.dataset.nextIndex = String(index + 1);
         const fragment = template.content.cloneNode(true);
         fragment.querySelectorAll('[name], [id], label[for]').forEach((element) => {
             ['name', 'id', 'for'].forEach((attribute) => {

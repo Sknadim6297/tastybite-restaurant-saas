@@ -96,7 +96,9 @@ class RestaurantMenuCategoryManagementTest extends TestCase
             ->assertOk()
             ->assertSee('No categories yet')
             ->assertSee('Add category')
-            ->assertSee('Products');
+            ->assertSee('Products')
+            ->assertSee('bi bi-grid-3x3-gap', false)
+            ->assertSee('bi bi-egg-fried', false);
     }
 
     public function test_category_uses_default_icon_when_no_icon_is_selected(): void
@@ -138,7 +140,10 @@ class RestaurantMenuCategoryManagementTest extends TestCase
         $this->get(route('restaurant.menu.categories.create'))
             ->assertOk()
             ->assertSee('Create category')
-            ->assertSee('name="sort_order"', false);
+            ->assertSee('name="sort_order"', false)
+            ->assertSee('class="form-field checkbox-field category-active-option"', false)
+            ->assertSee('name="is_active" value="0"', false)
+            ->assertSee('name="is_active" value="1"', false);
 
         $category = $this->createCategory($this->restaurant, 'Breakfast');
         $this->get(route('restaurant.menu.categories.edit', $category))
