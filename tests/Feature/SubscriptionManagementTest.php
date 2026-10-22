@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Restaurant;
 use App\Models\RestaurantSubscription;
 use App\Models\RestaurantSubscriptionEvent;
+use App\Models\SaasFeature;
 use App\Models\SubscriptionPlan;
 use App\Models\SuperAdmin;
 use App\Models\User;
@@ -25,7 +26,7 @@ class SubscriptionManagementTest extends TestCase
 
         $this->post(route('super-admin.subscription-plans.store'), $this->planInput([
             'name' => 'Growth Plan',
-            'code' => 'growth-01',
+            'code' => 'FORGED-CODE',
             'billing_period' => 'custom',
             'duration_months' => '',
             'duration_days' => '45',
@@ -34,7 +35,8 @@ class SubscriptionManagementTest extends TestCase
         ]))
             ->assertRedirect();
 
-        $plan = SubscriptionPlan::query()->where('code', 'GROWTH-01')->firstOrFail();
+        $plan = SubscriptionPlan::query()->where('name', 'Growth Plan')->firstOrFail();
+        $this->assertSame('PLN000001', $plan->code);
         $this->assertSame('1299.50', $plan->price);
         $this->assertSame('INR', $plan->currency);
         $this->assertSame(45, $plan->duration_days);
@@ -46,11 +48,11 @@ class SubscriptionManagementTest extends TestCase
         ]);
 
         $this->get(route('super-admin.subscription-plans.index'))->assertOk()->assertSee('Growth Plan');
-        $this->get(route('super-admin.subscription-plans.show', $plan))->assertOk()->assertSee('GROWTH-01');
+        $this->get(route('super-admin.subscription-plans.show', $plan))->assertOk()->assertSee('PLN000001');
 
         $this->put(route('super-admin.subscription-plans.update', $plan), $this->planInput([
             'name' => 'Growth Plan Updated',
-            'code' => 'growth-01',
+            'code' => 'ATTEMPTED-CHANGE',
             'price' => '1499.00',
             'status' => 'inactive',
             'billing_period' => 'quarterly',
@@ -61,6 +63,7 @@ class SubscriptionManagementTest extends TestCase
         ]))->assertRedirect(route('super-admin.subscription-plans.show', $plan));
 
         $this->assertSame('1499.00', $plan->fresh()->price);
+        $this->assertSame('PLN000001', $plan->fresh()->code);
         $this->assertSame(3, $plan->fresh()->duration_months);
         $this->assertSame('inactive', $plan->fresh()->status);
         $this->assertDatabaseHas('restaurant_audit_logs', [
@@ -70,21 +73,43 @@ class SubscriptionManagementTest extends TestCase
         ]);
     }
 
-    public function test_plan_code_and_custom_duration_validation_reject_duplicates_and_ambiguous_terms(): void
+    public function test_plan_codes_are_generated_after_existing_pln_codes_and_custom_duration_validation_remains(): void
     {
         $this->actingAsSuperAdmin();
-        SubscriptionPlan::create($this->planAttributes(['code' => 'DUPLICATE']));
+        $existingFirst = SubscriptionPlan::create($this->planAttributes(['code' => 'PLN000002']));
+        $existingHighest = SubscriptionPlan::create($this->planAttributes(['code' => 'PLN000009']));
 
         $this->from(route('super-admin.subscription-plans.create'))
             ->post(route('super-admin.subscription-plans.store'), $this->planInput([
-                'code' => 'duplicate',
+                'code' => 'PLN000002',
                 'billing_period' => 'custom',
                 'duration_months' => '2',
                 'duration_days' => '60',
             ]))
-            ->assertSessionHasErrors(['code', 'duration_months']);
+            ->assertSessionHasErrors(['duration_months']);
 
-        $this->assertDatabaseCount('subscription_plans', 1);
+        $this->assertDatabaseCount('subscription_plans', 2);
+        $this->assertSame('PLN000002', $existingFirst->fresh()->code);
+        $this->assertSame('PLN000009', $existingHighest->fresh()->code);
+
+        $this->post(route('super-admin.subscription-plans.store'), $this->planInput([
+            'code' => 'PLN000002',
+        ]))->assertRedirect();
+
+        $created = SubscriptionPlan::query()->where('name', 'Standard Plan')->firstOrFail();
+        $this->assertSame('PLN000010', $created->code);
+        $this->assertSame(1, SubscriptionPlan::query()->where('code', 'PLN000010')->count());
+    }
+
+    public function test_subscription_plan_code_cannot_be_changed_through_model_updates(): void
+    {
+        $plan = $this->createPlan(['code' => 'PLN000025']);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Subscription plan codes are immutable.');
+
+        $plan->code = 'PLN000026';
+        $plan->save();
     }
 
     public function test_subscription_plan_form_renders_safely_for_create_and_edit(): void
@@ -94,6 +119,8 @@ class SubscriptionManagementTest extends TestCase
         $this->get(route('super-admin.subscription-plans.create'))
             ->assertOk()
             ->assertSee('Create subscription plan')
+            ->assertDontSee('name="code"', false)
+            ->assertDontSee('Unique plan code')
             ->assertSee('value="0.00"', false);
 
         $plan = $this->createPlan([
@@ -110,6 +137,9 @@ class SubscriptionManagementTest extends TestCase
             ->assertSee('value="45"', false)
             ->assertSee('value="7"', false)
             ->assertSee('value="custom" selected', false);
+        $this->get(route('super-admin.subscription-plans.edit', $plan))
+            ->assertDontSee('name="code"', false)
+            ->assertDontSee('Unique plan code');
     }
 
     public function test_plan_configuration_ignores_custom_duration_inputs_for_standard_billing_periods(): void
@@ -117,13 +147,12 @@ class SubscriptionManagementTest extends TestCase
         $this->actingAsSuperAdmin();
 
         $this->post(route('super-admin.subscription-plans.store'), $this->planInput([
-            'code' => 'MONTHLY',
-            'billing_period' => 'monthly',
             'duration_months' => 'not-used',
             'duration_days' => 'not-used',
         ]))->assertRedirect();
 
-        $plan = SubscriptionPlan::query()->where('code', 'MONTHLY')->firstOrFail();
+        $plan = SubscriptionPlan::query()->firstOrFail();
+        $this->assertSame('PLN000001', $plan->code);
         $this->assertSame(1, $plan->duration_months);
         $this->assertNull($plan->duration_days);
     }
@@ -533,7 +562,7 @@ class SubscriptionManagementTest extends TestCase
         $this->actingAs($admin, 'super_admin');
         $this->app['session']->put('super_admin_password_version', hash('sha256', $admin->getAuthPassword()));
         $this->get(route('super-admin.subscription-plans.index'))->assertOk();
-        $this->post(route('super-admin.subscription-plans.store'), $this->planInput(['code' => 'AUTHZ']))
+        $this->post(route('super-admin.subscription-plans.store'), $this->planInput())
             ->assertRedirect();
     }
 
@@ -694,7 +723,7 @@ class SubscriptionManagementTest extends TestCase
     {
         $plan = SubscriptionPlan::create($this->planAttributes($overrides));
         $plan->features()->attach(
-            \App\Models\SaasFeature::query()->where('code', 'pos')->value('id'),
+            SaasFeature::query()->where('code', 'pos')->value('id'),
             ['is_enabled' => true, 'limit_value' => null],
         );
 
@@ -725,7 +754,7 @@ class SubscriptionManagementTest extends TestCase
     {
         return array_replace([
             'name' => 'Standard Plan',
-            'code' => 'STANDARD',
+            'code' => 'IGNORED-LEGACY-TEST-CODE',
             'description' => 'Restaurant operations access.',
             'price' => '1299.50',
             'billing_period' => 'monthly',

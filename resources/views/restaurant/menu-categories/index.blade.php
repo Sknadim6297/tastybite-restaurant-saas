@@ -36,16 +36,18 @@
                         <td>
                             <div class="action-stack">
                                 <a class="button button-secondary" href="{{ route('restaurant.menu.categories.edit', $category) }}">Edit</a>
-                                <form method="POST" action="{{ route('restaurant.menu.categories.status', $category) }}">
-                                    @csrf
-                                    @method('PATCH')
-                                    <button class="button button-secondary" type="submit">{{ $category->is_active ? 'Deactivate' : 'Activate' }}</button>
-                                </form>
-                                <form method="POST" action="{{ route('restaurant.menu.categories.destroy', $category) }}" data-confirm="Delete this category? Categories with assigned products cannot be deleted.">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="button button-danger" type="submit">Delete</button>
-                                </form>
+                                @unless (request()->attributes->has('restaurant_support_request') || request()->attributes->has('restaurant_admin_access_restaurant'))
+                                    <form method="POST" action="{{ route('restaurant.menu.categories.status', $category) }}">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button class="button button-secondary" type="submit">{{ $category->is_active ? 'Deactivate' : 'Activate' }}</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('restaurant.menu.categories.destroy', $category) }}" data-confirm="Delete this category? Categories with assigned products cannot be deleted.">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="button button-danger" type="submit">Delete</button>
+                                    </form>
+                                @endunless
                             </div>
                         </td>
                     </tr>

@@ -15,7 +15,6 @@ class ApplyPlatformSettings
         $settings->applyRuntime();
         $general = $settings->group('general');
         view()->share('platformSettings', $general);
-        view()->share('notificationSettings', $settings->group('notifications'));
 
         return $next($request);
     }

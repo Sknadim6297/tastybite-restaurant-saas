@@ -65,7 +65,10 @@ class SuperAdminRestaurantOwnerManagementTest extends TestCase
             ->assertSee($owner->email)
             ->assertDontSee('Add owner');
         $this->get(route('super-admin.restaurant-owners.show', $owner))->assertOk();
-        $this->get(route('super-admin.restaurant-owners.edit', $owner))->assertOk();
+        $this->get(route('super-admin.restaurant-owners.edit', $owner))
+            ->assertOk()
+            ->assertSee('name="mobile"', false)
+            ->assertSee('value=""', false);
 
         $this->assertSame($ownerCount, User::query()->where('role', 'owner')->count());
         $this->assertSame($restaurantCount, Restaurant::query()->count());
@@ -82,6 +85,7 @@ class SuperAdminRestaurantOwnerManagementTest extends TestCase
         $this->put(route('super-admin.restaurant-owners.update', $owner), [
             'name' => 'Updated Owner',
             'email' => 'updated@example.test',
+            'mobile' => '+1 (555) 555-0102',
             'role' => 'super_admin',
             'restaurant_id' => $otherRestaurant->id,
             'status' => 'inactive',
@@ -89,9 +93,36 @@ class SuperAdminRestaurantOwnerManagementTest extends TestCase
 
         $this->assertSame('Updated Owner', $owner->fresh()->name);
         $this->assertSame('updated@example.test', $owner->fresh()->email);
+        $this->assertSame('+1 (555) 555-0102', $owner->fresh()->mobile);
         $this->assertSame('owner', $owner->fresh()->role);
         $this->assertSame($restaurant->id, $owner->fresh()->restaurant_id);
         $this->assertSame('active', $owner->fresh()->status);
+        $this->get(route('super-admin.restaurant-owners.show', $owner))
+            ->assertOk()
+            ->assertSee('+1 (555) 555-0102');
+    }
+
+    public function test_owner_mobile_is_optional_and_invalid_phone_formats_are_rejected(): void
+    {
+        $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant('Mobile House', 'mobile-house');
+        $owner = $this->createOwner($restaurant, 'mobile-owner@example.test');
+
+        $this->put(route('super-admin.restaurant-owners.update', $owner), [
+            'name' => $owner->name,
+            'email' => $owner->email,
+            'mobile' => '',
+        ])->assertRedirect(route('super-admin.restaurant-owners.show', $owner));
+        $this->assertNull($owner->fresh()->mobile);
+
+        $this->from(route('super-admin.restaurant-owners.edit', $owner))
+            ->put(route('super-admin.restaurant-owners.update', $owner), [
+                'name' => $owner->name,
+                'email' => $owner->email,
+                'mobile' => 'not a phone number',
+            ])
+            ->assertSessionHasErrors('mobile');
+        $this->assertNull($owner->fresh()->mobile);
     }
 
     public function test_owner_enable_disable_is_audited_and_disabled_account_cannot_log_in_or_keep_a_session(): void

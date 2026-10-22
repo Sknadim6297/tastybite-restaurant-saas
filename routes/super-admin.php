@@ -4,6 +4,7 @@ use App\Http\Controllers\SuperAdmin\AuthController;
 use App\Http\Controllers\SuperAdmin\ActivityLogController;
 use App\Http\Controllers\SuperAdmin\AnnouncementController;
 use App\Http\Controllers\SuperAdmin\DashboardController;
+use App\Http\Controllers\SuperAdmin\DemoDataController;
 use App\Http\Controllers\SuperAdmin\FeatureManagementController;
 use App\Http\Controllers\SuperAdmin\InvoiceController;
 use App\Http\Controllers\SuperAdmin\NotificationController;
@@ -12,7 +13,7 @@ use App\Http\Controllers\SuperAdmin\PaymentManagementController;
 use App\Http\Controllers\SuperAdmin\PlatformReportController;
 use App\Http\Controllers\SuperAdmin\PlatformSettingsController;
 use App\Http\Controllers\SuperAdmin\RestaurantManagementController;
-use App\Http\Controllers\SuperAdmin\RestaurantApprovalController;
+use App\Http\Controllers\SuperAdmin\RestaurantSupportAccessController;
 use App\Http\Controllers\SuperAdmin\RestaurantOwnerController;
 use App\Http\Controllers\SuperAdmin\SecurityCenterController;
 use App\Http\Controllers\SuperAdmin\SubscriptionManagementController;
@@ -71,6 +72,13 @@ Route::prefix('super-admin')->name('super-admin.')->middleware('super-admin.head
         Route::get('/analytics', [PlatformAnalyticsController::class, 'index'])->name('analytics.index');
         Route::get('/security-center', [SecurityCenterController::class, 'index'])->name('security-center.index');
         Route::get('/system-health', [SystemHealthController::class, 'index'])->name('system-health.index');
+        Route::get('/demo-data', [DemoDataController::class, 'index'])->name('demo-data.index');
+        Route::post('/demo-data/generate', [DemoDataController::class, 'generate'])
+            ->middleware('throttle:super-admin-subscription-management')
+            ->name('demo-data.generate');
+        Route::post('/demo-data/cleanup', [DemoDataController::class, 'cleanup'])
+            ->middleware('throttle:super-admin-subscription-management')
+            ->name('demo-data.cleanup');
         Route::get('/support-access', [SupportAccessController::class, 'index'])->name('support-access.index');
         Route::get('/support-access/create', [SupportAccessController::class, 'create'])->name('support-access.create');
         Route::post('/support-access', [SupportAccessController::class, 'store'])
@@ -83,6 +91,9 @@ Route::prefix('super-admin')->name('super-admin.')->middleware('super-admin.head
         Route::post('/support-access/{supportAccessRequest}/cancel', [SupportAccessController::class, 'cancel'])
             ->middleware('throttle:super-admin-subscription-management')
             ->name('support-access.cancel');
+        Route::post('/support-access/{supportAccessRequest}/revoke', [RestaurantSupportAccessController::class, 'revoke'])
+            ->middleware('throttle:super-admin-subscription-management')
+            ->name('support-access.revoke');
         Route::get('/announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
         Route::get('/announcements/create', [AnnouncementController::class, 'create'])->name('announcements.create');
         Route::post('/announcements', [AnnouncementController::class, 'store'])->name('announcements.store');
@@ -198,16 +209,19 @@ Route::prefix('super-admin')->name('super-admin.')->middleware('super-admin.head
             ->name('subscriptions.status');
 
         Route::get('/restaurants', [RestaurantManagementController::class, 'index'])->name('restaurants.index');
-        Route::get('/restaurant-approvals', [RestaurantApprovalController::class, 'index'])->name('restaurant-approvals.index');
-        Route::get('/restaurant-approvals/{restaurant}', [RestaurantApprovalController::class, 'show'])->name('restaurant-approvals.show');
-        Route::put('/restaurant-approvals/{restaurant}', [RestaurantApprovalController::class, 'decide'])
-            ->middleware('throttle:super-admin-restaurant-management')
-            ->name('restaurant-approvals.decide');
+        Route::redirect('/restaurant-approvals', '/super-admin/restaurants')->name('restaurant-approvals.index');
         Route::get('/restaurants/create', [RestaurantManagementController::class, 'create'])->name('restaurants.create');
         Route::post('/restaurants', [RestaurantManagementController::class, 'store'])
             ->middleware('throttle:super-admin-restaurant-management')
             ->name('restaurants.store');
         Route::get('/restaurants/{restaurant}', [RestaurantManagementController::class, 'show'])->name('restaurants.show');
+        Route::post('/restaurants/{restaurant}/dashboard', [RestaurantSupportAccessController::class, 'start'])
+            ->middleware('throttle:super-admin-restaurant-management')
+            ->name('restaurants.dashboard');
+        Route::post('/restaurants/dashboard/return', [RestaurantSupportAccessController::class, 'end'])
+            ->name('restaurants.dashboard.return');
+        Route::post('/support-access/return', [RestaurantSupportAccessController::class, 'end'])
+            ->name('support-access.return');
         Route::get('/restaurants/{restaurant}/edit', [RestaurantManagementController::class, 'edit'])->name('restaurants.edit');
         Route::put('/restaurants/{restaurant}', [RestaurantManagementController::class, 'update'])->name('restaurants.update');
         Route::post('/restaurants/{restaurant}/status', [RestaurantManagementController::class, 'toggleStatus'])->name('restaurants.toggle-status');

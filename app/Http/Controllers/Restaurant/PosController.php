@@ -3,20 +3,15 @@
 namespace App\Http\Controllers\Restaurant;
 
 use App\Http\Controllers\Controller;
-use App\Models\RestaurantMenuCategory;
-use App\Models\RestaurantMenuItem;
+use App\Services\RestaurantAccessContext;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class PosController extends Controller
 {
     public function index(Request $request): View
     {
-        $user = Auth::guard('web')->user();
-
-        abort_unless($user && $user->restaurant, 403, 'A valid restaurant account is required.');
-
+        $user = app(RestaurantAccessContext::class)->owner();
         $restaurant = $user->restaurant;
 
         $categories = $restaurant->menuCategories()

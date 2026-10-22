@@ -33,14 +33,17 @@
             </div>
 
             <div class="form-field form-field-full">
-                <span class="section-heading"><strong>Restaurant details</strong></span>
-                <div class="detail-grid">
-                    <div class="detail-item"><span>Restaurant name / ID</span><strong data-payment-restaurant-name>—</strong></div>
-                    <div class="detail-item"><span>Restaurant email</span><strong data-payment-restaurant-email>—</strong></div>
-                    <div class="detail-item"><span>Restaurant phone</span><strong data-payment-restaurant-phone>—</strong></div>
-                    <div class="detail-item"><span>Owner name</span><strong data-payment-owner-name>—</strong></div>
-                    <div class="detail-item"><span>Owner email</span><strong data-payment-owner-email>—</strong></div>
-                    <div class="detail-item"><span>Owner mobile</span><strong data-payment-owner-mobile>Not recorded</strong></div>
+                <div class="payment-details-section">
+                    <div class="section-heading"><div><h2>Restaurant and owner</h2><p>Restaurant contact and owner contact are shown separately.</p></div></div>
+                    <div class="detail-grid payment-details-grid">
+                        <div class="detail-item"><span>Restaurant name</span><strong data-payment-restaurant-name>—</strong></div>
+                        <div class="detail-item"><span>Restaurant ID</span><strong data-payment-restaurant-id>—</strong></div>
+                        <div class="detail-item"><span>Restaurant email</span><strong data-payment-restaurant-email>—</strong></div>
+                        <div class="detail-item"><span>Restaurant phone</span><strong data-payment-restaurant-phone>—</strong></div>
+                        <div class="detail-item"><span>Owner name</span><strong data-payment-owner-name>—</strong></div>
+                        <div class="detail-item"><span>Owner email</span><strong data-payment-owner-email>—</strong></div>
+                        <div class="detail-item payment-owner-mobile"><span>Owner mobile</span><strong data-payment-owner-mobile>Not provided</strong><a class="payment-edit-owner" data-payment-owner-edit hidden>Edit owner</a></div>
+                    </div>
                 </div>
             </div>
 
@@ -56,16 +59,19 @@
             </div>
 
             <div class="form-field form-field-full">
-                <strong>Subscription details</strong>
-                <div class="detail-grid">
-                    <div class="detail-item"><span>Subscription ID</span><strong data-payment-subscription-id>—</strong></div>
-                    <div class="detail-item"><span>Plan name</span><strong data-payment-plan-name>—</strong></div>
-                    <div class="detail-item"><span>Plan code</span><strong data-payment-plan-code>—</strong></div>
-                    <div class="detail-item"><span>Plan price</span><strong data-payment-plan-price>—</strong></div>
-                    <div class="detail-item"><span>Billing duration</span><strong data-payment-duration>—</strong></div>
-                    <div class="detail-item"><span>Start date</span><strong data-payment-start>—</strong></div>
-                    <div class="detail-item"><span>Expiry date</span><strong data-payment-expiry>—</strong></div>
-                    <div class="detail-item"><span>Subscription status</span><strong data-payment-status>—</strong></div>
+                <div class="payment-details-section">
+                    <div class="section-heading"><div><h2>Subscription details</h2><p>Dates remain pending until the subscription is activated under the existing approval workflow.</p></div></div>
+                    <div class="detail-grid payment-details-grid">
+                        <div class="detail-item"><span>Subscription ID</span><strong data-payment-subscription-id>—</strong></div>
+                        <div class="detail-item"><span>Plan name</span><strong data-payment-plan-name>—</strong></div>
+                        <div class="detail-item"><span>Plan code</span><strong data-payment-plan-code>—</strong></div>
+                        <div class="detail-item"><span>Plan price</span><strong data-payment-plan-price>—</strong></div>
+                        <div class="detail-item"><span>Billing duration</span><strong data-payment-duration>—</strong></div>
+                        <div class="detail-item"><span>Start date</span><strong data-payment-start>—</strong></div>
+                        <div class="detail-item"><span>Expiry date</span><strong data-payment-expiry>—</strong></div>
+                        <div class="detail-item"><span>Subscription status</span><strong><span class="status-pill" data-payment-status>—</span></strong></div>
+                        <div class="detail-item"><span>Payment status</span><strong><span class="status-pill" data-payment-balance-status>—</span></strong></div>
+                    </div>
                 </div>
             </div>
 
@@ -76,7 +82,6 @@
                     <div class="detail-item"><span>Already paid</span><strong data-payment-paid>—</strong></div>
                     <div class="detail-item"><span>Outstanding amount</span><strong data-payment-outstanding>—</strong></div>
                     <div class="detail-item"><span>Pending payments</span><strong data-payment-pending>—</strong></div>
-                    <div class="detail-item"><span>Payment status</span><strong data-payment-balance-status>—</strong></div>
                 </div>
                 <span class="field-hint" data-payment-fully-paid hidden>Fully Paid</span>
                 <span class="field-hint" data-payment-no-available hidden>The outstanding balance is reserved by pending payments.</span>

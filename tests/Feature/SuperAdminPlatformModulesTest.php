@@ -22,6 +22,24 @@ class SuperAdminPlatformModulesTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_demo_data_management_is_super_admin_only_and_read_only_outside_local(): void
+    {
+        $this->get(route('super-admin.demo-data.index'))->assertRedirect(route('super-admin.login'));
+
+        $this->actingAsSuperAdmin();
+        $this->get(route('super-admin.demo-data.index'))
+            ->assertOk()
+            ->assertSee('Dry-run summary')
+            ->assertSee('Generation is disabled here')
+            ->assertDontSee('Generate local demo records');
+
+        $this->post(route('super-admin.demo-data.generate'), [
+            'confirmation' => 'GENERATE DEMO DATA',
+        ])->assertForbidden();
+        $this->assertDatabaseCount('restaurants', 0);
+        $this->assertDatabaseCount('subscription_payments', 0);
+    }
+
     public function test_platform_report_requires_super_admin_and_uses_exact_decimal_totals(): void
     {
         $this->get(route('super-admin.reports.index'))->assertRedirect(route('super-admin.login'));
@@ -81,6 +99,29 @@ class SuperAdminPlatformModulesTest extends TestCase
         $this->post(route('super-admin.notifications.read', $notification))->assertRedirect();
         $this->assertNotNull($notification->fresh()->read_at);
         $this->post(route('super-admin.notifications.read-all'))->assertRedirect();
+
+        $script = file_get_contents(public_path('assets/super-admin.js'));
+        $this->assertIsString($script);
+        $this->assertStringContainsString('const pollingIntervalMs = 30000;', $script);
+        $this->assertStringContainsString('window.setInterval(loadNotifications, pollingIntervalMs);', $script);
+        $this->assertStringContainsString("document.addEventListener('visibilitychange', loadNotifications);", $script);
+    }
+
+    public function test_notification_feed_never_returns_its_own_endpoint_as_a_navigation_destination(): void
+    {
+        $this->actingAsSuperAdmin();
+        SuperAdminNotification::create([
+            'super_admin_id' => auth('super_admin')->id(),
+            'event_key' => 'bad-notification-destination',
+            'category' => 'restaurant_registered',
+            'title' => 'New restaurant',
+            'description' => 'A restaurant was added.',
+            'url' => route('super-admin.notifications.feed'),
+        ]);
+
+        $this->get(route('super-admin.notifications.feed'))
+            ->assertOk()
+            ->assertJsonPath('notifications.0.url', route('super-admin.notifications.index'));
     }
 
     public function test_expiry_alert_command_is_safe_to_repeat(): void
@@ -139,7 +180,6 @@ class SuperAdminPlatformModulesTest extends TestCase
 
         foreach ([
             route('super-admin.restaurants.index'),
-            route('super-admin.restaurant-approvals.index'),
             route('super-admin.restaurant-owners.index'),
             route('super-admin.subscription-plans.index'),
             route('super-admin.subscriptions.index'),
@@ -198,7 +238,12 @@ class SuperAdminPlatformModulesTest extends TestCase
         $this->get(route('super-admin.settings.index', ['tab' => 'notifications']))
             ->assertOk()
             ->assertSee('settings-toggle-row', false)
-            ->assertSee('name="polling_interval"', false);
+            ->assertDontSee('Visible-tab polling interval')
+            ->assertDontSee('name="polling_interval"', false);
+        $this->get(route('super-admin.dashboard'))
+            ->assertOk()
+            ->assertSee('data-notification-menu', false)
+            ->assertDontSee('data-polling-interval', false);
 
         $this->get(route('super-admin.settings.index', ['tab' => 'branding']))
             ->assertOk()
@@ -335,6 +380,16 @@ class SuperAdminPlatformModulesTest extends TestCase
         ])->assertRedirect(route('super-admin.settings.index', ['tab' => 'general']));
         $this->assertSame('TastyBite QA', app(PlatformSettingsService::class)->group('general')['platform_name']);
         $this->assertDatabaseHas('restaurant_audit_logs', ['action' => 'platform_settings_updated', 'actor_id' => $admin->id]);
+
+        $this->post(route('super-admin.settings.update', 'notifications'), [
+            'enabled' => '1',
+            'payment_alerts' => '1',
+            'polling_interval' => '300',
+        ])->assertRedirect(route('super-admin.settings.index', ['tab' => 'notifications']));
+        $notificationSettings = app(PlatformSettingsService::class)->group('notifications');
+        $this->assertTrue($notificationSettings['enabled']);
+        $this->assertTrue($notificationSettings['payment_alerts']);
+        $this->assertArrayNotHasKey('polling_interval', $notificationSettings);
 
         $restaurant = $this->createRestaurant();
         $plan = $this->createPlan();

@@ -12,7 +12,8 @@ class EnsureRestaurantSubscription
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $user = Auth::guard('web')->user();
+        $user = request()->attributes->get('restaurant_support_owner')
+            ?? Auth::guard('web')->user();
 
         if (! $user instanceof User || ! $user->restaurant) {
             return response()->json(['message' => 'A valid restaurant account is required.'], 403);

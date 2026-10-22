@@ -70,9 +70,7 @@ class PlatformSettingsController extends Controller
                 }
                 break;
             case 'notifications':
-                $validated = $request->validate([
-                    'polling_interval' => ['required', 'integer', 'min:30', 'max:300'],
-                ]);
+                $validated = [];
                 foreach (['enabled', 'expiry_alerts', 'payment_alerts', 'restaurant_alerts'] as $toggle) {
                     $validated[$toggle] = $request->boolean($toggle);
                 }

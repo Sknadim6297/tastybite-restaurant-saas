@@ -9,11 +9,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const amountInput = form.querySelector('[data-payment-amount]');
         const values = {
             restaurantName: form.querySelector('[data-payment-restaurant-name]'),
+            restaurantId: form.querySelector('[data-payment-restaurant-id]'),
             restaurantEmail: form.querySelector('[data-payment-restaurant-email]'),
             restaurantPhone: form.querySelector('[data-payment-restaurant-phone]'),
             ownerName: form.querySelector('[data-payment-owner-name]'),
             ownerEmail: form.querySelector('[data-payment-owner-email]'),
             ownerMobile: form.querySelector('[data-payment-owner-mobile]'),
+            ownerEdit: form.querySelector('[data-payment-owner-edit]'),
             subscriptionId: form.querySelector('[data-payment-subscription-id]'),
             planName: form.querySelector('[data-payment-plan-name]'),
             planCode: form.querySelector('[data-payment-plan-code]'),
@@ -33,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const restaurantDetailValues = [
             values.restaurantName,
+            values.restaurantId,
             values.restaurantEmail,
             values.restaurantPhone,
             values.ownerName,
@@ -58,13 +61,17 @@ document.addEventListener('DOMContentLoaded', () => {
             restaurantDetailValues.forEach((element) => {
                 element.textContent = '—';
             });
-            values.ownerMobile.textContent = 'Not recorded';
+            values.ownerMobile.textContent = 'Not provided';
+            values.ownerEdit.hidden = true;
+            values.ownerEdit.removeAttribute('href');
         };
 
         const clearSubscriptionDetails = () => {
             subscriptionDetailValues.forEach((element) => {
                 element.textContent = '—';
             });
+            values.status.className = 'status-pill';
+            values.balanceStatus.className = 'status-pill';
             form.querySelector('[data-payment-fully-paid]').hidden = true;
             form.querySelector('[data-payment-no-available]').hidden = true;
             submitButton.disabled = true;
@@ -75,24 +82,46 @@ document.addEventListener('DOMContentLoaded', () => {
             clearSubscriptionDetails();
         };
 
+        const displayValue = (value, fallback = 'Not available') => {
+            if (typeof value !== 'string' || value.trim() === '') return fallback;
+            if (['null', 'undefined', 'invalid date'].includes(value.trim().toLowerCase())) return fallback;
+
+            return value;
+        };
+        const currencyAmount = (currency, amount) => {
+            const numericAmount = Number(amount);
+            if (!Number.isFinite(numericAmount)) return 'Not available';
+            const formattedAmount = numericAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+
+            return currency === 'INR' ? `₹${formattedAmount}` : `${displayValue(currency)} ${formattedAmount}`;
+        };
+        const statusClass = (status) => `status-pill status-${String(status || '').replaceAll('_', '-')}`;
+
         const displaySubscription = () => {
             const subscription = restaurantData?.subscriptions.find((item) => String(item.id) === subscriptionSelect.value);
             clearSubscriptionDetails();
             if (!subscription) return;
 
             values.subscriptionId.textContent = `#${subscription.id}`;
-            values.planName.textContent = subscription.plan_name;
-            values.planCode.textContent = subscription.plan_code;
-            values.planPrice.textContent = `${subscription.currency} ${subscription.price}`;
-            values.duration.textContent = subscription.billing_duration;
-            values.start.textContent = subscription.starts_at;
-            values.expiry.textContent = subscription.expires_at;
-            values.status.textContent = subscription.status;
-            values.total.textContent = `${subscription.currency} ${subscription.total_payable}`;
-            values.paid.textContent = `${subscription.currency} ${subscription.already_paid}`;
-            values.outstanding.textContent = `${subscription.currency} ${subscription.outstanding}`;
-            values.pending.textContent = `${subscription.currency} ${subscription.pending_amount}`;
-            values.balanceStatus.textContent = subscription.payment_status;
+            values.planName.textContent = displayValue(subscription.plan_name);
+            values.planCode.textContent = displayValue(subscription.plan_code);
+            values.planPrice.textContent = currencyAmount(subscription.currency, subscription.price);
+            values.duration.textContent = displayValue(subscription.billing_duration);
+            const activationPending = ['pending_payment', 'pending_approval'].includes(subscription.status);
+            const dateFallback = activationPending ? 'Not Activated Yet' : 'Not available';
+            values.start.textContent = displayValue(subscription.starts_at, dateFallback);
+            values.expiry.textContent = displayValue(subscription.expires_at, dateFallback);
+            values.status.textContent = displayValue(subscription.status_label);
+            values.status.className = statusClass(subscription.status);
+            values.total.textContent = currencyAmount(subscription.currency, subscription.total_payable);
+            values.paid.textContent = currencyAmount(subscription.currency, subscription.already_paid);
+            values.outstanding.textContent = currencyAmount(subscription.currency, subscription.outstanding);
+            values.pending.textContent = currencyAmount(subscription.currency, subscription.pending_amount);
+            values.balanceStatus.textContent = displayValue(subscription.payment_status);
+            values.balanceStatus.className = statusClass(subscription.payment_status);
 
             const fullyPaid = subscription.outstanding === '0.00';
             const available = Number(subscription.available_amount);
@@ -143,20 +172,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 restaurantData = payload;
                 const restaurant = payload.restaurant;
                 const owner = payload.owner;
-                values.restaurantName.textContent = `${restaurant.name} (#${restaurant.id})`;
-                values.restaurantEmail.textContent = restaurant.email || 'Not recorded';
-                values.restaurantPhone.textContent = restaurant.phone || 'Not recorded';
-                values.ownerName.textContent = owner?.name || 'No owner listed';
-                values.ownerEmail.textContent = owner?.email || 'Not recorded';
-                values.ownerMobile.textContent = owner?.mobile || 'Not recorded';
+                values.restaurantName.textContent = displayValue(restaurant.name);
+                values.restaurantId.textContent = `#${restaurant.id}`;
+                values.restaurantEmail.textContent = displayValue(restaurant.email);
+                values.restaurantPhone.textContent = displayValue(restaurant.phone);
+                values.ownerName.textContent = displayValue(owner?.name, 'No owner listed');
+                values.ownerEmail.textContent = displayValue(owner?.email);
+                values.ownerMobile.textContent = displayValue(owner?.mobile, 'Not provided');
+                values.ownerEdit.hidden = !owner?.edit_url;
+                if (owner?.edit_url) values.ownerEdit.href = owner.edit_url;
 
                 subscriptionSelect.replaceChildren(new Option(
                     payload.subscriptions.length ? 'Select an existing subscription' : 'No subscription found for this restaurant.',
                     '',
                 ));
                 payload.subscriptions.forEach((subscription) => {
+                    const amount = currencyAmount(subscription.currency, subscription.price);
                     const option = new Option(
-                        `#${subscription.id} · ${subscription.plan_name} · ${subscription.billing_duration} · ${subscription.starts_at} – ${subscription.expires_at} · ${subscription.status} · ${subscription.currency} ${subscription.price} · ${subscription.payment_status}`,
+                        `SUB #${subscription.id} — ${displayValue(subscription.plan_name)} — ${amount} — ${displayValue(subscription.status_label)}`,
                         String(subscription.id),
                     );
                     subscriptionSelect.add(option);
@@ -599,7 +632,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const list = notificationMenu.querySelector('[data-notification-list]');
         const count = notificationMenu.querySelector('[data-notification-count]');
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
-        const interval = Math.max(30000, Number(notificationMenu.dataset.pollingInterval || 60) * 1000);
+        const notificationIndexUrl = notificationMenu.querySelector('.notification-dropdown-heading a').href;
+        const notificationFeedPath = new URL(notificationMenu.dataset.feedUrl, window.location.href).pathname;
+        const pollingIntervalMs = 30000;
+        const notificationDestination = (url) => {
+            try {
+                const destination = new URL(url || notificationIndexUrl, window.location.href);
+                if (
+                    destination.origin !== window.location.origin
+                    || destination.pathname === notificationFeedPath
+                ) {
+                    return new URL(notificationIndexUrl, window.location.href);
+                }
+
+                return destination;
+            } catch {
+                return new URL(notificationIndexUrl, window.location.href);
+            }
+        };
         const showNotificationError = (message) => {
             let error = notificationMenu.querySelector('[data-notification-error]');
             if (!error) {
@@ -614,6 +664,13 @@ document.addEventListener('DOMContentLoaded', () => {
         notificationMenu.addEventListener('toggle', () => {
             notificationMenu.querySelector('summary').setAttribute('aria-expanded', String(notificationMenu.open));
         });
+        document.addEventListener('click', (event) => {
+            if (!(event.target instanceof Node) || notificationMenu.contains(event.target)) return;
+            notificationMenu.open = false;
+        });
+        document.addEventListener('scroll', () => {
+            notificationMenu.open = false;
+        }, true);
 
         const loadNotifications = async () => {
             if (document.hidden) return;
@@ -638,7 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.notifications.forEach((notification) => {
                     const item = document.createElement('a');
                     item.className = `notification-preview${notification.read ? '' : ' is-unread'}`;
-                    item.href = notification.url || notificationMenu.querySelector('.notification-dropdown-heading a').href;
+                    item.href = notificationDestination(notification.url).href;
                     const title = document.createElement('strong');
                     title.textContent = notification.title;
                     const description = document.createElement('span');
@@ -656,8 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 credentials: 'same-origin',
                             });
                             if (!response.ok) throw new Error('Could not update notification.');
-                            const destination = new URL(item.href, window.location.origin);
-                            if (destination.origin === window.location.origin) window.location.assign(destination.href);
+                            window.location.assign(notificationDestination(item.href).href);
                         } catch (error) {
                             showNotificationError('Could not update this notification. Please try again.');
                             console.error(error);
@@ -691,7 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         loadNotifications();
-        window.setInterval(loadNotifications, interval);
+        window.setInterval(loadNotifications, pollingIntervalMs);
         document.addEventListener('visibilitychange', loadNotifications);
     }
 });

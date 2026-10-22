@@ -118,17 +118,18 @@ class RestaurantOwnerController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($owner->id)],
+            'mobile' => ['nullable', 'string', 'max:32', 'regex:/^\+?[0-9][0-9\s().-]{5,28}[0-9]$/'],
         ]);
 
         DB::transaction(function () use ($owner, $validated): void {
-            $before = $owner->only(['name', 'email']);
+            $before = $owner->only(['name', 'email', 'mobile']);
             $owner->fill($validated)->save();
 
             $this->recordAudit(
                 Auth::guard('super_admin')->user(),
                 'owner_updated',
                 $owner,
-                ['before' => $before, 'after' => $owner->only(['name', 'email'])],
+                ['before' => $before, 'after' => $owner->only(['name', 'email', 'mobile'])],
             );
         });
 

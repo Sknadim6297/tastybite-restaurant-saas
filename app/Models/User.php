@@ -24,6 +24,7 @@ class User extends Authenticatable
         'restaurant_id',
         'name',
         'email',
+        'mobile',
         'password',
         'role',
         'status',

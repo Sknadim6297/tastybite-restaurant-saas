@@ -33,9 +33,6 @@
                 <a href="{{ route('super-admin.restaurants.index') }}" class="sidebar-link @if(request()->routeIs('super-admin.restaurants.*')) is-active @endif">
                     <span class="nav-icon" aria-hidden="true">▦</span><span>Restaurants</span>
                 </a>
-                <a href="{{ route('super-admin.restaurant-approvals.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.restaurant-approvals.*')])>
-                    <span class="nav-icon" aria-hidden="true">✓</span><span>Restaurant Approvals</span>
-                </a>
                 <a href="{{ route('super-admin.restaurant-owners.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.restaurant-owners.*')])>
                     <span class="nav-icon" aria-hidden="true">♙</span><span>Restaurant Owners</span>
                 </a>
@@ -70,6 +67,9 @@
                 <a href="{{ route('super-admin.support-access.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.support-access.*')])>
                     <span class="nav-icon" aria-hidden="true">♧</span><span>Support Access</span>
                 </a>
+                <a href="{{ route('super-admin.demo-data.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.demo-data.*')])>
+                    <span class="nav-icon" aria-hidden="true">◇</span><span>Demo Data</span>
+                </a>
 
                 <span class="sidebar-caption">INSIGHTS &amp; SECURITY</span>
                 <a href="{{ route('super-admin.analytics.index') }}" @class(['sidebar-link', 'is-active' => request()->routeIs('super-admin.analytics.*')])>
@@ -102,7 +102,7 @@
                     <span aria-hidden="true">☰</span>
                 </button>
                 <div class="breadcrumb"><span>Super Admin</span><span aria-hidden="true">/</span><strong>@yield('section', 'Dashboard')</strong></div>
-                <details class="notification-menu" data-notification-menu data-feed-url="{{ route('super-admin.notifications.feed') }}" data-read-all-url="{{ route('super-admin.notifications.read-all') }}" data-read-url-template="{{ route('super-admin.notifications.read', ['notification' => '__ID__']) }}" data-polling-interval="{{ $notificationSettings['polling_interval'] ?? 60 }}">
+                <details class="notification-menu" data-notification-menu data-feed-url="{{ route('super-admin.notifications.feed') }}" data-read-all-url="{{ route('super-admin.notifications.read-all') }}" data-read-url-template="{{ route('super-admin.notifications.read', ['notification' => '__ID__']) }}">
                     <summary class="icon-button notification-trigger" aria-label="Notifications">
                         <span aria-hidden="true">♧</span><span class="notification-count" data-notification-count aria-live="polite">0</span>
                     </summary>

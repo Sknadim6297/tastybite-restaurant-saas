@@ -90,7 +90,7 @@ class PaymentManagementController extends Controller
 
     public function restaurantSubscriptions(Restaurant $restaurant): JsonResponse
     {
-        $owner = $restaurant->owners()->orderBy('id')->first(['id', 'name', 'email']);
+        $owner = $restaurant->owners()->orderBy('id')->first(['id', 'name', 'email', 'mobile']);
         $subscriptions = $restaurant->subscriptions()
             ->orderByDesc('starts_at')
             ->orderByDesc('id')
@@ -106,13 +106,15 @@ class PaymentManagementController extends Controller
             'restaurant' => [
                 'id' => $restaurant->id,
                 'name' => $restaurant->name,
-                'email' => $restaurant->email,
-                'phone' => $restaurant->phone,
+                'email' => $restaurant->email ?: 'Not provided',
+                'phone' => $restaurant->phone ?: 'Not provided',
             ],
             'owner' => $owner ? [
+                'id' => $owner->id,
                 'name' => $owner->name,
                 'email' => $owner->email,
-                'mobile' => null,
+                'mobile' => $owner->mobile ?: null,
+                'edit_url' => route('super-admin.restaurant-owners.edit', $owner),
             ] : null,
             'subscriptions' => $subscriptions->map(function ($subscription) use ($summaries, $timezone): array {
                 return [
@@ -121,12 +123,23 @@ class PaymentManagementController extends Controller
                     'plan_code' => $subscription->plan_code,
                     'billing_duration' => $this->billingDuration($subscription),
                     'starts_at' => in_array($subscription->status, ['pending_payment', 'pending_approval'], true)
-                        ? null
-                        : $subscription->starts_at->timezone($timezone)->format('M j, Y'),
+                        ? 'Not Activated Yet'
+                        : ($subscription->starts_at?->timezone($timezone)->format('M j, Y') ?? 'Not available'),
                     'expires_at' => in_array($subscription->status, ['pending_payment', 'pending_approval'], true)
-                        ? null
-                        : $subscription->expires_at->timezone($timezone)->format('M j, Y'),
+                        ? 'Not Activated Yet'
+                        : ($subscription->expires_at?->timezone($timezone)->format('M j, Y') ?? 'Not available'),
                     'status' => $subscription->effectiveStatus(),
+                    'status_label' => match ($subscription->effectiveStatus()) {
+                        'pending_payment' => 'Pending Payment',
+                        'pending_approval' => 'Pending Approval',
+                        'scheduled' => 'Scheduled',
+                        'active' => 'Active',
+                        'trial' => 'Trial',
+                        'expired' => 'Expired',
+                        'cancelled' => 'Cancelled',
+                        'suspended' => 'Suspended',
+                        default => 'Not available',
+                    },
                     'price' => number_format((float) $subscription->price, 2, '.', ''),
                     'currency' => $subscription->currency,
                     ...$summaries[$subscription->id],
@@ -159,7 +172,7 @@ class PaymentManagementController extends Controller
         $payment = $this->payments->create($validated, $this->actor(), $request->file('proof'));
 
         return redirect()->route('super-admin.payments.show', $payment)
-            ->with('status', 'Payment recorded as pending. No subscription was changed.');
+            ->with('status', 'Payment recorded as pending. Subscription activation still requires payment approval.');
     }
 
     public function show(SubscriptionPayment $payment): View

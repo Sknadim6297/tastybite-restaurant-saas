@@ -26,20 +26,28 @@ class NotificationController extends Controller
     public function feed(): JsonResponse
     {
         $adminId = Auth::guard('super_admin')->id();
+        $feedPath = '/'.ltrim((string) parse_url(route('super-admin.notifications.feed'), PHP_URL_PATH), '/');
+        $notificationsUrl = route('super-admin.notifications.index');
 
         return response()->json([
             'unread_count' => SuperAdminNotification::query()->where('super_admin_id', $adminId)->whereNull('read_at')->count(),
             'notifications' => SuperAdminNotification::query()->where('super_admin_id', $adminId)
                 ->orderByDesc('created_at')->limit(8)->get(['id', 'category', 'title', 'description', 'url', 'read_at', 'created_at'])
-                ->map(fn (SuperAdminNotification $notification): array => [
-                    'id' => $notification->id,
-                    'category' => $notification->category,
-                    'title' => $notification->title,
-                    'description' => $notification->description,
-                    'url' => $notification->url,
-                    'read' => $notification->read_at !== null,
-                    'created_at' => $notification->created_at?->diffForHumans(),
-                ]),
+                ->map(function (SuperAdminNotification $notification) use ($feedPath, $notificationsUrl): array {
+                    $notificationPath = is_string($notification->url)
+                        ? '/'.ltrim((string) parse_url($notification->url, PHP_URL_PATH), '/')
+                        : null;
+
+                    return [
+                        'id' => $notification->id,
+                        'category' => $notification->category,
+                        'title' => $notification->title,
+                        'description' => $notification->description,
+                        'url' => $notificationPath === $feedPath ? $notificationsUrl : $notification->url,
+                        'read' => $notification->read_at !== null,
+                        'created_at' => $notification->created_at?->diffForHumans(),
+                    ];
+                }),
         ])->header('Cache-Control', 'no-store, private');
     }
 

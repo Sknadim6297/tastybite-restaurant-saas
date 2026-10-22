@@ -4,7 +4,9 @@ namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\RestaurantAuditLog;
+use App\Models\SuperAdmin;
 use App\Services\LoginSecurityAuditService;
+use App\Services\RestaurantSupportAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,6 +45,7 @@ class AuthController extends Controller
 
         if (! Auth::guard('super_admin')->attempt($credentials)) {
             $securityAudit->recordFailure('super_admin', $credentials['email']);
+
             return redirect()->route('super-admin.login')
                 ->withErrors(['email' => 'These credentials do not match our records.'])
                 ->withInput($request->only('email'));
@@ -69,6 +72,12 @@ class AuthController extends Controller
     public function logout(Request $request): RedirectResponse
     {
         $admin = Auth::guard('super_admin')->user();
+        if ($admin instanceof SuperAdmin && $request->session()->has(RestaurantSupportAccessService::SESSION_REQUEST_ID)) {
+            app(RestaurantSupportAccessService::class)->end($request, $admin);
+        }
+        if ($admin instanceof SuperAdmin) {
+            app(RestaurantSupportAccessService::class)->clearDirectAccessForLogout($request, $admin);
+        }
         if ($admin !== null) {
             RestaurantAuditLog::create([
                 'actor_id' => $admin->id,

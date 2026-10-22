@@ -163,12 +163,6 @@
                             <span class="settings-toggle-copy"><strong>{{ $label }}</strong><small>{{ $help }}</small></span>
                         </label>
                     @endforeach
-                    <label class="settings-field">
-                        <span class="settings-field-label">Visible-tab polling interval</span>
-                        <input class="settings-input" type="number" name="polling_interval" min="30" max="300" value="{{ old('polling_interval', $notifications['polling_interval']) }}">
-                        <small class="settings-help">Refresh interval in seconds (30–300).</small>
-                        @error('polling_interval')<small class="settings-error">{{ $message }}</small>@enderror
-                    </label>
                     <div class="settings-form-actions">
                         <button class="button button-primary" type="submit"><span class="button-label">Save notification settings</span></button>
                     </div>

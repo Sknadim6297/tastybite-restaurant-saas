@@ -6,10 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\RestaurantMenuCategory;
 use App\Models\RestaurantMenuItem;
 use App\Models\User;
+use App\Services\RestaurantAccessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -200,10 +200,7 @@ class MenuProductController extends Controller
 
     private function owner(): User
     {
-        $user = Auth::guard('web')->user();
-        abort_unless($user instanceof User && $user->isOwner() && $user->restaurant, 403);
-
-        return $user;
+        return app(RestaurantAccessContext::class)->owner();
     }
 
     private function tenantProduct(int $productId, User $owner): RestaurantMenuItem

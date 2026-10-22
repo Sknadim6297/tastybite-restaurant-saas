@@ -55,11 +55,13 @@
                         <td>
                             <div class="action-stack">
                                 <a class="button button-secondary" href="{{ route('restaurant.menu.products.edit', $product) }}">Edit</a>
-                                <form method="POST" action="{{ route('restaurant.menu.products.destroy', $product) }}" data-confirm="Delete this product and its stored image?">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="button button-danger" type="submit">Delete</button>
-                                </form>
+                                @unless (request()->attributes->has('restaurant_support_request') || request()->attributes->has('restaurant_admin_access_restaurant'))
+                                    <form method="POST" action="{{ route('restaurant.menu.products.destroy', $product) }}" data-confirm="Delete this product and its stored image?">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="button button-danger" type="submit">Delete</button>
+                                    </form>
+                                @endunless
                             </div>
                         </td>
                     </tr>

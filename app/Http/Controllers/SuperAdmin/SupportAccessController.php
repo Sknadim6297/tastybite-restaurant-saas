@@ -41,10 +41,17 @@ class SupportAccessController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
+        $filters = $request->validate([
+            'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id'],
+            'requested_scope' => ['nullable', Rule::in([SupportAccessRequest::RESTAURANT_DASHBOARD_MENU_MANAGE])],
+        ]);
+
         return view('super-admin.support-access.create', [
             'restaurants' => Restaurant::query()->orderBy('name')->get(['id', 'name', 'slug', 'status']),
+            'restaurantId' => $filters['restaurant_id'] ?? null,
+            'requestedScope' => $filters['requested_scope'] ?? null,
         ]);
     }
 
@@ -52,14 +59,22 @@ class SupportAccessController extends Controller
     {
         $validated = $request->validate([
             'restaurant_id' => ['required', 'integer', 'exists:restaurants,id'],
-            'requested_scope' => ['required', Rule::in(['billing', 'technical', 'account', 'other'])],
+            'requested_scope' => ['required', Rule::in([
+                'billing',
+                'technical',
+                'account',
+                'other',
+                SupportAccessRequest::RESTAURANT_DASHBOARD_MENU_MANAGE,
+            ])],
             'reason' => ['required', 'string', 'min:20', 'max:2000'],
             'requested_duration_minutes' => ['required', 'integer', 'between:30,480'],
         ]);
         $supportRequest = $service->create($this->actor(), $validated);
 
         return redirect()->route('super-admin.support-access.show', $supportRequest)
-            ->with('status', 'Support-access request submitted for independent review. No restaurant access has been granted.');
+            ->with('status', $supportRequest->requested_scope === SupportAccessRequest::RESTAURANT_DASHBOARD_MENU_MANAGE
+                ? 'Dashboard/menu access request submitted for independent review. No restaurant access has been granted.'
+                : 'Support-access request submitted for independent review. No restaurant access has been granted.');
     }
 
     public function show(SupportAccessRequest $supportAccessRequest): View
@@ -86,7 +101,10 @@ class SupportAccessController extends Controller
         $service->decide($supportAccessRequest, $this->actor(), $validated['decision'], $validated['reason']);
 
         return redirect()->route('super-admin.support-access.show', $supportAccessRequest)
-            ->with('status', 'Decision recorded. Approval does not open or impersonate a restaurant account.');
+            ->with('status', $supportAccessRequest->requested_scope === SupportAccessRequest::RESTAURANT_DASHBOARD_MENU_MANAGE
+                && $validated['decision'] === 'approved'
+                ? 'Approval recorded. The requester may now start a time-limited dashboard/menu session.'
+                : 'Decision recorded. No restaurant access was granted.');
     }
 
     public function cancel(Request $request, SupportAccessRequest $supportAccessRequest, SupportAccessRequestService $service): RedirectResponse

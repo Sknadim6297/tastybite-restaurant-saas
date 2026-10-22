@@ -64,8 +64,8 @@ class SupportAccessRequestTest extends TestCase
         ]);
         $this->get(route('super-admin.support-access.show', $supportRequest))
             ->assertOk()
-            ->assertSee('Approval does not grant system access')
-            ->assertSee('No impersonation token');
+            ->assertSee('Approval records an authorization decision only')
+            ->assertSee('This scope does not open restaurant data');
         $this->assertFalse(auth('web')->check());
     }
 

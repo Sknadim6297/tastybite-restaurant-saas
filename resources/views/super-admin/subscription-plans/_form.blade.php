@@ -10,12 +10,6 @@
             @error('name')<span class="field-error">{{ $message }}</span>@enderror
         </div>
         <div class="form-field">
-            <label for="code">Unique plan code</label>
-            <input id="code" name="code" value="{{ old('code', $plan?->code ?? '') }}" required maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_-]*" autocomplete="off" @error('code') aria-invalid="true" @enderror>
-            <span class="field-hint">Letters, numbers, underscores, and hyphens. Saved in uppercase.</span>
-            @error('code')<span class="field-error">{{ $message }}</span>@enderror
-        </div>
-        <div class="form-field">
             <label for="price">Price (INR)</label>
             <input id="price" name="price" type="number" min="0" max="99999999.99" step="0.01" value="{{ old('price', $plan?->price ?? '0.00') }}" required @error('price') aria-invalid="true" @enderror>
             @error('price')<span class="field-error">{{ $message }}</span>@enderror

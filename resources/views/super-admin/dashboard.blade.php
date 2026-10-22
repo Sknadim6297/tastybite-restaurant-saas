@@ -28,7 +28,6 @@
     </div>
     <section class="module-grid" aria-label="Platform modules">
         <a class="module-card module-card-action" href="{{ route('super-admin.restaurants.index') }}"><span class="module-icon" aria-hidden="true">▦</span><div><h3>Restaurants</h3><p>Restaurant accounts and their platform access.</p></div><span class="coming-soon">Open</span></a>
-        <a class="module-card module-card-action" href="{{ route('super-admin.restaurant-approvals.index') }}"><span class="module-icon" aria-hidden="true">✓</span><div><h3>Restaurant Approvals</h3><p>Review onboarding requests and status history.</p></div><span class="coming-soon">Open</span></a>
         <a class="module-card module-card-action" href="{{ route('super-admin.restaurant-owners.index') }}"><span class="module-icon" aria-hidden="true">♙</span><div><h3>Restaurant Owners</h3><p>Owner accounts and account relationships.</p></div><span class="coming-soon">Open</span></a>
         <a class="module-card module-card-action" href="{{ route('super-admin.subscription-plans.index') }}"><span class="module-icon" aria-hidden="true">◇</span><div><h3>Subscription Plans</h3><p>Create plans and manage availability.</p></div><span class="coming-soon">Open</span></a>
         <a class="module-card module-card-action" href="{{ route('super-admin.features.index') }}"><span class="module-icon" aria-hidden="true">⚙</span><div><h3>Feature Management</h3><p>Configure feature access by subscription plan.</p></div><span class="coming-soon">Open</span></a>

@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Restaurant;
 use App\Models\RestaurantSubscription;
-use App\Models\RestaurantSubscriptionEvent;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPaymentRefund;
 use App\Models\SubscriptionPlan;
@@ -30,6 +29,20 @@ class SuperAdminPaymentManagementTest extends TestCase
             ->assertRedirect(route('super-admin.login'));
     }
 
+    public function test_offline_payment_form_targets_the_multipart_store_route(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->get(route('super-admin.payments.create'))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'method="POST"',
+                'action="'.route('super-admin.payments.store').'"',
+                'enctype="multipart/form-data"',
+                'Record pending payment',
+            ], false);
+    }
+
     public function test_payment_id_has_a_padded_professional_display_format(): void
     {
         foreach ([1 => 'PAY000001', 2 => 'PAY000002', 125 => 'PAY000125'] as $id => $expected) {
@@ -50,6 +63,7 @@ class SuperAdminPaymentManagementTest extends TestCase
             'restaurant_id' => $restaurant->id,
             'name' => 'Payment Owner',
             'email' => 'payment-owner@example.test',
+            'mobile' => '+91 98765 43210',
             'password' => 'StrongOwnerPass123!',
             'role' => 'owner',
             'status' => 'active',
@@ -108,7 +122,8 @@ class SuperAdminPaymentManagementTest extends TestCase
         $subscription = $this->createSubscription($restaurant, $plan);
 
         $this->post(route('super-admin.payments.store'), $this->paymentInput($restaurant, $plan))
-            ->assertRedirect();
+            ->assertRedirect(route('super-admin.payments.show', SubscriptionPayment::query()->firstOrFail()))
+            ->assertSessionHas('status', 'Payment recorded as pending. Subscription activation still requires payment approval.');
 
         $payment = SubscriptionPayment::query()->firstOrFail();
         $this->assertSame('pending', $payment->status);
@@ -292,7 +307,7 @@ class SuperAdminPaymentManagementTest extends TestCase
         $this->post(route('super-admin.payments.store'), array_merge(
             $this->paymentInput($restaurant, $plan),
             ['proof' => UploadedFile::fake()->create('receipt.pdf', 10, 'application/pdf')],
-        ))->assertRedirect();
+        ))->assertRedirect(route('super-admin.payments.show', SubscriptionPayment::query()->firstOrFail()));
 
         $payment = SubscriptionPayment::query()->firstOrFail();
         $this->assertStringStartsWith('payment-proofs/', $payment->proof_path);
@@ -300,12 +315,39 @@ class SuperAdminPaymentManagementTest extends TestCase
         $this->get(route('super-admin.payments.proof', $payment))->assertOk();
     }
 
-    public function test_restaurant_subscription_endpoint_returns_saved_subscription_and_payment_summary(): void
+    public function test_offline_payment_rejects_an_invalid_proof_without_creating_a_payment(): void
     {
         $this->actingAsSuperAdmin();
         $restaurant = $this->createRestaurant();
         $plan = $this->createPlan();
+        $this->createSubscription($restaurant, $plan);
+
+        $this->from(route('super-admin.payments.create'))
+            ->post(route('super-admin.payments.store'), array_merge(
+                $this->paymentInput($restaurant, $plan),
+                ['proof' => UploadedFile::fake()->create('receipt.txt', 10, 'text/plain')],
+            ))
+            ->assertRedirect(route('super-admin.payments.create'))
+            ->assertSessionHasErrors('proof');
+
+        $this->assertDatabaseCount('subscription_payments', 0);
+    }
+
+    public function test_restaurant_subscription_endpoint_returns_saved_subscription_and_payment_summary(): void
+    {
+        $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant();
+        $restaurant->update(['phone' => '+1 555 555 0100']);
+        $plan = $this->createPlan();
         $subscription = $this->createSubscription($restaurant, $plan);
+        $owner = User::create([
+            'restaurant_id' => $restaurant->id,
+            'name' => 'No Mobile Owner',
+            'email' => 'no-mobile-owner@example.test',
+            'password' => 'StrongOwnerPass123!',
+            'role' => 'owner',
+            'status' => 'active',
+        ]);
         $payment = SubscriptionPayment::create($this->paymentAttributes(
             $restaurant,
             $plan,
@@ -316,13 +358,54 @@ class SuperAdminPaymentManagementTest extends TestCase
         $this->get(route('super-admin.payments.restaurants.subscriptions', $restaurant))
             ->assertOk()
             ->assertJsonPath('restaurant.name', $restaurant->name)
-            ->assertJsonPath('owner', null)
+            ->assertJsonPath('restaurant.phone', '+1 555 555 0100')
+            ->assertJsonPath('owner.id', $owner->id)
+            ->assertJsonPath('owner.mobile', null)
             ->assertJsonPath('subscriptions.0.id', $subscription->id)
             ->assertJsonPath('subscriptions.0.price', '1299.50')
+            ->assertJsonPath('subscriptions.0.status_label', 'Active')
+            ->assertJsonPath('subscriptions.0.starts_at', $subscription->starts_at->timezone(config('app.timezone'))->format('M j, Y'))
+            ->assertJsonPath('subscriptions.0.expires_at', $subscription->expires_at->timezone(config('app.timezone'))->format('M j, Y'))
             ->assertJsonPath('subscriptions.0.already_paid', '300.00')
             ->assertJsonPath('subscriptions.0.outstanding', '999.50');
 
         $this->assertSame($subscription->id, $payment->fresh()->restaurant_subscription_id);
+    }
+
+    public function test_payment_subscription_endpoint_humanizes_pending_status_and_handles_missing_dates_and_owner_mobile(): void
+    {
+        $this->actingAsSuperAdmin();
+        $restaurant = $this->createRestaurant();
+        $plan = $this->createPlan();
+        $subscription = $this->createSubscription($restaurant, $plan);
+        $subscription->update(['status' => 'pending_payment']);
+        $owner = User::create([
+            'restaurant_id' => $restaurant->id,
+            'name' => 'Pending Subscription Owner',
+            'email' => 'pending-owner@example.test',
+            'mobile' => '+91 98765 43210',
+            'password' => 'StrongOwnerPass123!',
+            'role' => 'owner',
+            'status' => 'active',
+        ]);
+
+        $this->get(route('super-admin.payments.restaurants.subscriptions', $restaurant))
+            ->assertOk()
+            ->assertJsonPath('restaurant.id', $restaurant->id)
+            ->assertJsonPath('owner.id', $owner->id)
+            ->assertJsonPath('owner.mobile', '+91 98765 43210')
+            ->assertJsonPath('owner.edit_url', route('super-admin.restaurant-owners.edit', $owner))
+            ->assertJsonPath('subscriptions.0.id', $subscription->id)
+            ->assertJsonPath('subscriptions.0.status', 'pending_payment')
+            ->assertJsonPath('subscriptions.0.status_label', 'Pending Payment')
+            ->assertJsonPath('subscriptions.0.starts_at', 'Not Activated Yet')
+            ->assertJsonPath('subscriptions.0.expires_at', 'Not Activated Yet');
+
+        $script = file_get_contents(public_path('assets/super-admin.js'));
+        $this->assertIsString($script);
+        $this->assertStringContainsString('SUB #${subscription.id}', $script);
+        $this->assertStringContainsString('status_label', $script);
+        $this->assertStringContainsString('Not Activated Yet', $script);
     }
 
     public function test_payment_creation_rejects_subscription_from_another_restaurant_and_overpayment(): void

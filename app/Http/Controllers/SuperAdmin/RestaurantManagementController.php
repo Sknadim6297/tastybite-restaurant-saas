@@ -8,7 +8,6 @@ use App\Models\RestaurantAuditLog;
 use App\Models\SuperAdmin;
 use App\Models\User;
 use App\Services\OwnerPasswordSetupService;
-use App\Services\RestaurantApprovalService;
 use App\Services\RestaurantProvisioningService;
 use App\Services\SuperAdminNotificationService;
 use Illuminate\Http\RedirectResponse;
@@ -23,7 +22,6 @@ class RestaurantManagementController extends Controller
 {
     public function __construct(
         protected RestaurantProvisioningService $provisioningService,
-        protected RestaurantApprovalService $approvalService,
         protected OwnerPasswordSetupService $passwordSetupService,
         protected SuperAdminNotificationService $notifications,
     ) {}
@@ -90,11 +88,11 @@ class RestaurantManagementController extends Controller
             'restaurant.phone' => ['nullable', 'string', 'max:50'],
             'restaurant.address' => ['nullable', 'string', 'max:500'],
             'restaurant.status' => ['required', 'in:active,suspended,inactive'],
-            'restaurant.approval_status' => ['nullable', 'in:pending,approved'],
             'owner.name' => ['required', 'string', 'max:255'],
             'owner.email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'owner.mobile' => ['nullable', 'string', 'max:32', 'regex:/^\+?[0-9][0-9\s().-]{5,28}[0-9]$/'],
         ]);
-        $validated['restaurant']['approval_status'] ??= 'approved';
+        $validated['restaurant']['approval_status'] = 'approved';
 
         $actor = Auth::guard('super_admin')->user();
         if (! ($actor instanceof SuperAdmin)) {
@@ -107,10 +105,6 @@ class RestaurantManagementController extends Controller
                     $validated['restaurant'],
                     $validated['owner'],
                 );
-
-                if ($result['restaurant']->approval_status === 'pending') {
-                    $this->approvalService->recordInitialPending($result['restaurant'], $actor);
-                }
 
                 $this->recordAudit(
                     $actor,

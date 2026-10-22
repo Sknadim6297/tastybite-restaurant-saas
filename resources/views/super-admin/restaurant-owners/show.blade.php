@@ -31,6 +31,7 @@
         <div class="detail-grid">
             <div class="detail-item"><span>Owner name</span><strong>{{ $owner->name }}</strong></div>
             <div class="detail-item"><span>Email</span><strong>{{ $owner->email }}</strong></div>
+            <div class="detail-item"><span>Mobile number</span><strong>{{ $owner->mobile ?: 'Not provided' }}</strong></div>
             <div class="detail-item"><span>Restaurant</span><strong>{{ $owner->restaurant?->name ?? 'Unassigned' }}</strong></div>
             <div class="detail-item"><span>Role</span><strong>{{ ucfirst($owner->role) }}</strong></div>
             <div class="detail-item"><span>Account status</span><strong>{{ ucfirst($owner->status) }}</strong></div>

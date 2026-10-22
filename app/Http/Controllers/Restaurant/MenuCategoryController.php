@@ -6,9 +6,9 @@ use Closure;
 use App\Http\Controllers\Controller;
 use App\Models\RestaurantMenuCategory;
 use App\Models\User;
+use App\Services\RestaurantAccessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -170,10 +170,7 @@ class MenuCategoryController extends Controller
 
     private function owner(): User
     {
-        $user = Auth::guard('web')->user();
-        abort_unless($user instanceof User && $user->isOwner() && $user->restaurant, 403);
-
-        return $user;
+        return app(RestaurantAccessContext::class)->owner();
     }
 
     private function deleteStoredImage(string $path, User $owner): void

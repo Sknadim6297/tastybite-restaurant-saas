@@ -62,16 +62,6 @@
                     @error('restaurant.status')<span class="field-error">{{ $message }}</span>@enderror
                 </div>
 
-                <div class="form-field">
-                    <label for="restaurant_approval_status">Approval status</label>
-                    <select id="restaurant_approval_status" name="restaurant[approval_status]" required>
-                        <option value="approved" @selected(old('restaurant.approval_status', 'approved') === 'approved')>Approved</option>
-                        <option value="pending" @selected(old('restaurant.approval_status') === 'pending')>Pending review</option>
-                    </select>
-                    <span class="field-hint">Pending restaurants can sign in to view their status but cannot access operational features.</span>
-                    @error('restaurant.approval_status')<span class="field-error">{{ $message }}</span>@enderror
-                </div>
-
                 <div class="full-span">
                     <h2 style="margin:24px 0 18px; color:var(--navy); font-size:18px;">Owner account</h2>
                 </div>
@@ -86,6 +76,12 @@
                     <label for="owner_email">Owner email</label>
                     <input id="owner_email" name="owner[email]" type="email" value="{{ old('owner.email') }}" required maxlength="255" @error('owner.email') aria-invalid="true" aria-describedby="owner_email_error" @enderror>
                     @error('owner.email')<span class="field-error" id="owner_email_error">{{ $message }}</span>@enderror
+                </div>
+
+                <div class="form-field">
+                    <label for="owner_mobile">Owner mobile number <span class="field-hint-inline">(optional)</span></label>
+                    <input id="owner_mobile" name="owner[mobile]" type="tel" value="{{ old('owner.mobile') }}" maxlength="32" autocomplete="tel" placeholder="+91 98765 43210" @error('owner.mobile') aria-invalid="true" aria-describedby="owner_mobile_error" @enderror>
+                    @error('owner.mobile')<span class="field-error" id="owner_mobile_error">{{ $message }}</span>@enderror
                 </div>
 
                 <div class="field-hint full-span">

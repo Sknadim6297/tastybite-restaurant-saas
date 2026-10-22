@@ -34,6 +34,11 @@
                     <input id="email" name="email" type="email" value="{{ old('email', $owner->email) }}" maxlength="255" required autocomplete="email" @error('email') aria-invalid="true" aria-describedby="email_error" @enderror>
                     @error('email')<span class="field-error" id="email_error">{{ $message }}</span>@enderror
                 </div>
+                <div class="form-field">
+                    <label for="mobile">Mobile number <span class="field-hint-inline">(optional)</span></label>
+                    <input id="mobile" name="mobile" type="tel" value="{{ old('mobile', $owner->mobile) }}" maxlength="32" autocomplete="tel" placeholder="+91 98765 43210" @error('mobile') aria-invalid="true" aria-describedby="mobile_error" @enderror>
+                    @error('mobile')<span class="field-error" id="mobile_error">{{ $message }}</span>@enderror
+                </div>
             </div>
             <div class="page-tools owner-form-actions">
                 <a class="button button-secondary" href="{{ route('super-admin.restaurant-owners.show', $owner) }}">Cancel</a>

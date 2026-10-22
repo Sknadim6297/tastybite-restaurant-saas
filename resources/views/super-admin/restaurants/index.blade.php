@@ -79,6 +79,12 @@
                             <div class="action-stack">
                                 <a class="button button-secondary" href="{{ route('super-admin.restaurants.show', $restaurant) }}">View</a>
                                 <a class="button button-secondary" href="{{ route('super-admin.restaurants.edit', $restaurant) }}">Edit</a>
+                                @if ($restaurant->status === 'active' && $restaurant->approval_status === 'approved' && $restaurant->owners->contains(fn ($restaurantOwner) => $restaurantOwner->status === 'active'))
+                                    <form class="inline-form" method="POST" action="{{ route('super-admin.restaurants.dashboard', $restaurant) }}">
+                                        @csrf
+                                        <button class="button button-primary" type="submit">Go to Dashboard</button>
+                                    </form>
+                                @endif
                                 @if ($restaurant->status !== 'active')
                                     <form class="inline-form" method="POST" action="{{ route('super-admin.restaurants.toggle-status', $restaurant) }}" data-loading-form data-confirm="Reactivate {{ $restaurant->name }}? Restaurant Admin access will be restored." data-confirm-title="Reactivate restaurant?" data-confirm-action="Reactivate">
                                         @csrf

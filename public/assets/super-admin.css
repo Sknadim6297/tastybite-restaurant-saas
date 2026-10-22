@@ -695,6 +695,7 @@ form[data-plan-duration-form] .form-field[hidden] {
     background: var(--white);
     box-shadow: 0 12px 32px rgba(16, 24, 39, 0.12);
 }
+.notification-menu:not([open]) > .notification-dropdown { display: none; }
 .notification-dropdown-heading {
     display: flex;
     justify-content: space-between;
@@ -1028,6 +1029,10 @@ form[data-plan-duration-form] .form-field[hidden] {
     justify-content: space-between;
     gap: 20px;
     margin-bottom: 25px;
+}
+.page-heading > .button-primary {
+    position: relative;
+    z-index: 11;
 }
 .page-heading .eyebrow {
     color: #8290a1;
@@ -1607,6 +1612,61 @@ form[data-plan-duration-form] .form-field[hidden] {
     color: var(--navy);
     font-size: 13px;
     font-weight: 600;
+}
+.payment-details-section {
+    display: grid;
+    gap: 12px;
+}
+.payment-details-section .section-heading {
+    margin: 0;
+}
+.payment-details-section .section-heading h2 {
+    margin: 0;
+    color: var(--navy);
+    font-size: 15px;
+}
+.payment-details-section .section-heading p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+}
+.payment-details-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+.payment-details-grid .detail-item {
+    min-width: 0;
+    padding: 12px;
+}
+.payment-details-grid .detail-item strong {
+    display: block;
+    overflow-wrap: anywhere;
+}
+.payment-details-grid .detail-item strong .status-pill {
+    display: inline-flex;
+}
+.payment-owner-mobile strong {
+    margin-bottom: 7px;
+}
+.payment-edit-owner {
+    width: fit-content;
+    color: #9b5600;
+    font-size: 11px;
+    font-weight: 650;
+    text-decoration: none;
+}
+.payment-edit-owner:hover {
+    text-decoration: underline;
+}
+@media (max-width: 920px) {
+    .payment-details-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 700px) {
+    .payment-details-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 .form-card {
     padding: 24px;

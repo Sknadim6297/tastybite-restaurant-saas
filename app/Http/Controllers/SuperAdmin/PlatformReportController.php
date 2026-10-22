@@ -18,16 +18,19 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PlatformReportController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         $now = CarbonImmutable::now(config('app.timezone'));
+        $scope = $request->validate([
+            'scope' => ['nullable', Rule::in(['real', 'demo', 'all'])],
+        ])['scope'] ?? 'real';
         $counts = [];
 
-        foreach (['real', 'demo'] as $scope) {
-            $restaurants = $this->restaurantsForScope(Restaurant::query(), $scope);
-            $subscriptions = $this->subscriptionsForScope(RestaurantSubscription::query(), $scope);
-            $payments = $this->paymentsForScope(SubscriptionPayment::query(), $scope);
-            $counts[$scope] = [
+        foreach (['real', 'demo', 'all'] as $dataScope) {
+            $restaurants = $this->restaurantsForScope(Restaurant::query(), $dataScope);
+            $subscriptions = $this->subscriptionsForScope(RestaurantSubscription::query(), $dataScope);
+            $payments = $this->paymentsForScope(SubscriptionPayment::query(), $dataScope);
+            $counts[$dataScope] = [
                 'restaurants' => (clone $restaurants)->count(),
                 'active_restaurants' => (clone $restaurants)->where('status', 'active')->count(),
                 'owners' => User::query()->where('role', 'owner')->where('status', 'active')
@@ -38,10 +41,11 @@ class PlatformReportController extends Controller
                     ->where('starts_at', '<=', $now->utc())->whereBetween('expires_at', [$now->utc(), $now->addDays(30)->utc()])->count(),
                 'expired_subscriptions' => (clone $subscriptions)->whereIn('status', ['active', 'trial'])
                     ->where('expires_at', '<', $now->utc())->count(),
+                'pending_payments' => (clone $payments)->where('status', 'pending')->count(),
                 'gross' => $this->gross($payments),
                 'refunds' => $this->refundsForPayments($payments),
             ];
-            $counts[$scope]['net'] = $this->subtract($counts[$scope]['gross'], $counts[$scope]['refunds']);
+            $counts[$dataScope]['net'] = $this->subtract($counts[$dataScope]['gross'], $counts[$dataScope]['refunds']);
         }
 
         $months = [];
@@ -49,11 +53,11 @@ class PlatformReportController extends Controller
             $month = $now->startOfMonth()->subMonths($offset);
             $start = $month->utc();
             $end = $month->endOfMonth()->utc();
-            $gross = $this->gross($this->paymentsForScope(SubscriptionPayment::query(), 'real')
+            $gross = $this->gross($this->paymentsForScope(SubscriptionPayment::query(), $scope)
                 ->whereBetween('paid_at', [$start, $end]));
             $refundQuery = SubscriptionPaymentRefund::query()
                 ->whereBetween('refunded_at', [$start, $end])
-                ->whereHas('payment', fn (Builder $query) => $this->paymentsForScope($query, 'real'));
+                ->whereHas('payment', fn (Builder $query) => $this->paymentsForScope($query, $scope));
             $refunds = $this->sumCents($refundQuery, 'amount');
             $months[] = [
                 'label' => $month->format('M y'),
@@ -63,7 +67,7 @@ class PlatformReportController extends Controller
             ];
         }
 
-        return view('super-admin.reports.index', compact('counts', 'months'));
+        return view('super-admin.reports.index', compact('counts', 'months', 'scope'));
     }
 
     public function restaurants(Request $request): View
@@ -74,16 +78,10 @@ class PlatformReportController extends Controller
             ->when($filters['date_to'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('created_at', '<=', $date))
             ->when($filters['status'] ?? null, fn (Builder $builder, string $status) => $builder->where('status', $status))
             ->when($filters['plan_id'] ?? null, fn (Builder $builder, int $plan) => $builder->whereHas('subscriptions', fn (Builder $subscriptions) => $subscriptions->where('subscription_plan_id', $plan)))
-            ->when($filters['subscription_status'] ?? null, function (Builder $builder, string $status): void {
-                $builder->whereHas('subscriptions', function (Builder $subscriptions) use ($status): void {
-                    if ($status === 'expired') {
-                        $subscriptions->whereIn('status', ['active', 'trial'])
-                            ->where('expires_at', '<', CarbonImmutable::now(config('app.timezone'))->utc());
-                    } else {
-                        $subscriptions->where('status', $status);
-                    }
-                });
-            });
+            ->when($filters['subscription_status'] ?? null, fn (Builder $builder, string $status) => $builder->whereHas(
+                'subscriptions',
+                fn (Builder $subscriptions) => $this->subscriptionStatusFilter($subscriptions, $status),
+            ));
 
         $restaurants = $query->orderByDesc('created_at')->orderByDesc('id')->paginate(15)->withQueryString();
         $this->attachCurrentSubscriptions($restaurants->getCollection());
@@ -100,14 +98,7 @@ class PlatformReportController extends Controller
         $filters = $this->filters($request);
         $query = $this->subscriptionsForScope(RestaurantSubscription::query()->with(['restaurant', 'events']), $filters['scope'])
             ->when($filters['plan_id'] ?? null, fn (Builder $builder, int $plan) => $builder->where('subscription_plan_id', $plan))
-            ->when($filters['subscription_status'] ?? null, function (Builder $builder, string $status): void {
-                if ($status === 'expired') {
-                    $builder->whereIn('status', ['active', 'trial'])
-                        ->where('expires_at', '<', CarbonImmutable::now(config('app.timezone'))->utc());
-                } else {
-                    $builder->where('status', $status);
-                }
-            })
+            ->when($filters['subscription_status'] ?? null, fn (Builder $builder, string $status) => $this->subscriptionStatusFilter($builder, $status))
             ->when($filters['date_from'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('starts_at', '>=', $date))
             ->when($filters['date_to'] ?? null, fn (Builder $builder, string $date) => $builder->whereDate('starts_at', '<=', $date))
             ->when($filters['expiring_days'] ?? null, function (Builder $builder, int $days): void {
@@ -187,7 +178,7 @@ class PlatformReportController extends Controller
                 $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
             ),
             'status' => ['nullable', Rule::in(['active', 'suspended', 'inactive', 'trial', 'expired', 'cancelled', 'pending', 'approved', 'rejected', 'refunded'])],
-            'subscription_status' => ['nullable', Rule::in(['active', 'trial', 'expired', 'suspended', 'cancelled'])],
+            'subscription_status' => ['nullable', Rule::in(['active', 'trial', 'scheduled', 'pending_payment', 'pending_approval', 'expired', 'suspended', 'cancelled'])],
             'plan_id' => ['nullable', 'integer', 'exists:subscription_plans,id'],
             'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id'],
             'expiring_days' => ['nullable', 'integer', 'min:1', 'max:365'],
@@ -274,7 +265,7 @@ class PlatformReportController extends Controller
                 $request->filled('date_from') ? ['after_or_equal:date_from'] : [],
             ),
             'status' => ['nullable', Rule::in(['active', 'suspended', 'inactive', 'pending', 'approved', 'rejected', 'refunded'])],
-            'subscription_status' => ['nullable', Rule::in(['active', 'trial', 'expired', 'suspended', 'cancelled'])],
+            'subscription_status' => ['nullable', Rule::in(['active', 'trial', 'scheduled', 'pending_payment', 'pending_approval', 'expired', 'suspended', 'cancelled'])],
             'plan_id' => ['nullable', 'integer', 'exists:subscription_plans,id'],
             'restaurant_id' => ['nullable', 'integer', 'exists:restaurants,id'],
             'expiring_days' => ['nullable', 'integer', 'min:1', 'max:365'],
@@ -367,9 +358,14 @@ class PlatformReportController extends Controller
 
     private function subscriptionStatusFilter(Builder $query, string $status): Builder
     {
-        return $status === 'expired'
-            ? $query->whereIn('status', ['active', 'trial'])
-                ->where('expires_at', '<', CarbonImmutable::now(config('app.timezone'))->utc())
-            : $query->where('status', $status);
+        $now = CarbonImmutable::now(config('app.timezone'))->utc();
+
+        return match ($status) {
+            'expired' => $query->whereIn('status', ['active', 'trial'])->where('expires_at', '<', $now),
+            'scheduled' => $query->whereIn('status', ['active', 'trial'])->where('starts_at', '>', $now),
+            'active' => $query->where('status', 'active')->where('starts_at', '<=', $now)->where('expires_at', '>=', $now),
+            'trial' => $query->where('status', 'trial')->where('starts_at', '<=', $now)->where('expires_at', '>=', $now),
+            default => $query->where('status', $status),
+        };
     }
 }

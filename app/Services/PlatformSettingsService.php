@@ -34,7 +34,6 @@ class PlatformSettingsService
             'expiry_alerts' => true,
             'payment_alerts' => true,
             'restaurant_alerts' => true,
-            'polling_interval' => 60,
         ],
     ];
 

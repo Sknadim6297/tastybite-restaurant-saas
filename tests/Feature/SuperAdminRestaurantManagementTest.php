@@ -6,9 +6,11 @@ use App\Models\Restaurant;
 use App\Models\RestaurantAuditLog;
 use App\Models\SuperAdmin;
 use App\Models\User;
+use App\Services\RestaurantProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Transport\ArrayTransport;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Symfony\Component\Mime\Email;
@@ -33,7 +35,16 @@ class SuperAdminRestaurantManagementTest extends TestCase
         $this->get(route('super-admin.restaurants.index'))
             ->assertOk()
             ->assertSee('Restaurants')
+            ->assertSee('href="'.route('super-admin.restaurants.create').'"', false)
             ->assertSee($admin->name);
+
+        $this->get(route('super-admin.restaurants.create'))
+            ->assertOk()
+            ->assertSee('action="'.route('super-admin.restaurants.store').'"', false)
+            ->assertSee('name="restaurant[name]"', false)
+            ->assertSee('name="owner[email]"', false)
+            ->assertSee('name="owner[mobile]"', false)
+            ->assertSee('href="'.route('super-admin.restaurants.index').'"', false);
     }
 
     public function test_super_admin_can_create_a_restaurant_and_initial_owner(): void
@@ -61,6 +72,7 @@ class SuperAdminRestaurantManagementTest extends TestCase
             'owner' => [
                 'name' => 'Alicia Rivera',
                 'email' => ' OWNER@CedarHouse.TEST ',
+                'mobile' => '+1 (555) 555-0101',
             ],
         ]);
 
@@ -70,10 +82,17 @@ class SuperAdminRestaurantManagementTest extends TestCase
         $owner = User::firstOrFail();
 
         $this->assertSame('cedar-house', $restaurant->slug);
+        $this->assertSame('approved', $restaurant->approval_status);
+        $this->assertSame('active', $restaurant->status);
         $this->assertSame('owner@cedarhouse.test', $owner->email);
+        $this->assertSame('+1 (555) 555-0101', $owner->mobile);
         $this->assertSame('owner', $owner->role);
         $this->assertSame($restaurant->id, $owner->restaurant_id);
         $this->assertSame(1, $restaurant->owners()->count());
+        $this->get(route('super-admin.restaurants.show', $restaurant))
+            ->assertOk()
+            ->assertSee('+1 (555) 555-0101')
+            ->assertSee(route('super-admin.restaurant-owners.edit', $owner), false);
         $this->assertNotSame('', $owner->getRawOriginal('password'));
         $this->assertNotSame('SecureOwnerPass123!', $owner->getRawOriginal('password'));
         $this->assertDatabaseHas('restaurants', ['email' => 'hello@cedarhouse.test']);
@@ -129,6 +148,44 @@ class SuperAdminRestaurantManagementTest extends TestCase
             'password' => 'AnotherOwnerPassword4!',
             'password_confirmation' => 'AnotherOwnerPassword4!',
         ])->assertSessionHasErrors(['email']);
+
+        Auth::guard('web')->logout();
+        Auth::forgetGuards();
+        $this->post(route('restaurant.login.submit'), [
+            'email' => $owner->email,
+            'password' => $newPassword,
+        ])->assertRedirect(route('restaurant.dashboard'));
+        $this->get(route('restaurant.dashboard'))->assertOk();
+    }
+
+    public function test_restaurant_creation_rejects_an_invalid_owner_mobile_number(): void
+    {
+        $admin = SuperAdmin::create([
+            'name' => 'Platform Admin',
+            'email' => 'admin@example.com',
+            'password' => 'StrongAdminPass1!',
+            'is_active' => true,
+        ]);
+        $this->actingAs($admin, 'super_admin');
+        $this->app['session']->put('super_admin_password_version', hash('sha256', $admin->getAuthPassword()));
+
+        $this->from(route('super-admin.restaurants.create'))
+            ->post(route('super-admin.restaurants.store'), [
+                'restaurant' => [
+                    'name' => 'Mobile Validation House',
+                    'slug' => 'mobile-validation-house',
+                    'email' => 'hello@mobile-validation.test',
+                    'status' => 'active',
+                ],
+                'owner' => [
+                    'name' => 'Mobile Owner',
+                    'email' => 'mobile-owner@mobile-validation.test',
+                    'mobile' => 'not a phone number',
+                ],
+            ])
+            ->assertSessionHasErrors('owner.mobile');
+
+        $this->assertDatabaseMissing('restaurants', ['slug' => 'mobile-validation-house']);
     }
 
     public function test_restaurant_owner_cannot_access_super_admin_restaurant_management_routes(): void
@@ -339,7 +396,7 @@ class SuperAdminRestaurantManagementTest extends TestCase
 
     public function test_restaurant_provisioning_rolls_back_when_owner_creation_fails(): void
     {
-        \Illuminate\Support\Facades\Event::listen(
+        Event::listen(
             'eloquent.creating: '.User::class,
             static function (): void {
                 throw new \RuntimeException('Simulated owner insert failure.');
@@ -347,7 +404,7 @@ class SuperAdminRestaurantManagementTest extends TestCase
         );
 
         try {
-            app(\App\Services\RestaurantProvisioningService::class)->provision(
+            app(RestaurantProvisioningService::class)->provision(
                 [
                     'name' => 'Rollback House',
                     'slug' => 'rollback-house',

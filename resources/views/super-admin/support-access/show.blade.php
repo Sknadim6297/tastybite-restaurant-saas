@@ -9,7 +9,11 @@
         <a class="button button-secondary" href="{{ route('super-admin.support-access.index') }}">Back to requests</a>
     </div>
 
-    <div class="notice-card" role="note"><strong>Approval does not grant system access.</strong><p>No impersonation token, owner session, guard switch, or tenant data access is issued by this workflow. The application has no support-access execution mechanism.</p></div>
+    @if ($supportRequest->requested_scope === \App\Models\SupportAccessRequest::RESTAURANT_DASHBOARD_MENU_MANAGE)
+        <div class="notice-card" role="note"><strong>Support Access requests remain a separate approval record.</strong><p>This request does not start or authorize direct dashboard access. Use Restaurants → Go to Dashboard for the direct, temporary Super Admin context.</p></div>
+    @else
+        <div class="notice-card" role="note"><strong>Approval records an authorization decision only.</strong><p>This scope does not open restaurant data or grant a restaurant session.</p></div>
+    @endif
     <div class="form-card">
         <div class="detail-grid">
             <div class="detail-item"><span>Request status</span><strong>{{ ucfirst($supportRequest->status) }}</strong></div>
@@ -22,8 +26,29 @@
                 <div class="detail-item"><span>Reviewed at</span><strong>{{ $supportRequest->reviewed_at?->format('M j, Y H:i') }}</strong></div>
                 <div class="detail-item full-span"><span>Review reason</span><strong style="white-space:pre-wrap;">{{ $supportRequest->review_reason }}</strong></div>
             @endif
+            @if ($supportRequest->access_started_at)
+                <div class="detail-item"><span>Access started</span><strong>{{ $supportRequest->access_started_at->timezone(config('app.timezone'))->format('M j, Y H:i') }}</strong></div>
+                <div class="detail-item"><span>Access expires</span><strong>{{ $supportRequest->access_expires_at?->timezone(config('app.timezone'))->format('M j, Y H:i') ?? 'Not available' }}</strong></div>
+                @if ($supportRequest->access_ended_at)
+                    <div class="detail-item"><span>Access ended</span><strong>{{ $supportRequest->access_ended_at->timezone(config('app.timezone'))->format('M j, Y H:i') }}</strong></div>
+                @elseif ($supportRequest->access_revoked_at)
+                    <div class="detail-item"><span>Access revoked</span><strong>{{ $supportRequest->access_revoked_at->timezone(config('app.timezone'))->format('M j, Y H:i') }}</strong></div>
+                @endif
+            @endif
         </div>
     </div>
+
+    @if ($supportRequest->requested_scope === \App\Models\SupportAccessRequest::RESTAURANT_DASHBOARD_MENU_MANAGE && $supportRequest->access_started_at && $supportRequest->access_ended_at === null && $supportRequest->access_revoked_at === null)
+        @if ($supportRequest->requester_admin_id !== $currentAdmin->id)
+            <div class="page-tools" style="margin-top:20px; justify-content:flex-end;">
+                <form method="POST" action="{{ route('super-admin.support-access.revoke', $supportRequest) }}" data-confirm="Immediately revoke this restaurant support session?">
+                    @csrf
+                    <input type="hidden" name="reason" value="Revoked by {{ $currentAdmin->name }} from the support-access request details.">
+                    <button class="button button-danger" type="submit">Revoke active access</button>
+                </form>
+            </div>
+        @endif
+    @endif
 
     @if ($supportRequest->status === 'pending')
         @if ($supportRequest->requester_admin_id === $currentAdmin->id)

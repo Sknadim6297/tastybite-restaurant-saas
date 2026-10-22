@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use LogicException;
 
 class SubscriptionPlan extends Model
 {
@@ -21,6 +22,15 @@ class SubscriptionPlan extends Model
         'trial_duration_days',
         'status',
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (SubscriptionPlan $plan): void {
+            if ($plan->isDirty('code')) {
+                throw new LogicException('Subscription plan codes are immutable.');
+            }
+        });
+    }
 
     protected function casts(): array
     {

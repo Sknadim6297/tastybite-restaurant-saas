@@ -5,6 +5,7 @@ namespace App\Http\Controllers\SuperAdmin;
 use App\Http\Controllers\Controller;
 use App\Models\RestaurantAuditLog;
 use App\Models\SubscriptionPlan;
+use App\Services\SubscriptionPlanCodeGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -47,12 +48,10 @@ class SubscriptionPlanController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validatedPlan($request);
-        $plan = DB::transaction(function () use ($data): SubscriptionPlan {
-            $plan = SubscriptionPlan::create($this->planAttributes($data));
-            $this->recordPlanAudit('subscription_plan_created', $plan);
-
-            return $plan;
-        });
+        $plan = app(SubscriptionPlanCodeGenerator::class)->create(
+            $this->planAttributes($data),
+            fn (SubscriptionPlan $plan) => $this->recordPlanAudit('subscription_plan_created', $plan),
+        );
 
         return redirect()->route('super-admin.subscription-plans.show', $plan)
             ->with('status', 'Subscription plan created successfully.');
@@ -75,7 +74,7 @@ class SubscriptionPlanController extends Controller
 
     public function update(Request $request, SubscriptionPlan $subscriptionPlan): RedirectResponse
     {
-        $data = $this->validatedPlan($request, $subscriptionPlan);
+        $data = $this->validatedPlan($request);
         DB::transaction(function () use ($data, $subscriptionPlan): void {
             $before = $subscriptionPlan->only([
                 'name', 'code', 'description', 'price', 'billing_period',
@@ -119,22 +118,12 @@ class SubscriptionPlanController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function validatedPlan(Request $request, ?SubscriptionPlan $plan = null): array
+    private function validatedPlan(Request $request): array
     {
         $input = $request->all();
-        if (isset($input['code']) && is_string($input['code'])) {
-            $input['code'] = strtoupper(trim($input['code']));
-        }
 
         $validator = Validator::make($input, [
             'name' => ['required', 'string', 'max:120'],
-            'code' => [
-                'required',
-                'string',
-                'max:40',
-                'regex:/^[A-Z0-9][A-Z0-9_-]*$/',
-                Rule::unique('subscription_plans', 'code')->ignore($plan?->id),
-            ],
             'description' => ['nullable', 'string', 'max:2000'],
             'price' => ['required', 'numeric', 'min:0', 'max:99999999.99', 'decimal:0,2'],
             'billing_period' => ['required', Rule::in(['monthly', 'quarterly', 'yearly', 'custom'])],
@@ -180,7 +169,6 @@ class SubscriptionPlanController extends Controller
 
         return [
             'name' => $data['name'],
-            'code' => $data['code'],
             'description' => $data['description'] ?? null,
             'price' => $data['price'],
             'currency' => 'INR',

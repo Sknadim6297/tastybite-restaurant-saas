@@ -8,7 +8,7 @@
     @include('super-admin.reports._tabs', ['active' => 'subscriptions'])
     <form method="GET" class="form-card report-filters" data-auto-filter>
         <label>Data scope<select name="scope"><option value="real" @selected($filters['scope'] === 'real')>Real records</option><option value="demo" @selected($filters['scope'] === 'demo')>Demo records</option><option value="all" @selected($filters['scope'] === 'all')>All records</option></select></label>
-        <label>Status<select name="subscription_status"><option value="">All statuses</option>@foreach(['active','trial','expired','suspended','cancelled'] as $status)<option value="{{ $status }}" @selected(($filters['subscription_status'] ?? '') === $status)>{{ ucfirst($status) }}</option>@endforeach</select></label>
+        <label>Status<select name="subscription_status"><option value="">All statuses</option>@foreach(['pending_payment','pending_approval','scheduled','active','trial','expired','suspended','cancelled'] as $status)<option value="{{ $status }}" @selected(($filters['subscription_status'] ?? '') === $status)>{{ str($status)->replace('_', ' ')->title() }}</option>@endforeach</select></label>
         <label>Plan<select name="plan_id"><option value="">Any plan</option>@foreach($plans as $plan)<option value="{{ $plan->id }}" @selected((string) ($filters['plan_id'] ?? '') === (string) $plan->id)>{{ $plan->name }}</option>@endforeach</select></label>
         <label>Expiring in days<input type="number" min="1" max="365" name="expiring_days" value="{{ $filters['expiring_days'] ?? '' }}"></label>
         <label>Starts from<input type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}"></label>

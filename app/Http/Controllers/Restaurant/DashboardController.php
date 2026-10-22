@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Restaurant;
 
 use App\Http\Controllers\Controller;
 use App\Models\RestaurantSubscription;
+use App\Services\RestaurantAccessContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class DashboardController extends Controller
 {
     public function index(): View
     {
-        $user = Auth::guard('web')->user();
+        $user = app(RestaurantAccessContext::class)->owner();
         $restaurant = $user->restaurant;
         $now = CarbonImmutable::now(config('app.timezone'));
         $subscription = $restaurant->currentSubscriptionAt($now);

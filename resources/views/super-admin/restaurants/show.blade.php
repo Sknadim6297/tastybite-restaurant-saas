@@ -13,6 +13,12 @@
         <div class="toolbar-actions">
             <a class="button button-secondary" href="{{ route('super-admin.restaurants.index') }}">Back to list</a>
             <a class="button button-secondary" href="{{ route('super-admin.restaurants.edit', $restaurant) }}">Edit</a>
+            @if ($restaurant->status === 'active' && $restaurant->approval_status === 'approved' && $restaurant->owners->contains(fn ($restaurantOwner) => $restaurantOwner->status === 'active'))
+                <form class="inline-form" method="POST" action="{{ route('super-admin.restaurants.dashboard', $restaurant) }}">
+                    @csrf
+                    <button class="button button-primary" type="submit">Go to Dashboard</button>
+                </form>
+            @endif
             @if ($restaurant->status !== 'active')
                 <form class="inline-form" method="POST" action="{{ route('super-admin.restaurants.toggle-status', $restaurant) }}" data-loading-form data-confirm="Reactivate {{ $restaurant->name }}? Restaurant Admin access will be restored." data-confirm-title="Reactivate restaurant?" data-confirm-action="Reactivate">
                     @csrf
@@ -65,10 +71,12 @@
             <div class="detail-grid">
                 <div class="detail-item"><span>Owner name</span><strong>{{ $owner->name }}</strong></div>
                 <div class="detail-item"><span>Email</span><strong>{{ $owner->email }}</strong></div>
+                <div class="detail-item"><span>Mobile number</span><strong>{{ $owner->mobile ?: 'Not provided' }}</strong></div>
                 <div class="detail-item"><span>Role</span><strong>{{ ucfirst($owner->role) }}</strong></div>
                 <div class="detail-item"><span>Status</span><strong>{{ ucfirst($owner->status) }}</strong></div>
             </div>
             <div class="page-tools" style="margin-top:24px; margin-bottom:0; justify-content:flex-end;">
+                <a class="button button-secondary" href="{{ route('super-admin.restaurant-owners.edit', $owner) }}">Edit owner details</a>
                 <form class="inline-form" method="POST" action="{{ route('super-admin.restaurants.owners.toggle-status', [$restaurant, $owner]) }}" data-loading-form data-confirm="{{ $owner->status === 'active' ? 'Disable' : 'Enable' }} owner access for {{ $owner->name }}?" data-confirm-title="{{ $owner->status === 'active' ? 'Disable owner?' : 'Enable owner?' }}" data-confirm-action="{{ $owner->status === 'active' ? 'Disable' : 'Enable' }}">
                     @csrf
                     <input type="hidden" name="status" value="{{ $owner->status === 'active' ? 'inactive' : 'active' }}">

@@ -40,6 +40,7 @@ class RestaurantProvisioningService
                 'restaurant_id' => $restaurant->id,
                 'name' => $ownerData['name'],
                 'email' => $ownerData['email'],
+                'mobile' => $ownerData['mobile'] ?? null,
                 'password' => Hash::make(Str::random(64)),
                 'role' => 'owner',
                 'status' => $ownerData['status'] ?? 'active',
@@ -69,6 +70,7 @@ class RestaurantProvisioningService
             'restaurant.approval_status' => ['nullable', 'in:pending,approved'],
             'owner.name' => ['required', 'string', 'max:255'],
             'owner.email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'owner.mobile' => ['nullable', 'string', 'max:32', 'regex:/^\+?[0-9][0-9\s().-]{5,28}[0-9]$/'],
             'owner.status' => ['nullable', 'in:active,inactive'],
         ];
 

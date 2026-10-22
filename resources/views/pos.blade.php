@@ -5,9 +5,10 @@
 @section('content')
 @php
     $restaurantName = $restaurant->name ?? 'TastyBite';
-    $currentUser = $currentUser ?? Auth::guard('web')->user();
+    $adminAccess = request()->attributes->get('restaurant_support_admin');
+    $currentUser = $adminAccess ?? ($currentUser ?? Auth::guard('web')->user());
     $staffName = $currentUser?->name ?? 'Staff';
-    $staffRole = ucfirst((string) ($currentUser?->role ?? 'owner'));
+    $staffRole = $adminAccess ? 'Super Admin' : ucfirst((string) ($currentUser?->role ?? 'owner'));
 @endphp
 
     <header class="top-header">
@@ -52,27 +53,37 @@
           <span id="currentTime">--:--:-- --</span>
         </div>
 
-        <div class="dropdown">
-          <button class="admin-profile" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account menu">
+        @if ($adminAccess)
+          <div class="admin-profile" aria-label="Super Admin account">
             <span class="admin-avatar"><i class="bi bi-person-fill"></i></span>
             <span class="admin-meta">
               <span class="admin-name">{{ $staffName }}</span>
               <small>{{ $staffRole }}</small>
             </span>
-            <i class="bi bi-chevron-down admin-caret" aria-hidden="true"></i>
-          </button>
-          <ul class="dropdown-menu dropdown-menu-end admin-menu">
-            <li><a class="dropdown-item" href="{{ route('restaurant.profile') }}"><i class="bi bi-person-gear"></i> Profile &amp; Branding</a></li>
-            <li><a class="dropdown-item" href="{{ route('restaurant.dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li>
-              <form method="POST" action="{{ route('restaurant.logout') }}">
-                @csrf
-                <button type="submit" class="dropdown-item"><i class="bi bi-box-arrow-right"></i> Log out</button>
-              </form>
-            </li>
-          </ul>
-        </div>
+          </div>
+        @else
+          <div class="dropdown">
+            <button class="admin-profile" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account menu">
+              <span class="admin-avatar"><i class="bi bi-person-fill"></i></span>
+              <span class="admin-meta">
+                <span class="admin-name">{{ $staffName }}</span>
+                <small>{{ $staffRole }}</small>
+              </span>
+              <i class="bi bi-chevron-down admin-caret" aria-hidden="true"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end admin-menu">
+              <li><a class="dropdown-item" href="{{ route('restaurant.profile') }}"><i class="bi bi-person-gear"></i> Profile &amp; Branding</a></li>
+              <li><a class="dropdown-item" href="{{ route('restaurant.dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <form method="POST" action="{{ route('restaurant.logout') }}">
+                  @csrf
+                  <button type="submit" class="dropdown-item"><i class="bi bi-box-arrow-right"></i> Log out</button>
+                </form>
+              </li>
+            </ul>
+          </div>
+        @endif
       </div>
     </header>
 

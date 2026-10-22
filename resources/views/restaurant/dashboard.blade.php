@@ -7,7 +7,11 @@
     <div class="page-heading">
         <div>
             <span class="eyebrow">RESTAURANT OVERVIEW</span>
-            <h1>Good to see you, {{ Str::of($user->name)->before(' ') }}.</h1>
+            @if (request()->attributes->has('restaurant_admin_access_restaurant'))
+                <h1>Good to see you, Super Admin.</h1>
+            @else
+                <h1>Good to see you, {{ Str::of($user->name)->before(' ') }}.</h1>
+            @endif
             <p>{{ $restaurant->name ?? 'Your restaurant' }} subscription and account overview.</p>
         </div>
         <span class="date-chip">{{ now()->format('l, j M Y') }}</span>
@@ -42,7 +46,9 @@
             <span class="welcome-kicker">RESTAURANT ADMIN WORKSPACE</span>
             <h2 id="welcome-title">Your restaurant starts here.</h2>
             <p>Power your service operations through a secure admin dashboard. The next modules will go live as the restaurant management stack is expanded.</p>
-            <a class="button button-secondary" href="{{ route('restaurant.profile') }}">Review your profile <span aria-hidden="true">→</span></a>
+            @unless (request()->attributes->has('restaurant_admin_access_restaurant'))
+                <a class="button button-secondary" href="{{ route('restaurant.profile') }}">Review your profile <span aria-hidden="true">→</span></a>
+            @endunless
         </div>
         <div class="welcome-art" aria-hidden="true"><span class="welcome-art-dot"></span></div>
     </section>
@@ -52,7 +58,9 @@
             <h2>Subscription</h2>
             <p>Plan and access dates currently recorded for this restaurant.</p>
         </div>
-        <a class="button button-secondary" href="{{ route('restaurant.subscription') }}">View subscription</a>
+        @unless (request()->attributes->has('restaurant_admin_access_restaurant'))
+            <a class="button button-secondary" href="{{ route('restaurant.subscription') }}">View subscription</a>
+        @endunless
     </section>
     <section class="subscription-overview" aria-label="Current subscription">
         @if ($subscription)
