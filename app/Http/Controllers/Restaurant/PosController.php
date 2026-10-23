@@ -6,12 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\InventoryItem;
 use App\Models\InventoryLocation;
 use App\Models\InventoryMovement;
-use App\Models\MenuRecipe;
 use App\Models\RestaurantAuditLog;
 use App\Models\RestaurantMenuItem;
 use App\Models\RestaurantPosOrder;
 use App\Models\RestaurantPosOrderItem;
-use App\Models\RestaurantPosOrderItemIngredient;
 use App\Models\RestaurantPosOrderStatusHistory;
 use App\Models\RestaurantPosPayment;
 use App\Models\RestaurantTable;
@@ -88,20 +86,14 @@ class PosController extends Controller
             'idempotency_key' => ['required', 'string', 'max:120'],
             'items_json' => ['required', 'json', 'max:30000'],
             'discount_percent' => ['required', 'numeric', 'between:0,100', 'decimal:0,2'],
-            'notes' => ['nullable', 'string', 'max:2000'],
             'order_type' => ['nullable', Rule::in(['dine_in', 'takeaway', 'delivery'])],
             'table_number' => ['nullable', 'string', 'max:32'],
             'table_id' => ['nullable', 'integer'],
             'floor_id' => ['nullable', 'integer'],
             'section_id' => ['nullable', 'integer'],
             'guest_count' => ['nullable', 'integer', 'between:1,100'],
-            'payment_method' => ['nullable', Rule::in(['cash', 'card', 'upi'])],
-            'payment_confirmed' => ['nullable', 'boolean'],
+            'payment_method' => ['required', Rule::in(['cash', 'card', 'upi'])],
         ]);
-        $paymentConfirmed = $request->boolean('payment_confirmed');
-        if ($paymentConfirmed && ! ($data['payment_method'] ?? null)) {
-            abort(422, 'Select a payment method before confirming receipt.');
-        }
         $data['order_type'] = $data['order_type'] ?? 'dine_in';
         if ($data['order_type'] !== 'dine_in') {
             $data['table_number'] = null;
@@ -125,8 +117,8 @@ class PosController extends Controller
             return redirect()->route('pos.orders.index')->with('status', "Order {$existing->order_number} was already completed.");
         }
 
-        $order = DB::transaction(function () use ($owner, $restaurantId, $submitted, $data, $paymentConfirmed): RestaurantPosOrder {
-            abort_unless(DB::table('restaurants')->where('id', $restaurantId)->lockForUpdate()->first(), 404);
+        $order = DB::transaction(function () use ($owner, $restaurantId, $submitted, $data): RestaurantPosOrder {
+            abort_unless(DB::table('restaurants')->where('id', $restaurantId)->lockForUpdate()->first() !== null, 404);
             $existing = RestaurantPosOrder::query()->where('restaurant_id', $restaurantId)
                 ->where('idempotency_key', $data['idempotency_key'])->first();
             if ($existing) {
@@ -168,7 +160,6 @@ class PosController extends Controller
                     ->whereIn('table_id', $reservationTableIds)->whereIn('status', ['pending', 'confirmed'])
                     ->where('starts_at', '>=', now(config('app.timezone'))->utc())->exists(), 409, 'This table is blocked by an upcoming reservation.');
             }
-            $settings = DB::table('inventory_settings')->where('restaurant_id', $restaurantId)->first();
             $order = RestaurantPosOrder::create([
                 'restaurant_id' => $restaurantId,
                 'created_by' => $owner->id,
@@ -181,14 +172,12 @@ class PosController extends Controller
                 'table_id' => $table?->id,
                 'original_table_id' => $table?->id,
                 'guest_count' => $data['guest_count'] ?? null,
-                'notes' => $data['notes'] ?? null,
                 'fulfillment_status' => 'pending',
                 'payment_method' => $data['payment_method'] ?? null,
                 'idempotency_key' => $data['idempotency_key'],
                 'subtotal' => '0.00', 'discount' => '0.00', 'tax' => '0.00', 'total' => '0.00',
             ]);
             $subtotal = BigDecimal::zero();
-            $recipes = [];
             foreach ($submitted as $line) {
                 $product = RestaurantMenuItem::query()->where('restaurant_id', $restaurantId)
                     ->where('is_active', true)->where('is_available', true)->lockForUpdate()
@@ -196,34 +185,14 @@ class PosController extends Controller
                 $quantity = (int) $line['quantity'];
                 $lineTotal = BigDecimal::of((string) $product->price)->multipliedBy($quantity)->toScale(2, RoundingMode::HALF_UP);
                 $subtotal = $subtotal->plus($lineTotal);
-                $recipe = MenuRecipe::query()->where('restaurant_id', $restaurantId)
-                    ->where('menu_item_id', $product->id)->where('is_active', true)
-                    ->with('ingredients')->lockForUpdate()->first();
-                $orderItem = RestaurantPosOrderItem::create([
+                RestaurantPosOrderItem::create([
                     'restaurant_id' => $restaurantId,
                     'pos_order_id' => $order->id,
                     'menu_item_id' => $product->id,
-                    'menu_recipe_id' => $recipe?->id,
-                    'recipe_version' => $recipe?->version,
                     'item_name' => $product->name,
                     'quantity' => $quantity,
                     'unit_price' => $product->price,
                 ]);
-                if ($recipe && ($settings?->consume_recipes ?? true)) {
-                    $recipes[] = [$orderItem, $recipe];
-                    foreach ($recipe->ingredients as $ingredient) {
-                        $quantityPerServing = BigDecimal::of((string) $ingredient->base_quantity)
-                            ->dividedBy((string) $recipe->yield_quantity, 9, RoundingMode::HALF_UP)
-                            ->toScale(6, RoundingMode::HALF_UP);
-                        RestaurantPosOrderItemIngredient::create([
-                            'restaurant_id' => $restaurantId,
-                            'order_item_id' => $orderItem->id,
-                            'inventory_item_id' => $ingredient->inventory_item_id,
-                            'unit_id' => $ingredient->unit_id,
-                            'quantity_per_serving' => $quantityPerServing->__toString(),
-                        ]);
-                    }
-                }
             }
             $discount = $subtotal->multipliedBy((string) $data['discount_percent'])
                 ->dividedBy('100', 2, RoundingMode::HALF_UP);
@@ -270,64 +239,35 @@ class PosController extends Controller
                 'to_status' => 'pending',
                 'changed_at' => now(),
             ]);
-            if ($paymentConfirmed) {
-                $payment = RestaurantPosPayment::create([
-                    'restaurant_id' => $restaurantId,
-                    'pos_order_id' => $order->id,
-                    'recorded_by' => $owner->id,
-                    'payment_reference' => 'POSPAY'.sprintf('%010d', $order->id),
-                    'idempotency_key' => 'pos-payment:'.$order->id,
-                    'amount' => $order->total,
-                    'method' => $data['payment_method'],
-                    'status' => 'recorded',
-                    'recorded_at' => now(),
-                    'notes' => 'Manually recorded at POS; no external payment was processed.',
-                ]);
-                $order->update([
-                    'payment_status' => 'paid',
-                    'payment_method' => $payment->method,
-                ]);
-                $this->audit($owner, 'pos_payment_recorded', 'pos_order', $order->id, [
-                    'payment_reference' => $payment->payment_reference,
-                    'method' => $payment->method,
-                    'amount' => $payment->amount,
-                ]);
-            }
+            $payment = RestaurantPosPayment::create([
+                'restaurant_id' => $restaurantId,
+                'pos_order_id' => $order->id,
+                'recorded_by' => $owner->id,
+                'payment_reference' => 'POSPAY'.sprintf('%010d', $order->id),
+                'idempotency_key' => 'pos-payment:'.$order->id,
+                'amount' => $order->total,
+                'method' => $data['payment_method'],
+                'status' => 'recorded',
+                'recorded_at' => now(),
+                'notes' => 'Manually recorded at POS; no external payment was processed.',
+            ]);
+            $order->update([
+                'payment_status' => 'paid',
+                'payment_method' => $payment->method,
+            ]);
+            $this->audit($owner, 'pos_payment_recorded', 'pos_order', $order->id, [
+                'payment_reference' => $payment->payment_reference,
+                'method' => $payment->method,
+                'amount' => $payment->amount,
+            ]);
             $this->audit($owner, 'pos_order_completed', 'pos_order', $order->id, [
                 'order_number' => $order->order_number, 'total' => $order->total,
             ]);
-            if ($settings?->consume_recipes ?? true) {
-                $defaultLocationId = $settings?->default_location_id;
-                foreach ($recipes as [$orderItem, $recipe]) {
-                    foreach ($recipe->ingredients as $ingredient) {
-                        $item = InventoryItem::query()->where('restaurant_id', $restaurantId)->findOrFail($ingredient->inventory_item_id);
-                        $locationId = $item->default_location_id ?: $defaultLocationId;
-                        abort_unless($locationId, 422, "Set a default stock location for {$item->name} before selling recipe-based products.");
-                        $location = InventoryLocation::query()->where('restaurant_id', $restaurantId)->findOrFail($locationId);
-                        $quantityPerServing = BigDecimal::of((string) $ingredient->quantity)
-                            ->dividedBy((string) $recipe->yield_quantity, 9, RoundingMode::HALF_UP)
-                            ->multipliedBy((int) $orderItem->quantity)->toScale(6, RoundingMode::HALF_UP);
-                        $this->stock->issue($owner, $item, $location, $quantityPerServing->__toString(), 'consumption',
-                            'pos-order:'.$order->id.':line:'.$orderItem->id.':ingredient:'.$ingredient->id, [
-                                'unit_id' => $ingredient->unit_id,
-                                'source_type' => 'pos_sale',
-                                'source_id' => $order->id,
-                                'source_line_id' => $orderItem->id,
-                                'reference' => $order->order_number,
-                                'reason' => 'pos_sale',
-                            ]);
-                    }
-                }
-            }
 
             return $order;
         });
 
-        $paymentMessage = $paymentConfirmed
-            ? 'Full payment recorded as paid.'
-            : 'No payment was recorded; the order remains unpaid until receipt is confirmed.';
-
-        return redirect()->route('pos.orders.index')->with('status', "Order {$order->order_number} completed. {$paymentMessage}");
+        return redirect()->route('pos.orders.index')->with('status', "Order {$order->order_number} completed.");
     }
 
     public function orders(): View

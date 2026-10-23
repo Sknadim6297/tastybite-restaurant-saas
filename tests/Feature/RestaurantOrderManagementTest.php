@@ -3,6 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Restaurant;
+use App\Models\InventoryCategory;
+use App\Models\InventoryItem;
+use App\Models\InventoryLocation;
+use App\Models\InventoryUnit;
+use App\Models\MenuRecipe;
+use App\Models\MenuRecipeIngredient;
 use App\Models\RestaurantMenuItem;
 use App\Models\RestaurantPosOrder;
 use App\Models\RestaurantPosOrderItem;
@@ -14,6 +20,7 @@ use App\Models\SubscriptionPlan;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -139,13 +146,13 @@ class RestaurantOrderManagementTest extends TestCase
         ]);
     }
 
-    public function test_pos_creates_a_payment_only_after_full_receipt_is_confirmed_for_each_method(): void
+    public function test_pos_completes_with_a_selected_method_without_payment_confirmation(): void
     {
         $product = $this->createMenuItem();
 
         foreach (['cash', 'card', 'upi'] as $method) {
             $key = 'confirmed-'.$method;
-            $this->post(route('pos.orders.store'), $this->posPayload($product, $key, $method, true))
+            $this->post(route('pos.orders.store'), $this->posPayload($product, $key, $method))
                 ->assertRedirect(route('pos.orders.index'));
 
             $order = RestaurantPosOrder::query()
@@ -153,7 +160,9 @@ class RestaurantOrderManagementTest extends TestCase
                 ->where('idempotency_key', $key)
                 ->firstOrFail();
 
+            $this->assertSame('completed', $order->status);
             $this->assertSame('paid', $order->payment_status);
+            $this->assertSame($method, $order->payment_method);
             $this->assertDatabaseHas('restaurant_pos_payments', [
                 'restaurant_id' => $this->restaurant->id,
                 'pos_order_id' => $order->id,
@@ -164,24 +173,100 @@ class RestaurantOrderManagementTest extends TestCase
         }
     }
 
-    public function test_selecting_a_method_without_payment_confirmation_leaves_order_unpaid(): void
+    public function test_legacy_payment_confirmation_and_order_notes_are_ignored(): void
     {
         $product = $this->createMenuItem();
         $key = 'unconfirmed-card';
 
-        $this->post(route('pos.orders.store'), $this->posPayload($product, $key, 'card', false))
+        $payload = $this->posPayload($product, $key, 'card');
+        $payload['payment_confirmed'] = '1';
+        $payload['notes'] = 'This note must not be stored';
+
+        $this->post(route('pos.orders.store'), $payload)
             ->assertRedirect(route('pos.orders.index'));
 
         $order = RestaurantPosOrder::query()->where('idempotency_key', $key)->firstOrFail();
-        $this->assertSame('unpaid', $order->payment_status);
+        $this->assertSame('paid', $order->payment_status);
         $this->assertSame('card', $order->payment_method);
-        $this->assertDatabaseMissing('restaurant_pos_payments', ['pos_order_id' => $order->id]);
+        $this->assertNull($order->notes);
+        $this->assertDatabaseHas('restaurant_pos_payments', [
+            'pos_order_id' => $order->id,
+            'method' => 'card',
+            'status' => 'recorded',
+        ]);
+    }
+
+    public function test_pos_checkout_does_not_consume_active_recipe_stock(): void
+    {
+        $unit = InventoryUnit::create([
+            'restaurant_id' => $this->restaurant->id,
+            'name' => 'Kilogram',
+            'abbreviation' => 'kg',
+            'dimension' => 'mass',
+            'status' => 'active',
+        ]);
+        $category = InventoryCategory::create([
+            'restaurant_id' => $this->restaurant->id,
+            'name' => 'Ingredients',
+            'status' => 'active',
+        ]);
+        $location = InventoryLocation::create([
+            'restaurant_id' => $this->restaurant->id,
+            'name' => 'Main Store',
+            'code' => 'MAIN',
+            'status' => 'active',
+        ]);
+        $ingredient = InventoryItem::create([
+            'restaurant_id' => $this->restaurant->id,
+            'category_id' => $category->id,
+            'base_unit_id' => $unit->id,
+            'default_location_id' => $location->id,
+            'item_code' => 'ING000001',
+            'name' => 'Rice',
+            'status' => 'active',
+        ]);
+        DB::table('inventory_settings')->insert([
+            'restaurant_id' => $this->restaurant->id,
+            'expiry_warning_days' => 30,
+            'deduction_event' => 'sale_completed',
+            'allow_negative_stock' => false,
+            'valuation_method' => 'weighted_average',
+            'consume_recipes' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $product = $this->createMenuItem();
+        $recipe = MenuRecipe::create([
+            'restaurant_id' => $this->restaurant->id,
+            'menu_item_id' => $product->id,
+            'version' => 1,
+            'yield_quantity' => '1.000000',
+            'is_active' => true,
+        ]);
+        MenuRecipeIngredient::create([
+            'restaurant_id' => $this->restaurant->id,
+            'menu_recipe_id' => $recipe->id,
+            'inventory_item_id' => $ingredient->id,
+            'unit_id' => $unit->id,
+            'quantity' => '0.250000',
+            'base_quantity' => '0.250000',
+        ]);
+
+        $this->post(route('pos.orders.store'), $this->posPayload($product, 'recipe-no-deduction', 'cash'))
+            ->assertRedirect(route('pos.orders.index'));
+
+        $order = RestaurantPosOrder::query()->where('idempotency_key', 'recipe-no-deduction')->firstOrFail();
+        $orderItem = RestaurantPosOrderItem::query()->where('pos_order_id', $order->id)->firstOrFail();
+        $this->assertSame('completed', $order->status);
+        $this->assertNull($orderItem->menu_recipe_id);
+        $this->assertDatabaseCount('restaurant_pos_order_item_ingredients', 0);
+        $this->assertDatabaseCount('inventory_movements', 0);
     }
 
     public function test_repeated_pos_submission_with_same_idempotency_key_does_not_duplicate_payment(): void
     {
         $product = $this->createMenuItem();
-        $payload = $this->posPayload($product, 'double-submit', 'upi', true);
+        $payload = $this->posPayload($product, 'double-submit', 'upi');
 
         $this->post(route('pos.orders.store'), $payload)->assertRedirect(route('pos.orders.index'));
         $this->post(route('pos.orders.store'), $payload)->assertRedirect(route('pos.orders.index'));
@@ -498,7 +583,7 @@ class RestaurantOrderManagementTest extends TestCase
         ]);
     }
 
-    private function posPayload(RestaurantMenuItem $product, string $key, string $method, bool $confirmed): array
+    private function posPayload(RestaurantMenuItem $product, string $key, string $method): array
     {
         return [
             'idempotency_key' => $key,
@@ -506,7 +591,6 @@ class RestaurantOrderManagementTest extends TestCase
             'discount_percent' => '0',
             'order_type' => 'takeaway',
             'payment_method' => $method,
-            'payment_confirmed' => $confirmed ? '1' : '0',
         ];
     }
 

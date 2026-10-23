@@ -66,13 +66,6 @@ const searchClear = document.querySelector("[data-search-clear]");
 const noMatchingProducts = document.getElementById("noMatchingProducts");
 const nextBillingCount = document.getElementById("nextBillingCount");
 
-const paymentNotice = document.getElementById("paymentNotice");
-const paymentMethodNotices = {
-    Cash: "Cash is recorded only after you confirm the full amount was received.",
-    Card: "Confirm only after the external card terminal reports the full payment received.",
-    UPI: "Confirm only after the external UPI/QR payment is verified as received."
-};
-
 document.querySelectorAll("[data-payment-method]").forEach(button => {
     button.addEventListener("click", () => {
         document.querySelectorAll("[data-payment-method]").forEach(method => {
@@ -81,13 +74,6 @@ document.querySelectorAll("[data-payment-method]").forEach(button => {
             method.setAttribute("aria-pressed", String(isSelected));
         });
 
-        if (paymentNotice) {
-            const method = button.dataset.paymentMethod || "Cash";
-            const noticeText = paymentNotice.querySelector("span");
-            if (noticeText) {
-                noticeText.textContent = paymentMethodNotices[method] || paymentMethodNotices.Cash;
-            }
-        }
     });
 });
 
@@ -611,10 +597,8 @@ function clearCart() {
     cart.clear();
 
     const discount = document.getElementById("discount");
-    const notes = document.getElementById("orderNotes");
 
     if (discount) discount.value = "0";
-    if (notes) notes.value = "";
 
     renderCart();
 }
@@ -622,6 +606,11 @@ function clearCart() {
 // Hold current order
 function holdOrder() {
     if (cart.size === 0) {
+        const mostRecentOrder = heldOrders.at(-1);
+        if (mostRecentOrder) {
+            resumeHeldOrder(mostRecentOrder.id);
+            return;
+        }
         alert("Add at least one menu item before holding this bill.");
         return;
     }
@@ -634,66 +623,13 @@ function holdOrder() {
         floorId: document.getElementById("posFloor")?.value || "",
         sectionId: document.getElementById("posSection")?.value || "",
         guestNo: document.getElementById("guestNo")?.value || "",
-        notes: document.getElementById("orderNotes")?.value || "",
         discount: document.getElementById("discount")?.value || "0",
         items: [...cart.values()].map(item => ({ ...item }))
     });
 
     cart.clear();
     document.getElementById("discount").value = "0";
-    document.getElementById("orderNotes").value = "";
     renderCart();
-    renderHeldOrders();
-}
-
-// Render held orders
-function renderHeldOrders() {
-    const list = document.getElementById("heldOrdersList");
-    if (!list) return;
-    const count = document.getElementById("heldOrderCount");
-    if (count) count.textContent = String(heldOrders.length);
-
-    if (heldOrders.length === 0) {
-        list.innerHTML = '<p class="held-orders-empty">No held bills.</p>';
-        return;
-    }
-
-    list.replaceChildren();
-    heldOrders.forEach(order => {
-        const subtotal = order.items.reduce((sum, item) => sum + item.price * item.qty, 0);
-        const discountPercent = Math.max(0, Math.min(100, Number(order.discount) || 0));
-        const taxable = subtotal - subtotal * discountPercent / 100;
-        const total = taxable * 1.05;
-
-        const card = document.createElement("article");
-        card.className = "held-order-card";
-        const details = document.createElement("div");
-        details.className = "held-order-details";
-        const title = document.createElement("strong");
-        title.textContent = `${order.orderType} · Table ${order.tableNo || "—"} · ${order.items.length} item${order.items.length === 1 ? "" : "s"}`;
-        const amount = document.createElement("span");
-        amount.textContent = money(total);
-        details.append(title, amount);
-
-        const actions = document.createElement("div");
-        actions.className = "held-order-actions";
-        const restore = document.createElement("button");
-        restore.type = "button";
-        restore.className = "held-order-restore";
-        restore.textContent = "Restore";
-        restore.addEventListener("click", () => resumeHeldOrder(order.id));
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "held-order-remove";
-        remove.textContent = "Remove";
-        remove.addEventListener("click", () => {
-            heldOrders = heldOrders.filter(held => held.id !== order.id);
-            renderHeldOrders();
-        });
-        actions.append(restore, remove);
-        card.append(details, actions);
-        list.append(card);
-    });
 }
 
 // Restore selected held order
@@ -742,7 +678,6 @@ function resumeHeldOrder(id) {
         tableNo: order.tableId,
         guestNo: order.guestNo,
         customerMobile: order.mobile,
-        orderNotes: order.notes,
         discount: order.discount
     };
 
@@ -759,7 +694,6 @@ function resumeHeldOrder(id) {
     heldOrders.splice(index, 1);
 
     renderCart();
-    renderHeldOrders();
 
 }
 
@@ -792,7 +726,6 @@ if (completeSaleButton) {
         const form = document.getElementById("completeSaleForm");
         const itemsField = document.getElementById("posItemsJson");
         const discountField = document.getElementById("posDiscountPercent");
-        const notesField = document.getElementById("posOrderNotes");
         const orderTypeField = document.getElementById("posOrderType");
         const tableField = document.getElementById("posTableNumber");
         const tableIdField = document.getElementById("posTableId");
@@ -800,15 +733,13 @@ if (completeSaleButton) {
         const sectionIdField = document.getElementById("posSectionId");
         const guestField = document.getElementById("posGuestCount");
         const paymentField = document.getElementById("posPaymentMethod");
-        const paymentConfirmedField = document.getElementById("posPaymentConfirmed");
-        if (!form || !itemsField || !discountField || !notesField || !orderTypeField || !tableField || !guestField || !paymentField || !paymentConfirmedField) return;
+        if (!form || !itemsField || !discountField || !orderTypeField || !tableField || !guestField || !paymentField) return;
 
         itemsField.value = JSON.stringify([...cart.values()].map(item => ({
             menu_item_id: item.id,
             quantity: item.qty
         })));
         discountField.value = String(Math.max(0, Math.min(100, Number(document.getElementById("discount")?.value) || 0)));
-        notesField.value = document.getElementById("orderNotes")?.value || "";
         orderTypeField.value = ({
             "Dine In": "dine_in",
             "Take Away": "takeaway",
@@ -823,9 +754,6 @@ if (completeSaleButton) {
         guestField.value = document.getElementById("guestNo")?.value || "";
         const selectedPaymentMethod = document.querySelector("[data-payment-method].active")?.dataset.paymentMethod;
         paymentField.value = selectedPaymentMethod?.toLowerCase() || "";
-        paymentConfirmedField.value = document.getElementById("paymentReceivedConfirmed")?.checked && selectedPaymentMethod
-            ? "1"
-            : "0";
         completeSaleButton.disabled = true;
         completeSaleButton.textContent = "Completing...";
         form.submit();

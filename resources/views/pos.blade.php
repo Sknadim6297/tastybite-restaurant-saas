@@ -11,6 +11,9 @@
     $staffRole = $adminAccess ? 'Super Admin' : ucfirst((string) ($currentUser?->role ?? 'owner'));
 @endphp
 
+    <main class="main-content">
+      <div class="pos-layout" id="posLayout">
+        <section class="pos-left" aria-label="Menu and products">
     <header class="top-header">
       <a href="{{ route('pos.index') }}" class="brand">
         @if($restaurant->logo_url)
@@ -86,17 +89,8 @@
       </div>
     </header>
 
-    <main class="main-content">
-        <div class="pos-layout" id="posLayout">
           <section class="menu-panel">
             <section class="pos-order-controls" aria-label="Current order details">
-              <div class="pos-control-heading">
-                <div>
-                  <h2>New Order</h2>
-                  <span>Choose order type and table details</span>
-                </div>
-                <span class="pos-live-indicator"><i aria-hidden="true"></i> Live order</span>
-              </div>
               <div class="pos-order-control-grid">
                 <div class="pos-control-group">
                   <span class="pos-control-label">Order Type</span>
@@ -137,19 +131,16 @@
             <div class="category-scroller" id="categoryScroller">
               <button class="cat-arrow cat-prev" type="button" data-cat-scroll="-1" aria-label="Scroll categories left"><i class="bi bi-chevron-left"></i></button>
             <div class="category-list" id="categoryList">
-              <button class="category-btn active" type="button" data-category="all" data-category-name="All">
-                <i class="bi bi-grid"></i> All
+              <button class="category-btn active" type="button" data-category="all" data-category-name="Items">
+                <i class="bi bi-grid" aria-hidden="true"></i><span>Items</span>
               </button>
 
               @foreach($categories as $category)
                 <button class="category-btn" type="button" data-category="{{ $category->id }}" data-category-name="{{ $category->name }}">
                   <span class="category-btn-media">
-                    @if($category->image_path)
-                      <img class="category-btn-image" src="{{ $category->image_url }}" alt="" loading="lazy">
-                    @endif
                     <i class="bi bi-{{ \App\Models\RestaurantMenuCategory::iconClassFor($category->icon) }}" aria-hidden="true"></i>
                   </span>
-                    <span>{{ $category->name }}</span>
+                  <span>{{ $category->name }}</span>
                 </button>
               @endforeach
             </div>
@@ -200,6 +191,7 @@
               @endif
             </div>
           </section>
+        </section>
 
           <aside class="billing-panel" id="billingPanel" aria-label="Current order and billing">
             <section class="checkout-dialog" aria-labelledby="checkoutTitle">
@@ -219,7 +211,7 @@
                   <div class="cart-heading">
                     <span>Item</span><span>Qty</span><span>Price</span><span>Total</span><span></span>
                   </div>
-                  <div class="cart-items" id="cartItems" aria-live="polite">
+                  <div class="cart-items" id="cartItems" aria-live="polite" role="region" aria-label="Cart items" tabindex="0">
                     <div class="empty-cart">
                       <i class="bi bi-cart3" aria-hidden="true"></i>
                       Add food items to start billing
@@ -256,7 +248,7 @@
                   </div>
                 </section>
 
-                <section class="pos-billing-options" aria-label="Payment and order notes">
+                <section class="pos-billing-options" aria-label="Payment method">
                   <h3>Payment Method</h3>
                   <div class="payment-methods" role="group" aria-label="Payment method">
                     <button type="button" class="payment-method active" data-payment-method="Cash" aria-pressed="true">
@@ -269,55 +261,30 @@
                       <i class="bi bi-qr-code" aria-hidden="true"></i><span>UPI</span>
                     </button>
                   </div>
-                  <p class="payment-notice" id="paymentNotice" aria-live="polite">
-                    <i class="bi bi-info-circle" aria-hidden="true"></i>
-                    <span>Choose a method, then confirm receipt only after the full payment has actually been received.</span>
-                  </p>
-                  <label class="payment-confirmation" for="paymentReceivedConfirmed">
-                    <input id="paymentReceivedConfirmed" type="checkbox">
-                    <span>I confirm the full payment was received through the selected method.</span>
-                  </label>
-                  <label for="orderNotes">Order Notes <span>(Optional)</span></label>
-                  <textarea id="orderNotes" class="order-notes" placeholder="Add a note for the kitchen or cashier..." rows="2"></textarea>
                 </section>
 
-                <p class="recipe-stock-notice">
-                  <i class="bi bi-info-circle" aria-hidden="true"></i>
-                  Completing records the sale and consumes configured recipe stock. Items without an active recipe do not deduct inventory.
-                </p>
-
-                <footer class="checkout-footer">
-                  <div class="checkout-footer-actions">
-                    <button class="action-btn hold-btn" type="button" id="holdOrderButton">
-                      <i class="bi bi-pause-fill" aria-hidden="true"></i> Hold Bill
-                    </button>
-                    <button class="action-btn print-btn" type="button" id="printBillButton">
-                      <i class="bi bi-printer" aria-hidden="true"></i> Print Bill
-                    </button>
-                    <button class="action-btn complete-sale-btn" id="completeSale" type="button">
-                      <i class="bi bi-check2-circle" aria-hidden="true"></i> Complete Sale
-                    </button>
-                  </div>
-                </footer>
-
-                <section class="held-orders-section" aria-labelledby="heldOrdersTitle">
-                  <div class="held-orders-heading">
-                    <h3 id="heldOrdersTitle">Held Bills</h3>
-                    <span id="heldOrderCount">0</span>
-                  </div>
-                  <div id="heldOrdersList" class="held-orders-list">
-                    <p class="held-orders-empty">No held bills.</p>
-                  </div>
-                </section>
               </div>
+              <footer class="checkout-footer">
+                <div class="checkout-footer-actions">
+                  <button class="action-btn hold-btn" type="button" id="holdOrderButton" aria-label="Hold current bill or restore the most recent held bill when empty" title="Hold current bill or restore the most recent held bill when empty">
+                    <i class="bi bi-pause-fill" aria-hidden="true"></i> Hold Bill
+                  </button>
+                  <button class="action-btn print-btn" type="button" id="printBillButton">
+                    <i class="bi bi-printer" aria-hidden="true"></i> Print Bill
+                  </button>
+                  <button class="action-btn complete-sale-btn" id="completeSale" type="button">
+                    <i class="bi bi-check2-circle" aria-hidden="true"></i> Complete Sale
+                  </button>
+                </div>
+              </footer>
             </section>
           </aside>
-        </div>
-    </main>
 
-    @if(session('status'))
-      <div class="pos-status-message" role="status">{{ session('status') }}</div>
-    @endif
+      </div>
+      @if(session('status'))
+        <div class="pos-status-message" role="status">{{ session('status') }}</div>
+      @endif
+    </main>
 
     <dialog class="pos-table-dialog" id="tablePickerDialog" aria-labelledby="tablePickerTitle" aria-describedby="tablePickerDescription" data-table-required="{{ $hasActiveTables ? 'true' : 'false' }}">
       <div class="pos-table-dialog-shell">
@@ -415,7 +382,6 @@
       <input type="hidden" name="idempotency_key" value="{{ $posIdempotencyKey }}">
       <input type="hidden" name="items_json" id="posItemsJson">
       <input type="hidden" name="discount_percent" id="posDiscountPercent">
-      <input type="hidden" name="notes" id="posOrderNotes">
       <input type="hidden" name="order_type" id="posOrderType">
       <input type="hidden" name="table_number" id="posTableNumber">
       <input type="hidden" name="table_id" id="posTableId">
@@ -423,7 +389,6 @@
       <input type="hidden" name="section_id" id="posSectionId">
       <input type="hidden" name="guest_count" id="posGuestCount">
       <input type="hidden" name="payment_method" id="posPaymentMethod">
-      <input type="hidden" name="payment_confirmed" id="posPaymentConfirmed" value="0">
     </form>
 
 @endsection

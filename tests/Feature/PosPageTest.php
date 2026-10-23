@@ -144,24 +144,29 @@ class PosPageTest extends TestCase
 
         $response->assertOk()
             ->assertSee('id="posLayout"', false)
+            ->assertSee('class="pos-left"', false)
             ->assertSee('id="categoryScroller"', false)
             ->assertSee('data-cat-scroll="1"', false)
+            ->assertSee('data-category-name="Items"', false)
             ->assertSee('id="billingPanel"', false)
             ->assertSee('id="checkoutTitle"', false)
             ->assertSee('Current Order')
-            ->assertSee('New Order')
+            ->assertDontSee('New Order')
+            ->assertDontSee('Choose order type and table details')
+            ->assertDontSee('Live order')
             ->assertSee('Order history')
             ->assertSee('id="nextBillingCount"', false)
             ->assertSee('Payment Method')
             ->assertSee('data-payment-method="Cash"', false)
             ->assertSee('data-payment-method="Card"', false)
             ->assertSee('data-payment-method="UPI"', false)
-            ->assertSee('id="paymentNotice"', false)
-            ->assertSee('id="paymentReceivedConfirmed"', false)
-            ->assertSee('id="posPaymentConfirmed"', false)
+            ->assertDontSee('Choose a method, then confirm receipt')
+            ->assertDontSee('I confirm the full payment was received')
+            ->assertDontSee('payment_confirmed')
+            ->assertDontSee('Order Notes')
+            ->assertDontSee('Completing records the sale and consumes configured recipe stock')
             ->assertSee('id="tableNo"', false)
             ->assertSee('id="guestNo"', false)
-            ->assertSee('id="orderNotes"', false)
             ->assertSee('id="discount"', false)
             ->assertSee('id="cartItems"', false)
             ->assertSee('id="grandTotal"', false)
@@ -169,7 +174,9 @@ class PosPageTest extends TestCase
             ->assertSee('id="holdOrderButton"', false)
             ->assertSee('id="printBillButton"', false)
             ->assertSee('id="completeSale"', false)
-            ->assertSee('id="heldOrdersList"', false)
+            ->assertDontSee('Held Bills')
+            ->assertDontSee('id="heldOrdersList"', false)
+            ->assertDontSee('id="heldOrderCount"', false)
             ->assertDontSee('class="sidebar"', false)
             ->assertDontSee('holdOrdersModal')
             ->assertDontSee('nextBilling"')
@@ -178,9 +185,9 @@ class PosPageTest extends TestCase
         $script = file_get_contents(public_path('assets/script.js'));
         $this->assertIsString($script);
         $this->assertStringContainsString('[...cart.values()].reduce((total, item) => total + item.qty, 0)', $script);
-        $this->assertStringContainsString('paymentMethodNotices', $script);
-        $this->assertStringContainsString('external card terminal reports the full payment received', $script);
-        $this->assertStringContainsString('paymentConfirmedField.value', $script);
+        $this->assertStringNotContainsString('paymentMethodNotices', $script);
+        $this->assertStringNotContainsString('paymentConfirmedField', $script);
+        $this->assertStringNotContainsString('posOrderNotes', $script);
         $this->assertStringContainsString('function holdOrder()', $script);
         $this->assertStringContainsString('function resumeHeldOrder(id)', $script);
         $this->assertStringContainsString('window.print();', $script);

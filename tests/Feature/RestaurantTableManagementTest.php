@@ -216,6 +216,7 @@ class RestaurantTableManagementTest extends TestCase
             'idempotency_key' => 'table-pos-checkout-1',
             'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
             'discount_percent' => '0.00', 'order_type' => 'dine_in',
+            'payment_method' => 'cash',
             'table_id' => $table->id, 'floor_id' => $this->floor->id,
             'section_id' => $this->section->id, 'guest_count' => 3,
         ])->assertRedirect();
@@ -227,7 +228,7 @@ class RestaurantTableManagementTest extends TestCase
             'restaurant_id' => $this->restaurant->id, 'table_id' => $table->id,
             'pos_order_id' => $order->id, 'guest_count' => 3, 'ended_at' => null,
         ]);
-        $this->assertSame('unpaid', $order->fresh()->payment_status);
+        $this->assertSame('paid', $order->fresh()->payment_status);
     }
 
     public function test_pos_hides_and_rejects_tables_on_inactive_floors(): void
@@ -245,6 +246,7 @@ class RestaurantTableManagementTest extends TestCase
             'idempotency_key' => 'inactive-floor-pos-checkout',
             'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
             'discount_percent' => '0.00', 'order_type' => 'dine_in',
+            'payment_method' => 'cash',
             'table_id' => $table->id, 'floor_id' => $this->floor->id,
             'section_id' => $this->section->id, 'guest_count' => 2,
         ])->assertStatus(409);
@@ -325,6 +327,7 @@ class RestaurantTableManagementTest extends TestCase
             'idempotency_key' => 'group-pos-checkout-1',
             'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
             'discount_percent' => '0.00', 'order_type' => 'dine_in',
+            'payment_method' => 'cash',
             'table_id' => $first->id, 'floor_id' => $this->floor->id,
             'section_id' => $this->section->id, 'guest_count' => 6,
         ])->assertRedirect();
@@ -338,7 +341,7 @@ class RestaurantTableManagementTest extends TestCase
         $this->assertSame(0, RestaurantTableOccupancy::where('pos_order_id', $order->id)->whereNull('ended_at')->count());
         $this->assertDatabaseHas('restaurant_tables', ['id' => $first->id, 'status' => 'cleaning']);
         $this->assertDatabaseHas('restaurant_tables', ['id' => $second->id, 'status' => 'cleaning']);
-        $this->assertSame('unpaid', $order->fresh()->payment_status);
+        $this->assertSame('paid', $order->fresh()->payment_status);
     }
 
     public function test_table_transfer_preserves_original_order_location_and_records_transfer_history(): void
@@ -424,6 +427,7 @@ class RestaurantTableManagementTest extends TestCase
             'idempotency_key' => 'seated-reservation-pos-order',
             'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
             'discount_percent' => '0.00', 'order_type' => 'dine_in',
+            'payment_method' => 'cash',
             'table_id' => $table->id, 'floor_id' => $this->floor->id,
             'section_id' => $this->section->id, 'guest_count' => 3,
         ])->assertRedirect();

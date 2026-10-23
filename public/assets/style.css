@@ -1504,7 +1504,6 @@ textarea {
     font-weight: 600;
 }
 .table-fields select,
-.order-notes,
 .discount-input input {
     width: 100%;
     min-width: 0;
@@ -1559,27 +1558,6 @@ textarea {
     background: var(--pos-orange-light);
     color: #b45309;
     box-shadow: 0 0 0 1px #ff8a0014;
-}
-.payment-notice {
-    display: flex;
-    align-items: flex-start;
-    gap: 7px;
-    margin: 9px 0 0;
-    color: var(--pos-muted);
-    font-size: 11px;
-    line-height: 1.45;
-}
-.payment-notice i {
-    flex: 0 0 auto;
-    margin-top: 1px;
-    color: var(--pos-orange-hover);
-}
-.order-notes {
-    display: block;
-    min-height: 64px;
-    padding: 10px 12px;
-    resize: vertical;
-    line-height: 1.4;
 }
 .checkout-summary > h3 {
     margin-bottom: 14px;
@@ -1928,23 +1906,6 @@ body.pos-billing-open {
 #holdOrdersModal .modal-body {
     overflow-y: auto;
 }
-#heldOrdersList .held-order-card {
-    margin-bottom: 10px;
-    padding: 12px;
-    border: 1px solid var(--pos-border);
-    border-radius: 10px;
-    background: #fff;
-}
-#heldOrdersList .held-order-items {
-    margin-top: 8px;
-    padding: 9px;
-    border-radius: 7px;
-    background: #f8fafc;
-    color: var(--pos-text);
-    font-size: 13px;
-    white-space: pre-line;
-}
-
 /* Responsive Layout */
 @media (max-width: 1100px) {
     .top-header {
@@ -2280,8 +2241,7 @@ body.pos-page .menu-panel {
 }
 
 .menu-section-heading,
-.pos-control-heading,
-.held-orders-heading {
+.pos-control-heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2537,8 +2497,7 @@ body.pos-page .checkout-summary {
 }
 
 body.pos-page .checkout-summary > h3,
-body.pos-page .pos-billing-options > h3,
-.held-orders-heading h3 {
+body.pos-page .pos-billing-options > h3 {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2674,66 +2633,6 @@ body.pos-page .payment-method.active {
     color: #a45100;
 }
 
-body.pos-page .payment-notice,
-.recipe-stock-notice {
-    display: flex;
-    align-items: flex-start;
-    gap: 7px;
-    margin: 8px 0 12px;
-    color: #747c87;
-    font-size: 10px;
-    line-height: 1.45;
-}
-
-body.pos-page .payment-notice i,
-.recipe-stock-notice i {
-    flex: 0 0 auto;
-    color: #d57b12;
-}
-
-.payment-confirmation {
-    display: flex !important;
-    align-items: flex-start;
-    gap: 8px;
-    margin: 0 0 12px !important;
-    color: #454b55;
-    font-size: 11px !important;
-    font-weight: 600;
-    line-height: 1.4;
-}
-
-.payment-confirmation input {
-    flex: 0 0 auto;
-    margin: 1px 0 0;
-    accent-color: #f28c00;
-}
-
-.pos-billing-options > label {
-    display: block;
-    margin: 0 0 5px;
-    color: #454b55;
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.pos-billing-options > label span {
-    color: #89919b;
-    font-weight: 500;
-}
-
-body.pos-page .pos-billing-options textarea {
-    min-height: 55px;
-    padding: 8px 10px;
-    resize: vertical;
-}
-
-.recipe-stock-notice {
-    margin: 10px 0 0;
-    padding: 8px;
-    border-radius: 7px;
-    background: #f7f8fa;
-}
-
 body.pos-page .checkout-footer {
     position: sticky;
     bottom: 0;
@@ -2779,92 +2678,6 @@ body.pos-page .complete-sale-btn {
 body.pos-page .complete-sale-btn:hover {
     border-color: var(--pos-orange-hover);
     background: var(--pos-orange-hover);
-}
-
-.held-orders-section {
-    padding: 12px 0 14px;
-    border-top: 1px solid #eceef1;
-}
-
-.held-orders-heading h3 {
-    margin-bottom: 0;
-}
-
-.held-orders-heading > span {
-    display: inline-grid;
-    min-width: 21px;
-    height: 21px;
-    place-items: center;
-    border-radius: 50%;
-    background: #fff1df;
-    color: #a45100;
-    font-size: 10px;
-    font-weight: 700;
-}
-
-.held-orders-empty {
-    margin: 9px 0 0;
-    color: #8b929c;
-    font-size: 11px;
-}
-
-.held-order-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 9px;
-    margin-top: 8px;
-    padding: 9px;
-    border: 1px solid #e8eaed;
-    border-radius: 8px;
-}
-
-.held-order-details {
-    display: grid;
-    min-width: 0;
-    gap: 4px;
-}
-
-.held-order-details strong {
-    overflow: hidden;
-    color: #333942;
-    font-size: 10px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.held-order-details span {
-    color: #707984;
-    font-size: 10px;
-    font-weight: 650;
-}
-
-.held-order-actions {
-    display: flex;
-    flex: 0 0 auto;
-    gap: 5px;
-}
-
-.held-order-actions button {
-    min-height: 29px;
-    padding: 0 7px;
-    border: 1px solid #e2e5e9;
-    border-radius: 6px;
-    background: #fff;
-    color: #555e69;
-    font-size: 9px;
-    font-weight: 650;
-    cursor: pointer;
-}
-
-.held-order-actions .held-order-restore {
-    border-color: #ffd09a;
-    background: #fff6eb;
-    color: #955000;
-}
-
-.held-order-actions .held-order-remove {
-    color: #b83a3a;
 }
 
 @media (max-width: 1100px) {
@@ -3635,6 +3448,615 @@ body.pos-page .complete-sale-btn:hover {
     }
 }
 
+/* Full viewport POS workspace */
+html:has(body.pos-page) {
+    height: 100%;
+    overflow: hidden;
+}
+
+body.pos-page {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+}
+
+body.pos-page .app-layout,
+body.pos-page .main-content {
+    height: 100%;
+    min-height: 0;
+}
+
+body.pos-page .main-content {
+    padding: 0;
+    overflow: hidden;
+}
+
+body.pos-page .pos-layout {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    align-items: stretch;
+    grid-template-columns: minmax(0, 73fr) minmax(360px, 27fr);
+    gap: 0;
+    max-width: none;
+    margin: 0;
+    overflow: hidden;
+}
+
+body.pos-page .pos-left {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+body.pos-page .top-header {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    min-height: 72px;
+    flex: 0 0 auto;
+    gap: 16px;
+    padding: 10px 20px;
+}
+
+body.pos-page .header-search {
+    min-width: 150px;
+    margin-inline: 0;
+}
+
+body.pos-page .header-right {
+    gap: 10px;
+}
+
+body.pos-page .menu-panel {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 13px;
+    padding: 14px 20px 18px;
+    overflow: hidden;
+}
+
+body.pos-page .pos-order-controls,
+body.pos-page .menu-section-heading,
+body.pos-page .category-scroller {
+    flex: 0 0 auto;
+}
+
+body.pos-page .pos-order-controls {
+    padding: 10px 12px;
+}
+
+body.pos-page .food-grid {
+    min-height: 0;
+    flex: 1 1 auto;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-auto-rows: 190px;
+    align-content: start;
+    gap: 12px;
+    padding: 0 3px 4px 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+body.pos-page .food-card {
+    min-height: 0;
+    border-radius: 9px;
+}
+
+body.pos-page .food-image {
+    height: 92px;
+    flex-basis: 92px;
+    object-fit: cover;
+}
+
+body.pos-page .food-info {
+    gap: 4px;
+    padding: 7px 8px;
+}
+
+body.pos-page .food-name {
+    min-height: 30px;
+}
+
+body.pos-page .category-list {
+    gap: 7px;
+    padding: 0 40px 4px 2px;
+}
+
+body.pos-page .category-btn {
+    width: auto;
+    height: 38px;
+    flex: 0 0 auto;
+    flex-direction: row;
+    gap: 7px;
+    padding: 0 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+body.pos-page .category-btn > i,
+body.pos-page .category-btn-media i {
+    color: currentColor;
+    font-size: 15px;
+}
+
+body.pos-page .category-btn.active > i,
+body.pos-page .category-btn.active .category-btn-media i {
+    color: #fff;
+}
+
+body.pos-page .category-btn-media {
+    min-height: 0;
+    flex: 0 0 auto;
+}
+
+body.pos-page .category-btn > span {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+
+body.pos-page .billing-panel {
+    position: relative;
+    inset: auto;
+    z-index: 1;
+    display: flex;
+    width: auto;
+    height: 100%;
+    min-width: 360px;
+    min-height: 0;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-left: 1px solid #e5e7eb;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+body.pos-page .checkout-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    flex: 1 1 auto;
+    border: 0;
+    border-radius: 0;
+}
+
+body.pos-page .checkout-header {
+    min-height: 68px;
+    padding: 13px 16px;
+}
+
+body.pos-page .checkout-body {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    padding: 14px 16px 18px;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    overscroll-behavior: contain;
+}
+
+body.pos-page .checkout-summary {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+body.pos-page .checkout-summary > h3,
+body.pos-page .cart-heading,
+body.pos-page .bill-summary,
+body.pos-page .pos-billing-options {
+    flex: 0 0 auto;
+}
+
+body.pos-page .cart-items {
+    min-height: 72px;
+    max-height: none;
+    flex: 1 1 auto;
+    padding-bottom: 1px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.pos-page .cart-items:focus-visible {
+    outline: 2px solid #ff9a2e;
+    outline-offset: -2px;
+}
+
+body.pos-page .pos-billing-options {
+    margin-top: 10px;
+    padding-top: 9px;
+}
+
+body.pos-page .checkout-footer {
+    position: relative;
+    bottom: auto;
+    z-index: 1;
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid #eceef1;
+    background: #fff;
+}
+
+body.pos-page .checkout-footer-actions {
+    grid-template-columns: minmax(0, .9fr) minmax(0, .95fr) minmax(0, 1.45fr);
+    gap: 7px;
+}
+
+body.pos-page .action-btn {
+    min-height: 42px;
+    padding-inline: 6px;
+    font-size: 10px;
+}
+
+@media (max-width: 1100px) {
+    body.pos-page .pos-layout {
+        grid-template-columns: minmax(0, 1.45fr) minmax(330px, 1fr);
+    }
+
+    body.pos-page .top-header {
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        padding-inline: 14px;
+    }
+
+    body.pos-page .brand {
+        flex: 1 1 210px;
+    }
+
+    body.pos-page .header-search {
+        order: 3;
+        flex: 1 0 100%;
+        max-width: none;
+    }
+
+    body.pos-page .food-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-auto-rows: 190px;
+    }
+
+    body.pos-page .food-image {
+        height: 92px;
+        flex-basis: 92px;
+    }
+}
+
+@media (max-width: 900px) and (min-width: 701px) {
+    body.pos-page .pos-layout {
+        grid-template-columns: minmax(0, 1fr) minmax(320px, .95fr);
+    }
+
+    body.pos-page .menu-panel {
+        padding-inline: 12px;
+    }
+
+    body.pos-page .food-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-auto-rows: 190px;
+    }
+
+    body.pos-page .food-image {
+        height: 92px;
+        flex-basis: 92px;
+    }
+
+    body.pos-page .billing-panel {
+        min-width: 320px;
+    }
+}
+
+@media (max-width: 700px) {
+    body.pos-page .pos-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1.5fr) minmax(0, .8fr);
+    }
+
+    body.pos-page .pos-left {
+        min-height: 0;
+        border-bottom: 1px solid #dfe3e8;
+    }
+
+    body.pos-page .top-header {
+        min-height: 0;
+        gap: 7px 10px;
+        padding: 8px 12px;
+    }
+
+    body.pos-page .brand {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    body.pos-page .header-right {
+        display: flex;
+        flex: 0 0 auto;
+        margin-left: 0;
+    }
+
+    body.pos-page .header-search {
+        order: 3;
+        flex: 1 0 100%;
+        min-width: 0;
+    }
+
+    body.pos-page .header-date {
+        display: none;
+    }
+
+    body.pos-page .menu-panel {
+        gap: 8px;
+        padding: 8px 10px 10px;
+    }
+
+    body.pos-page .pos-order-controls {
+        padding: 8px 10px;
+    }
+
+    body.pos-page .pos-control-heading {
+        margin-bottom: 6px;
+    }
+
+    body.pos-page .pos-control-heading span {
+        font-size: 10px;
+    }
+
+    body.pos-page .pos-live-indicator {
+        display: none !important;
+    }
+
+    body.pos-page .pos-order-control-grid {
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+        align-items: end;
+        gap: 6px;
+    }
+
+    body.pos-page .pos-control-label {
+        margin-bottom: 4px;
+    }
+
+    body.pos-page .order-type button {
+        min-height: 31px;
+        gap: 2px;
+        padding-inline: 2px;
+        font-size: 9px;
+    }
+
+    body.pos-page .order-type button i {
+        display: none;
+    }
+
+    body.pos-page .pos-table-selection-button {
+        min-height: 36px;
+        gap: 5px;
+        padding: 4px 6px;
+    }
+
+    body.pos-page .pos-table-selection-icon {
+        width: 28px;
+        height: 28px;
+        flex-basis: 28px;
+        font-size: 14px;
+    }
+
+    body.pos-page .pos-table-selection-copy strong {
+        font-size: 10px;
+    }
+
+    body.pos-page .pos-table-selection-copy small {
+        font-size: 8px;
+    }
+
+    body.pos-page .pos-table-selection-arrow {
+        font-size: 10px;
+    }
+
+    body.pos-page .menu-section-heading h2 {
+        font-size: 14px;
+    }
+
+    body.pos-page .menu-section-heading > div > span {
+        display: none;
+    }
+
+    body.pos-page .pos-history-link {
+        min-height: 31px;
+    }
+
+    body.pos-page .category-btn {
+        width: auto;
+        height: 38px;
+        flex: 0 0 auto;
+        gap: 6px;
+        padding: 0 10px;
+        font-size: 12px;
+    }
+
+    body.pos-page .category-btn i {
+        font-size: 15px;
+    }
+
+    body.pos-page .category-btn-media {
+        min-height: 0;
+    }
+
+    body.pos-page .food-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-auto-rows: 158px;
+        gap: 7px;
+    }
+
+    body.pos-page .food-image {
+        height: 76px;
+        flex-basis: 76px;
+    }
+
+    body.pos-page .food-info {
+        gap: 3px;
+        padding: 6px;
+    }
+
+    body.pos-page .food-name {
+        min-height: 27px;
+        font-size: 10px;
+    }
+
+    body.pos-page .food-status {
+        font-size: 9px;
+    }
+
+    body.pos-page .food-price {
+        font-size: 10px;
+    }
+
+    body.pos-page .add-btn {
+        padding: 4px 6px;
+        font-size: 9px;
+    }
+
+    body.pos-page .billing-panel {
+        width: 100%;
+        min-width: 0;
+        border-left: 0;
+    }
+
+    body.pos-page .checkout-header {
+        min-height: 54px;
+        padding: 8px 12px;
+    }
+
+    body.pos-page .checkout-header h2 {
+        font-size: 15px;
+    }
+
+    body.pos-page .checkout-header p {
+        margin-top: 2px;
+        font-size: 10px;
+    }
+
+    body.pos-page .checkout-body {
+        display: block;
+        padding: 9px 11px 12px;
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+    }
+
+    body.pos-page .checkout-summary {
+        display: block;
+        overflow: visible;
+    }
+
+    body.pos-page .cart-items {
+        min-height: 78px;
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    body.pos-page .checkout-footer {
+        padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+@media (max-width: 360px) {
+    body.pos-page .pos-layout {
+        grid-template-rows: minmax(0, 2fr) minmax(150px, .75fr);
+    }
+
+    body.pos-page .pos-control-heading > div > span,
+    body.pos-page .pos-control-label {
+        display: none;
+    }
+
+    body.pos-page .pos-order-controls {
+        padding-block: 6px;
+    }
+
+    body.pos-page .pos-control-heading {
+        margin-bottom: 5px;
+    }
+
+    body.pos-page .category-list {
+        gap: 6px;
+        padding-block: 2px 6px;
+    }
+
+    body.pos-page .category-btn {
+        height: 36px;
+        gap: 6px;
+        padding-inline: 9px;
+        font-size: 12px;
+    }
+}
+
+@media (max-height: 680px) and (min-width: 701px) {
+    body.pos-page .checkout-header {
+        min-height: 58px;
+        padding-block: 8px;
+    }
+
+    body.pos-page .checkout-body {
+        padding-block: 8px;
+    }
+
+    body.pos-page .checkout-summary > h3 {
+        margin-bottom: 6px;
+    }
+
+    body.pos-page .cart-heading {
+        min-height: 25px;
+    }
+
+    body.pos-page .cart-items {
+        min-height: 64px;
+    }
+
+    body.pos-page .bill-summary {
+        padding-top: 3px;
+    }
+
+    body.pos-page .summary-row {
+        min-height: 21px;
+    }
+
+    body.pos-page .grand-total {
+        min-height: 40px;
+        margin-top: 3px;
+        padding-block: 6px;
+    }
+
+    body.pos-page .pos-billing-options {
+        margin-top: 6px;
+        padding-top: 6px;
+    }
+
+    body.pos-page .checkout-footer {
+        padding-block: 8px;
+    }
+}
+
 @media print {
     body.pos-page.pos-printing * {
         visibility: hidden !important;
@@ -3661,9 +4083,7 @@ body.pos-page .complete-sale-btn:hover {
 
     body.pos-page.pos-printing .clear-order-button,
     body.pos-page.pos-printing .pos-billing-options,
-    body.pos-page.pos-printing .recipe-stock-notice,
-    body.pos-page.pos-printing .checkout-footer,
-    body.pos-page.pos-printing .held-orders-section {
+    body.pos-page.pos-printing .checkout-footer {
         display: none !important;
     }
 }
