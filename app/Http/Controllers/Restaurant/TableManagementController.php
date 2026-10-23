@@ -397,6 +397,7 @@ class TableManagementController extends Controller
     public function reservations(Request $request): View
     {
         $owner = $this->owner();
+        $viewMode = $request->input('view', 'list');
         $calendarInput = $request->validate([
             'period' => ['nullable', Rule::in(['day', 'week', 'month'])],
             'date' => ['nullable', 'date'],
@@ -429,6 +430,19 @@ class TableManagementController extends Controller
             $query->where('table_id', $request->integer('table'));
         }
 
+        $timezone = config('app.timezone');
+        $todayStart = CarbonImmutable::now($timezone)->startOfDay()->utc();
+        $todayEnd = CarbonImmutable::now($timezone)->endOfDay()->utc();
+        $nowUtc = CarbonImmutable::now('UTC');
+
+        $kpis = [
+            'today' => RestaurantTableReservation::query()->where('restaurant_id', $owner->restaurant_id)->whereBetween('starts_at', [$todayStart, $todayEnd])->count(),
+            'confirmed' => RestaurantTableReservation::query()->where('restaurant_id', $owner->restaurant_id)->where('status', 'confirmed')->count(),
+            'upcoming' => RestaurantTableReservation::query()->where('restaurant_id', $owner->restaurant_id)->where('starts_at', '>=', $nowUtc)->whereIn('status', ['pending', 'confirmed'])->count(),
+            'seated' => RestaurantTableReservation::query()->where('restaurant_id', $owner->restaurant_id)->where('status', 'seated')->count(),
+        ];
+        $hasAnyReservations = RestaurantTableReservation::query()->where('restaurant_id', $owner->restaurant_id)->exists();
+
         return view('restaurant.tables.reservations', [
             'owner' => $owner,
             'reservations' => $query->orderBy('starts_at')->paginate(20)->withQueryString(),
@@ -436,6 +450,9 @@ class TableManagementController extends Controller
             'tables' => $this->tables($owner->restaurant_id)->where('is_active', true)->with(['floor', 'section'])->orderBy('table_number')->get(),
             'calendarPeriod' => $calendarPeriod,
             'calendarDate' => $calendarDate,
+            'viewMode' => in_array($viewMode, ['list', 'calendar'], true) ? $viewMode : 'list',
+            'kpis' => $kpis,
+            'hasAnyReservations' => $hasAnyReservations,
         ]);
     }
 
