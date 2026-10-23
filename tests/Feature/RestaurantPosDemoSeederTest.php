@@ -6,9 +6,13 @@ use App\Models\Restaurant;
 use App\Models\RestaurantMenuCategory;
 use App\Models\RestaurantMenuItem;
 use App\Models\RestaurantPosOrder;
+use App\Models\RestaurantPosOrderItem;
+use App\Models\RestaurantPosOrderStatusHistory;
+use App\Models\RestaurantPosPayment;
 use App\Models\User;
 use Database\Seeders\RestaurantPosDemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Tests\TestCase;
@@ -48,8 +52,8 @@ class RestaurantPosDemoSeederTest extends TestCase
             'idempotency_key' => 'real-order-key-001',
         ]);
         $this->assertSame(38, RestaurantPosOrder::query()->where('restaurant_id', 2)->where('payment_status', 'paid')->count());
-        $this->assertSame(38, \App\Models\RestaurantPosPayment::query()->where('restaurant_id', 2)->count());
-        $this->assertGreaterThan(0, \App\Models\RestaurantPosOrderStatusHistory::query()->where('restaurant_id', 2)->count());
+        $this->assertSame(38, RestaurantPosPayment::query()->where('restaurant_id', 2)->count());
+        $this->assertGreaterThan(0, RestaurantPosOrderStatusHistory::query()->where('restaurant_id', 2)->count());
 
         $types = RestaurantPosOrder::query()->where('idempotency_key', 'like', 'demo-pos:2:%')
             ->selectRaw('order_type, count(*) as total')->groupBy('order_type')->pluck('total', 'order_type');
@@ -67,9 +71,9 @@ class RestaurantPosDemoSeederTest extends TestCase
         $this->assertSame('Chicken Biryani', $menuItems[0]->fresh()->name);
         $this->assertSame('200.00', $menuItems[0]->fresh()->price);
         $this->assertStringStartsWith('restaurant-menu/2/', (string) $menuItems[0]->fresh()->image_path);
-        Storage::disk('public')->assertExists($menuItems[0]->fresh()->image_path);
+        $this->assertTrue(Storage::disk('public')->exists($menuItems[0]->fresh()->image_path));
 
-        $itemCountBeforeRerun = \App\Models\RestaurantPosOrderItem::query()->count();
+        $itemCountBeforeRerun = RestaurantPosOrderItem::query()->count();
         $seeder->run();
 
         $this->assertDatabaseCount('restaurant_pos_orders', 51);
@@ -104,7 +108,7 @@ class RestaurantPosDemoSeederTest extends TestCase
         $this->assertDatabaseCount('restaurant_tables', 0);
     }
 
-    /** @return array{Restaurant, User, \Illuminate\Support\Collection<int, RestaurantMenuItem>} */
+    /** @return array{Restaurant, User, Collection<int, RestaurantMenuItem>} */
     private function createDemoRestaurant(): array
     {
         $restaurant = Restaurant::forceCreate([

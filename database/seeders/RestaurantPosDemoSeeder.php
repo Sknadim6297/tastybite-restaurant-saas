@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Restaurant;
 use App\Models\RestaurantFloor;
-use App\Models\RestaurantMenuItem;
 use App\Models\RestaurantPosOrder;
 use App\Models\RestaurantPosOrderItem;
 use App\Models\RestaurantPosOrderStatusHistory;
@@ -17,6 +16,7 @@ use Carbon\CarbonImmutable;
 use Faker\Factory;
 use Faker\Generator;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
@@ -155,6 +155,7 @@ class RestaurantPosDemoSeeder extends Seeder
         foreach ($requiredColumns as $table => $columns) {
             if (! Schema::hasTable($table)) {
                 $missing[] = $table;
+
                 continue;
             }
 
@@ -221,7 +222,7 @@ class RestaurantPosDemoSeeder extends Seeder
         ]);
     }
 
-    /** @return \Illuminate\Support\Collection<int, RestaurantTable> */
+    /** @return Collection<int, RestaurantTable> */
     private function ensureTables(Restaurant $restaurant, RestaurantFloor $floor, RestaurantSection $section)
     {
         $tables = collect();
