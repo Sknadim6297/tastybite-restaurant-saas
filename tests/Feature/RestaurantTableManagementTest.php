@@ -93,6 +93,32 @@ class RestaurantTableManagementTest extends TestCase
         $this->get(route('restaurant.tables.operations'))->assertRedirect(route('restaurant.tables.overview', ['tab' => 'operations']));
     }
 
+    public function test_table_pages_render_one_breadcrumb_and_one_page_title(): void
+    {
+        $pages = [
+            [route('restaurant.tables.overview'), 'Table Dashboard'],
+            [route('restaurant.tables.manage', ['tab' => 'tables']), 'Manage Tables'],
+            [route('restaurant.tables.manage', ['tab' => 'floors']), 'Manage Tables'],
+            [route('restaurant.tables.manage', ['tab' => 'sections']), 'Manage Tables'],
+            [route('restaurant.tables.reservations'), 'Reservations'],
+            [route('restaurant.tables.reports'), 'Table Reports'],
+        ];
+
+        foreach ($pages as [$url, $title]) {
+            $html = $this->get($url)->assertOk()->getContent();
+
+            $this->assertSame(1, substr_count($html, 'aria-label="Breadcrumb"'));
+            $this->assertSame(1, substr_count($html, '<h1>'.$title.'</h1>'));
+            $this->assertStringContainsString(route('restaurant.dashboard'), $html);
+        }
+
+        $reservations = $this->get(route('restaurant.tables.reservations'))->assertOk();
+        $reservations->assertSee('data-open-reservation-modal', false)
+            ->assertSee(route('restaurant.tables.overview'), false)
+            ->assertSee(route('restaurant.tables.manage', ['tab' => 'tables']), false);
+        $this->assertSame(1, substr_count($reservations->getContent(), 'data-open-reservation-modal>'));
+    }
+
     public function test_table_creation_rejects_foreign_floors_sections_and_duplicate_identifiers(): void
     {
         $this->post(route('restaurant.tables.store'), [

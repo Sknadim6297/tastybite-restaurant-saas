@@ -5,9 +5,7 @@
 
 @section('content')
     <div class="page-heading table-page-heading">
-        <div><span class="eyebrow">TABLE MANAGEMENT</span><h1>Table Dashboard</h1><p>Monitor restaurant tables, occupancy, and daily operations.</p>
-            <nav class="table-breadcrumbs" aria-label="Breadcrumb"><a href="{{ route('restaurant.dashboard') }}">Dashboard</a><span aria-hidden="true">/</span><span aria-current="page">Table Dashboard</span></nav>
-        </div>
+        <div><span class="eyebrow">TABLE MANAGEMENT</span><h1>Table Dashboard</h1><p>Monitor restaurant tables, occupancy, and daily operations.</p></div>
         <div class="table-dashboard-actions">
             <a class="button button-primary" href="{{ route('restaurant.tables.manage', ['tab' => 'tables']) }}">Add Table</a>
             <a class="button button-secondary" href="{{ route('restaurant.tables.reservations') }}">New Reservation</a>

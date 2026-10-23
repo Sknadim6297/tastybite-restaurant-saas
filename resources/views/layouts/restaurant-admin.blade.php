@@ -18,6 +18,11 @@
         $adminAccessToken = request()->attributes->get('restaurant_admin_access_token');
         $adminMode = $adminAccessRestaurant !== null && $adminAccessAdmin !== null;
         $user = app(\App\Services\RestaurantAccessContext::class)->owner();
+        $breadcrumbSection = trim($__env->yieldContent('section', 'Dashboard'));
+        $breadcrumbTitle = trim($__env->yieldContent('title', 'Dashboard'));
+        $showBreadcrumbSection = strcasecmp($breadcrumbSection, $breadcrumbTitle) !== 0;
+        $breadcrumbSectionUrl = request()->routeIs('restaurant.tables.*') ? route('restaurant.tables.overview') : null;
+        $isDashboard = request()->routeIs('restaurant.dashboard');
     @endphp
     <div class="admin-shell">
         <aside class="admin-sidebar" id="admin-sidebar">
@@ -105,7 +110,22 @@
                 <button class="icon-button sidebar-toggle" type="button" data-sidebar-toggle aria-controls="admin-sidebar" aria-expanded="false" aria-label="Open navigation">
                     <span aria-hidden="true"><i class="bi bi-list"></i></span>
                 </button>
-                <div class="breadcrumb"><span>Restaurant Admin</span><span aria-hidden="true">/</span><strong>@yield('section', 'Dashboard')</strong></div>
+                <nav class="breadcrumb" aria-label="Breadcrumb">
+                    @if($isDashboard)
+                        <strong aria-current="page">{{ $breadcrumbTitle }}</strong>
+                    @else
+                        <a href="{{ route('restaurant.dashboard') }}">Dashboard</a><span aria-hidden="true">/</span>
+                        @if($showBreadcrumbSection)
+                            @if($breadcrumbSectionUrl)
+                                <a href="{{ $breadcrumbSectionUrl }}">{{ $breadcrumbSection }}</a>
+                            @else
+                                <span>{{ $breadcrumbSection }}</span>
+                            @endif
+                            <span aria-hidden="true">/</span>
+                        @endif
+                        <strong aria-current="page">{{ $breadcrumbTitle }}</strong>
+                    @endif
+                </nav>
                 @if ($adminMode)
                     <div class="profile-menu" aria-label="Super Admin administrative access">
                         <span class="avatar" aria-hidden="true">{{ strtoupper(substr($adminAccessAdmin->name, 0, 1)) }}</span>

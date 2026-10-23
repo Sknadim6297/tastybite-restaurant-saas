@@ -4,22 +4,15 @@
 @section('section', 'Table Management')
 
 @section('content')
-    @include('restaurant.tables.partials.heading', ['title' => 'Reservations', 'description' => 'Manage guest bookings, table assignments, and availability.'])
+    @include('restaurant.tables.partials.heading', [
+        'title' => 'Reservations',
+        'description' => 'Manage guest bookings, table assignments, and availability.',
+        'action' => new \Illuminate\Support\HtmlString('<button type="button" class="button button-primary" data-open-reservation-modal>New Reservation</button>'),
+    ])
 
     @if(session('status'))
         <div class="notice-card" role="status">{{ session('status') }}</div>
     @endif
-
-    <div class="reservation-page-header">
-        <div>
-            <div class="table-breadcrumbs">
-                <a href="{{ route('restaurant.tables.overview') }}">Table Management</a>
-                <span>/</span>
-                <span>Reservations</span>
-            </div>
-        </div>
-        <button type="button" class="button button-primary" data-open-reservation-modal>New Reservation</button>
-    </div>
 
     <section class="reservation-kpi-grid" aria-label="Reservation summary">
         @foreach([
@@ -145,8 +138,6 @@
                         <p>{{ $hasAnyReservations ? 'Try adjusting your search or filters.' : 'Create your first reservation to start managing guest bookings.' }}</p>
                         @if($hasAnyReservations)
                             <a class="button button-primary" href="{{ route('restaurant.tables.reservations', ['view' => $viewMode ?? 'list']) }}">Clear Filters</a>
-                        @else
-                            <button type="button" class="button button-primary" data-open-reservation-modal>New Reservation</button>
                         @endif
                     </div>
                 @endforelse
@@ -278,8 +269,6 @@
                         <p>{{ $hasAnyReservations ? 'Try adjusting your search or filters.' : 'Create your first reservation to start managing guest bookings.' }}</p>
                         @if($hasAnyReservations)
                             <a class="button button-primary" href="{{ route('restaurant.tables.reservations', ['view' => $viewMode ?? 'list']) }}">Clear Filters</a>
-                        @else
-                            <button type="button" class="button button-primary" data-open-reservation-modal>New Reservation</button>
                         @endif
                     </div>
                 @endif
