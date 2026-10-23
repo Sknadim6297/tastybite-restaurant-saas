@@ -68,9 +68,9 @@ const nextBillingCount = document.getElementById("nextBillingCount");
 
 const paymentNotice = document.getElementById("paymentNotice");
 const paymentMethodNotices = {
-    Cash: "Cash selected. Payment is not recorded or processed by this POS.",
-    Card: "Card selected. Use your existing payment terminal; no card details are collected here.",
-    UPI: "UPI selected. Use your existing UPI workflow; no payment is processed by this POS."
+    Cash: "Cash is recorded only after you confirm the full amount was received.",
+    Card: "Confirm only after the external card terminal reports the full payment received.",
+    UPI: "Confirm only after the external UPI/QR payment is verified as received."
 };
 
 document.querySelectorAll("[data-payment-method]").forEach(button => {
@@ -384,8 +384,60 @@ document.querySelectorAll(".order-type button").forEach(button => {
             tableField.style.display =
                 orderType === "Dine In" ? "" : "none";
         }
+        ["floorField", "sectionField"].forEach(id => {
+            const field = document.getElementById(id);
+            if (field) field.style.display = orderType === "Dine In" ? "" : "none";
+        });
     });
 });
+
+const posFloor = document.getElementById("posFloor");
+const posSection = document.getElementById("posSection");
+const posTable = document.getElementById("tableNo");
+const posGuests = document.getElementById("guestNo");
+function filterPosTables() {
+    if (!posTable) return;
+    const floorId = posFloor?.value || "";
+    const sectionId = posSection?.value || "";
+    [...posTable.options].forEach(option => {
+        if (!option.value) return;
+        option.hidden = !floorId || option.dataset.floor !== floorId ||
+            (sectionId && option.dataset.section !== sectionId);
+    });
+    const selected = posTable.selectedOptions[0];
+    if (selected?.hidden) posTable.value = "";
+    const capacity = Number(posTable.selectedOptions[0]?.dataset.capacity || 20);
+    if (posGuests) {
+        [...posGuests.options].forEach(option => {
+            option.disabled = Number(option.value) > capacity;
+        });
+        if (Number(posGuests.value) > capacity) posGuests.value = String(capacity);
+    }
+}
+posFloor?.addEventListener("change", () => {
+    if (posSection) {
+        posSection.value = "";
+        [...posSection.options].forEach(option => {
+            if (option.value) option.hidden = option.dataset.floor !== posFloor.value;
+        });
+    }
+    filterPosTables();
+});
+posSection?.addEventListener("change", filterPosTables);
+posTable?.addEventListener("change", () => {
+    const option = posTable.selectedOptions[0];
+    if (option?.value && posFloor) {
+        posFloor.value = option.dataset.floor || "";
+        if (posSection) {
+            [...posSection.options].forEach(section => {
+                if (section.value) section.hidden = section.dataset.floor !== posFloor.value;
+            });
+            posSection.value = option.dataset.section || "";
+        }
+    }
+    filterPosTables();
+});
+filterPosTables();
 
 // Clear cart
 function clearCart() {
@@ -414,7 +466,10 @@ function holdOrder() {
     heldOrders.push({
         id: holdOrderCounter++,
         orderType,
-        tableNo: document.getElementById("tableNo")?.value || "",
+        tableNo: document.getElementById("tableNo")?.selectedOptions[0]?.textContent?.split("·")[0]?.trim() || "",
+        tableId: document.getElementById("tableNo")?.value || "",
+        floorId: document.getElementById("posFloor")?.value || "",
+        sectionId: document.getElementById("posSection")?.value || "",
         guestNo: document.getElementById("guestNo")?.value || "",
         notes: document.getElementById("orderNotes")?.value || "",
         discount: document.getElementById("discount")?.value || "0",
@@ -513,9 +568,15 @@ function resumeHeldOrder(id) {
         tableField.style.display =
             orderType === "Dine In" ? "" : "none";
     }
+    ["floorField", "sectionField"].forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) field.style.display = orderType === "Dine In" ? "" : "none";
+    });
 
     const fields = {
-        tableNo: order.tableNo,
+        posFloor: order.floorId,
+        posSection: order.sectionId,
+        tableNo: order.tableId,
         guestNo: order.guestNo,
         customerMobile: order.mobile,
         orderNotes: order.notes,
@@ -526,6 +587,12 @@ function resumeHeldOrder(id) {
         const el = document.getElementById(fieldId);
         if (el) el.value = value ?? "";
     });
+    if (posSection && posFloor) {
+        [...posSection.options].forEach(section => {
+            if (section.value) section.hidden = section.dataset.floor !== posFloor.value;
+        });
+    }
+    filterPosTables();
 
     heldOrders.splice(index, 1);
 
@@ -560,7 +627,15 @@ if (completeSaleButton) {
         const itemsField = document.getElementById("posItemsJson");
         const discountField = document.getElementById("posDiscountPercent");
         const notesField = document.getElementById("posOrderNotes");
-        if (!form || !itemsField || !discountField || !notesField) return;
+        const orderTypeField = document.getElementById("posOrderType");
+        const tableField = document.getElementById("posTableNumber");
+        const tableIdField = document.getElementById("posTableId");
+        const floorIdField = document.getElementById("posFloorId");
+        const sectionIdField = document.getElementById("posSectionId");
+        const guestField = document.getElementById("posGuestCount");
+        const paymentField = document.getElementById("posPaymentMethod");
+        const paymentConfirmedField = document.getElementById("posPaymentConfirmed");
+        if (!form || !itemsField || !discountField || !notesField || !orderTypeField || !tableField || !guestField || !paymentField || !paymentConfirmedField) return;
 
         itemsField.value = JSON.stringify([...cart.values()].map(item => ({
             menu_item_id: item.id,
@@ -568,6 +643,23 @@ if (completeSaleButton) {
         })));
         discountField.value = String(Math.max(0, Math.min(100, Number(document.getElementById("discount")?.value) || 0)));
         notesField.value = document.getElementById("orderNotes")?.value || "";
+        orderTypeField.value = ({
+            "Dine In": "dine_in",
+            "Take Away": "takeaway",
+            Delivery: "delivery"
+        })[orderType] || "dine_in";
+        const tableSelect = document.getElementById("tableNo");
+        const selectedTable = tableSelect?.selectedOptions[0];
+        tableIdField.value = orderType === "Dine In" ? (tableSelect?.value || "") : "";
+        floorIdField.value = orderType === "Dine In" ? (document.getElementById("posFloor")?.value || "") : "";
+        sectionIdField.value = orderType === "Dine In" ? (document.getElementById("posSection")?.value || "") : "";
+        tableField.value = orderType === "Dine In" ? (selectedTable?.textContent?.split("·")[0]?.trim() || "") : "";
+        guestField.value = document.getElementById("guestNo")?.value || "";
+        const selectedPaymentMethod = document.querySelector("[data-payment-method].active")?.dataset.paymentMethod;
+        paymentField.value = selectedPaymentMethod?.toLowerCase() || "";
+        paymentConfirmedField.value = document.getElementById("paymentReceivedConfirmed")?.checked && selectedPaymentMethod
+            ? "1"
+            : "0";
         completeSaleButton.disabled = true;
         completeSaleButton.textContent = "Completing...";
         form.submit();

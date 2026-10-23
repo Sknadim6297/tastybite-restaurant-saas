@@ -9,8 +9,8 @@ use App\Models\RestaurantSubscription;
 use App\Models\SaasFeature;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
-use Database\Seeders\DemoRestaurantMenuSeeder;
 use Carbon\CarbonImmutable;
+use Database\Seeders\DemoRestaurantMenuSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -130,7 +130,7 @@ class RestaurantMenuProductManagementTest extends TestCase
             $product = RestaurantMenuItem::query()->where('name', $name)->firstOrFail();
             $this->assertStringStartsWith('restaurant-menu/'.$this->restaurant->id.'/', $product->image_path);
             Storage::disk('public')->assertExists($product->image_path);
-            $this->assertStringContainsString('storage/'.$product->image_path, $product->image_url);
+            $this->assertStringContainsString('/uploads/restaurant-menu/'.$this->restaurant->id.'/', $product->image_url);
         }
     }
 
@@ -235,7 +235,11 @@ class RestaurantMenuProductManagementTest extends TestCase
         $this->get(route('restaurant.menu.products.edit', $product))
             ->assertOk()
             ->assertSee('data-product-image-preview', false)
-            ->assertSee(asset('storage/'.$path), false)
+            ->assertSee(route('public.uploads.show', [
+                'directory' => 'restaurant-menu',
+                'restaurantId' => $this->restaurant->id,
+                'filename' => basename($path),
+            ]), false)
             ->assertSee('form-option-grid', false)
             ->assertSee('name="is_available" value="0"', false)
             ->assertSee('name="is_available" value="1"', false)
@@ -253,7 +257,11 @@ class RestaurantMenuProductManagementTest extends TestCase
 
         $this->get(route('restaurant.menu.products.index'))
             ->assertOk()
-            ->assertSee('src="'.asset('storage/'.$path).'"', false)
+            ->assertSee('src="'.route('public.uploads.show', [
+                'directory' => 'restaurant-menu',
+                'restaurantId' => $this->restaurant->id,
+                'filename' => basename($path),
+            ]).'"', false)
             ->assertSee('src="'.asset('assets/menu-item-placeholder.svg').'"', false);
     }
 
@@ -294,11 +302,45 @@ class RestaurantMenuProductManagementTest extends TestCase
 
         $this->get(route('restaurant.menu.products.index', ['search' => 'South Indian']))
             ->assertOk()
-            ->assertSee('data-auto-filter', false)
-            ->assertDontSee('type="submit">Search', false)
+            ->assertSee('id="product-filters"', false)
+            ->assertSee('menu-product-filters.js')
+            ->assertDontSee('Apply filters')
             ->assertSee('Masala Dosa')
             ->assertDontSee('Filter Coffee')
             ->assertDontSee('Foreign Product');
+    }
+
+    public function test_product_filter_ajax_combines_search_and_category_and_keeps_pagination(): void
+    {
+        $breakfast = $this->createCategory($this->restaurant, 'Breakfast');
+        $beverages = $this->createCategory($this->restaurant, 'Beverages');
+        $foreignCategory = $this->createCategory($this->otherRestaurant, 'Foreign Breakfast');
+        for ($number = 1; $number <= 16; $number++) {
+            $this->createProduct($this->restaurant, 'Masala Product '.$number, '', $breakfast);
+        }
+        $this->createProduct($this->restaurant, 'Masala Beverage', '', $beverages);
+        $this->createProduct($this->otherRestaurant, 'Masala Foreign Product', '', $foreignCategory);
+
+        $response = $this->getJson(route('restaurant.menu.products.index', [
+            'search' => 'Masala',
+            'category_id' => $breakfast->id,
+            'page' => 2,
+        ]))->assertOk();
+
+        $html = $response->json('html');
+        $this->assertIsString($html);
+        $this->assertStringContainsString('Masala Product 9', $html);
+        $this->assertStringNotContainsString('Masala Product 1</strong>', $html);
+        $this->assertStringNotContainsString('Masala Beverage', $html);
+        $this->assertStringNotContainsString('Masala Foreign Product', $html);
+        $this->assertStringContainsString('search=Masala', $html);
+        $this->assertStringContainsString('category_id='.$breakfast->id, $html);
+
+        $emptyResponse = $this->getJson(route('restaurant.menu.products.index', [
+            'search' => 'No matching item',
+            'category_id' => $breakfast->id,
+        ]))->assertOk();
+        $this->assertStringContainsString('No matching products', $emptyResponse->json('html'));
     }
 
     public function test_owner_can_filter_products_by_an_owned_category_only(): void
@@ -410,7 +452,11 @@ class RestaurantMenuProductManagementTest extends TestCase
         $this->get(route('restaurant.menu.products.index'))
             ->assertOk()
             ->assertSee('src="'.asset('assets/menu-item-placeholder.svg').'"', false)
-            ->assertDontSee('src="'.asset('storage/'.$foreignPath).'"', false);
+            ->assertDontSee('src="'.route('public.uploads.show', [
+                'directory' => 'restaurant-menu',
+                'restaurantId' => $this->otherRestaurant->id,
+                'filename' => basename($foreignPath),
+            ]).'"', false);
     }
 
     public function test_pos_shows_only_active_available_owner_products_with_working_category_attributes(): void
@@ -444,8 +490,16 @@ class RestaurantMenuProductManagementTest extends TestCase
 
         $this->get(route('pos.index'))
             ->assertOk()
-            ->assertSee('src="'.asset('storage/'.$path).'"', false)
-            ->assertSee('data-img="'.asset('storage/'.$path).'"', false);
+            ->assertSee('src="'.route('public.uploads.show', [
+                'directory' => 'restaurant-menu',
+                'restaurantId' => $this->restaurant->id,
+                'filename' => basename($path),
+            ]).'"', false)
+            ->assertSee('data-img="'.route('public.uploads.show', [
+                'directory' => 'restaurant-menu',
+                'restaurantId' => $this->restaurant->id,
+                'filename' => basename($path),
+            ]).'"', false);
     }
 
     public function test_pos_categories_and_products_match_the_menu_search_and_category_filter_contract(): void
@@ -506,7 +560,7 @@ class RestaurantMenuProductManagementTest extends TestCase
             $this->assertTrue($product->is_available);
             $this->assertStringStartsWith('restaurant-menu/'.$this->restaurant->id.'/demo-', $product->image_path);
             Storage::disk('public')->assertExists($product->image_path);
-            $this->assertStringContainsString('storage/'.$product->image_path, $product->image_url);
+            $this->assertStringContainsString('/uploads/restaurant-menu/'.$this->restaurant->id.'/', $product->image_url);
         }
 
         $chickenBiryani = $products->firstWhere('name', 'Chicken Biryani');
@@ -524,11 +578,11 @@ class RestaurantMenuProductManagementTest extends TestCase
             ->assertSee('menu-product-thumbnail');
         $this->get(route('restaurant.menu.products.edit', $chickenBiryani))
             ->assertOk()
-            ->assertSee('src="'.asset('storage/'.$chickenBiryani->image_path).'"', false);
+            ->assertSee('src="'.$chickenBiryani->image_url.'"', false);
         $this->get(route('pos.index'))
             ->assertOk()
             ->assertSee('data-name="Chicken Biryani"', false)
-            ->assertSee('src="'.asset('storage/'.$chickenBiryani->image_path).'"', false);
+            ->assertSee('src="'.$chickenBiryani->image_url.'"', false);
 
         $secondRun = $seeder->seedForRestaurant($this->restaurant->id);
         $this->assertSame([

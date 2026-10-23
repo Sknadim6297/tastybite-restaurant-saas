@@ -52,8 +52,9 @@
                             </td>
                             <td>
                                 @if ($order->status === 'completed' && ! request()->attributes->has('restaurant_admin_access_restaurant'))
-                                    <form method="POST" action="{{ route('pos.orders.cancel', $order) }}" data-confirm="Cancel this completed sale? This will add auditable stock reversal movements.">
+                                    <form class="pos-order-cancel-form" method="POST" action="{{ route('pos.orders.cancel', $order) }}" data-confirm="Cancel this completed sale? This will add auditable stock reversal movements.">
                                         @csrf
+                                        <input name="reason" aria-label="Cancellation reason" placeholder="Required reason" minlength="5" maxlength="2000" required>
                                         <button class="text-button danger-text" type="submit">Cancel and reverse</button>
                                     </form>
                                 @else

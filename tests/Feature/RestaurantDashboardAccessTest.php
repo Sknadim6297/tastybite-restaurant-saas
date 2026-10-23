@@ -109,6 +109,16 @@ class RestaurantDashboardAccessTest extends TestCase
         ])->assertRedirect($this->restaurantAccessUrl('restaurant.menu.products.index', $token));
         $product = RestaurantMenuItem::query()->where('name', 'Admin Product')->firstOrFail();
 
+        $this->get($this->restaurantAccessUrl('restaurant.menu.products.index', $token))
+            ->assertOk()
+            ->assertSee('id="product-filters"', false)
+            ->assertSee('Admin Product');
+        $adminProductsResponse = $this->getJson($this->restaurantAccessUrl('restaurant.menu.products.index', $token, [
+            'search' => 'Admin',
+        ]))
+            ->assertOk();
+        $this->assertStringContainsString('Admin Product', $adminProductsResponse->json('html'));
+
         $this->get($this->restaurantAccessUrl('pos.index', $token))
             ->assertOk()
             ->assertSee('Super Admin Access — Viewing: Access House')
@@ -117,6 +127,25 @@ class RestaurantDashboardAccessTest extends TestCase
             ->assertOk()
             ->assertSee('Order history')
             ->assertSee('Super Admin Access — Viewing: Access House');
+        $this->get($this->restaurantAccessUrl('restaurant.orders.overview', $token))
+            ->assertOk()
+            ->assertSee('Order Overview')
+            ->assertSee('Super Admin Access — Viewing: Access House');
+        $this->get($this->restaurantAccessUrl('restaurant.orders.all', $token))
+            ->assertOk()
+            ->assertSee('All Orders')
+            ->assertSee('Super Admin Access — Viewing: Access House');
+        $this->get($this->restaurantAccessUrl('restaurant.orders.reports', $token))
+            ->assertOk()
+            ->assertSee('Order Reports');
+        $this->patch($this->restaurantAccessUrl('restaurant.orders.status', $token, ['order' => 1]), [
+            'status' => 'confirmed',
+        ])->assertForbidden();
+        $this->post($this->restaurantAccessUrl('restaurant.orders.payment.reconcile', $token, ['order' => 1]), [
+            'method' => 'cash',
+            'verification_note' => 'Verified from the external receipt',
+            'confirmed' => '1',
+        ])->assertForbidden();
 
         $this->assertSame($this->restaurant->id, $product->restaurant_id);
         $this->assertDatabaseHas('restaurant_audit_logs', [

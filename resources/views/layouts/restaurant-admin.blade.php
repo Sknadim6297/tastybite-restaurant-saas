@@ -30,9 +30,27 @@
                     <span class="nav-icon" aria-hidden="true"><i class="bi bi-grid-1x2"></i></span><span>Dashboard</span>
                 </a>
                 <a href="{{ route('pos.index') }}" class="sidebar-link @if(request()->routeIs('pos.index')) is-active @endif"><span class="nav-icon" aria-hidden="true"><i class="bi bi-receipt"></i></span><span>POS Billing</span></a>
-                <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true"><i class="bi bi-bag"></i></span><span>Orders</span><span class="nav-soon">Soon</span></span>
+                <details class="sidebar-menu-group" @if(request()->routeIs('restaurant.orders.*')) open @endif>
+                    <summary @class(['sidebar-link', 'is-active' => request()->routeIs('restaurant.orders.*')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-bag-check"></i></span><span>Orders Management</span><span class="sidebar-menu-chevron" aria-hidden="true"><i class="bi bi-chevron-down"></i></span></summary>
+                    <div class="sidebar-menu-children">
+                        <a href="{{ route('restaurant.orders.overview') }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.orders.overview')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-grid-1x2"></i></span><span>Order Overview</span></a>
+                        <a href="{{ route('restaurant.orders.all') }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.orders.all', 'restaurant.orders.show', 'restaurant.orders.status', 'restaurant.orders.cancel')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-receipt"></i></span><span>All Orders</span></a>
+                        <a href="{{ route('restaurant.orders.dine-in') }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.orders.dine-in')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-cup-hot"></i></span><span>Dine-In Orders</span></a>
+                        <a href="{{ route('restaurant.orders.fulfillment', ['type' => 'takeaway']) }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.orders.fulfillment')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-bicycle"></i></span><span>Takeaway &amp; Delivery</span></a>
+                        <a href="{{ route('restaurant.orders.billing') }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.orders.billing')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-credit-card"></i></span><span>Billing &amp; Payments</span></a>
+                        <a href="{{ route('restaurant.orders.reports') }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.orders.reports*')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-bar-chart-line"></i></span><span>Order Reports</span></a>
+                    </div>
+                </details>
                 <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true"><i class="bi bi-fire"></i></span><span>Kitchen / KOT</span><span class="nav-soon">Soon</span></span>
-                <span class="sidebar-link is-disabled" aria-disabled="true"><span class="nav-icon" aria-hidden="true"><i class="bi bi-table"></i></span><span>Table Management</span><span class="nav-soon">Soon</span></span>
+                <details class="sidebar-menu-group" @if(request()->routeIs('restaurant.tables.*')) open @endif>
+                    <summary @class(['sidebar-link', 'is-active' => request()->routeIs('restaurant.tables.*')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-table"></i></span><span>Table Management</span><span class="sidebar-menu-chevron" aria-hidden="true"><i class="bi bi-chevron-down"></i></span></summary>
+                    <div class="sidebar-menu-children">
+                        <a href="{{ route('restaurant.tables.overview') }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.tables.overview', 'restaurant.tables.operations')])><span class="nav-icon"><i class="bi bi-grid"></i></span><span>Table Dashboard</span></a>
+                        <a href="{{ route('restaurant.tables.manage', ['tab' => 'tables']) }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.tables.manage', 'restaurant.tables.index', 'restaurant.tables.floors', 'restaurant.tables.show')])><span class="nav-icon"><i class="bi bi-list-ul"></i></span><span>Manage Tables</span></a>
+                        <a href="{{ route('restaurant.tables.reservations') }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.tables.reservations*')])><span class="nav-icon"><i class="bi bi-calendar-check"></i></span><span>Reservations</span></a>
+                        <a href="{{ route('restaurant.tables.reports') }}" @class(['sidebar-link', 'sidebar-sublink', 'is-active' => request()->routeIs('restaurant.tables.reports*')])><span class="nav-icon"><i class="bi bi-bar-chart"></i></span><span>Table Reports</span></a>
+                    </div>
+                </details>
                 <details class="sidebar-menu-group" @if(request()->routeIs('restaurant.menu.categories.*', 'restaurant.menu.products.*')) open @endif>
                     <summary @class(['sidebar-link', 'is-active' => request()->routeIs('restaurant.menu.categories.*', 'restaurant.menu.products.*')])><span class="nav-icon" aria-hidden="true"><i class="bi bi-journal-text"></i></span><span>Menu Management</span><span class="sidebar-menu-chevron" aria-hidden="true"><i class="bi bi-chevron-down"></i></span></summary>
                     <div class="sidebar-menu-children">

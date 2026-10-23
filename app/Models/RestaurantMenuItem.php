@@ -60,6 +60,10 @@ class RestaurantMenuItem extends Model
             return asset('assets/menu-item-placeholder.svg');
         }
 
-        return asset('storage/'.$path);
+        return route('public.uploads.show', [
+            'directory' => 'restaurant-menu',
+            'restaurantId' => $this->restaurant_id,
+            'filename' => basename($path),
+        ]);
     }
 }

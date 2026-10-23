@@ -1,10 +1,17 @@
 <?php
 
+use App\Http\Controllers\PublicUploadController;
 use App\Http\Controllers\Restaurant\PosController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('restaurant.login'))
     ->middleware('restaurant.guest');
+
+Route::get('/uploads/{directory}/{restaurantId}/{filename}', [PublicUploadController::class, 'show'])
+    ->where('directory', 'restaurant-menu|restaurant-menu-categories|restaurant-branding')
+    ->whereNumber('restaurantId')
+    ->where('filename', '[A-Za-z0-9._-]+\.[A-Za-z0-9]{3,4}')
+    ->name('public.uploads.show');
 
 Route::middleware(['restaurant.headers', 'restaurant', 'restaurant.subscription'])->group(function () {
     Route::get('/pos', [PosController::class, 'index'])

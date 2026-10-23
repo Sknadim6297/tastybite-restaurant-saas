@@ -141,6 +141,15 @@ class RestaurantDashboardAccessService
             'restaurant.dashboard' => ['GET', 'HEAD'],
             'pos.index' => ['GET', 'HEAD'],
             'pos.orders.index' => ['GET', 'HEAD'],
+            'restaurant.orders.overview' => ['GET', 'HEAD'],
+            'restaurant.orders.all' => ['GET', 'HEAD'],
+            'restaurant.orders.dine-in' => ['GET', 'HEAD'],
+            'restaurant.orders.fulfillment' => ['GET', 'HEAD'],
+            'restaurant.orders.billing' => ['GET', 'HEAD'],
+            'restaurant.orders.reports' => ['GET', 'HEAD'],
+            'restaurant.orders.reports.export' => ['GET', 'HEAD'],
+            'restaurant.orders.show' => ['GET', 'HEAD'],
+            'restaurant.orders.receipt' => ['GET', 'HEAD'],
             'restaurant.subscription' => ['GET', 'HEAD'],
             'restaurant.menu.categories.index' => ['GET', 'HEAD'],
             'restaurant.menu.categories.create' => ['GET', 'HEAD'],
@@ -159,6 +168,10 @@ class RestaurantDashboardAccessService
             return true;
         }
 
+        if (str_starts_with($routeName, 'restaurant.tables.')) {
+            return in_array($method, ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'], true);
+        }
+
         return in_array($method, ['GET', 'HEAD'], true)
             && (
                 str_starts_with($routeName, 'restaurant.inventory.')
@@ -172,10 +185,28 @@ class RestaurantDashboardAccessService
     public function logAction(Restaurant $restaurant, SuperAdmin $admin, Request $request, int $status): void
     {
         $routeName = (string) $request->route()?->getName();
-        $resourceId = $request->route('category') ?? $request->route('product');
+        $resourceId = $request->route('category') ?? $request->route('product') ?? $request->route('order')
+            ?? $request->route('table') ?? $request->route('floor') ?? $request->route('section')
+            ?? $request->route('reservation');
         $action = match ($routeName) {
             'restaurant.dashboard' => 'dashboard_viewed',
             'pos.index' => 'pos_viewed',
+            'restaurant.orders.overview' => 'orders_overview_viewed',
+            'restaurant.orders.all' => 'orders_list_viewed',
+            'restaurant.orders.dine-in' => 'dine_in_orders_viewed',
+            'restaurant.orders.fulfillment' => 'fulfillment_orders_viewed',
+            'restaurant.orders.billing' => 'order_billing_viewed',
+            'restaurant.orders.reports' => 'order_reports_viewed',
+            'restaurant.orders.reports.export' => 'order_report_exported',
+            'restaurant.orders.show' => 'order_details_viewed',
+            'restaurant.orders.receipt' => 'order_receipt_viewed',
+            'restaurant.tables.overview' => 'tables_overview_viewed',
+            'restaurant.tables.index' => 'tables_list_viewed',
+            'restaurant.tables.floors' => 'table_floors_viewed',
+            'restaurant.tables.reservations' => 'table_reservations_viewed',
+            'restaurant.tables.operations' => 'table_operations_viewed',
+            'restaurant.tables.reports' => 'table_reports_viewed',
+            'restaurant.tables.reports.export' => 'table_report_exported',
             'restaurant.menu.categories.index' => 'categories_viewed',
             'restaurant.menu.categories.create' => 'category_form_viewed',
             'restaurant.menu.categories.store' => 'category_created',

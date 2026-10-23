@@ -154,6 +154,10 @@ class RestaurantMenuCategory extends Model
             return asset('assets/menu-item-placeholder.svg');
         }
 
-        return asset('storage/'.$path);
+        return route('public.uploads.show', [
+            'directory' => 'restaurant-menu-categories',
+            'restaurantId' => $this->restaurant_id,
+            'filename' => basename($path),
+        ]);
     }
 }

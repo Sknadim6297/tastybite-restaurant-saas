@@ -2266,7 +2266,7 @@ body.pos-page .brand small {
 }
 
 body.pos-page .pos-layout {
-    grid-template-columns: minmax(0, 1.5fr) minmax(380px, 0.9fr);
+    grid-template-columns: minmax(0, 1fr) minmax(350px, 360px);
     align-items: start;
     gap: 20px;
     max-width: 1800px;
@@ -2557,8 +2557,8 @@ body.pos-page .pos-billing-options > h3,
 
 body.pos-page .cart-heading,
 body.pos-page .cart-row {
-    grid-template-columns: minmax(0, 1fr) 66px 60px 65px 18px;
-    gap: 5px;
+    grid-template-columns: minmax(0, 1fr) 58px 48px 54px 18px;
+    gap: 4px;
 }
 
 body.pos-page .cart-heading {
@@ -2589,6 +2589,18 @@ body.pos-page .cart-items > .cart-row {
 body.pos-page .cart-product {
     min-width: 0;
     gap: 7px;
+}
+
+body.pos-page .qty-control {
+    min-width: 0;
+}
+
+body.pos-page .qty-control button {
+    width: 18px;
+}
+
+body.pos-page .qty-control span {
+    min-width: 18px;
 }
 
 body.pos-page .cart-price,
@@ -2679,6 +2691,23 @@ body.pos-page .payment-notice i,
     color: #d57b12;
 }
 
+.payment-confirmation {
+    display: flex !important;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0 0 12px !important;
+    color: #454b55;
+    font-size: 11px !important;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.payment-confirmation input {
+    flex: 0 0 auto;
+    margin: 1px 0 0;
+    accent-color: #f28c00;
+}
+
 .pos-billing-options > label {
     display: block;
     margin: 0 0 5px;
@@ -2718,16 +2747,16 @@ body.pos-page .checkout-footer {
 
 body.pos-page .checkout-footer-actions {
     display: grid;
-    grid-template-columns: .85fr .9fr 1.45fr;
-    gap: 7px;
+    grid-template-columns: minmax(0, .9fr) minmax(0, .95fr) minmax(0, 1.45fr);
+    gap: 5px;
 }
 
 body.pos-page .action-btn {
     min-width: 0;
     min-height: 41px;
-    padding: 0 7px;
+    padding: 0 4px;
     border-radius: 8px;
-    font-size: 10px;
+    font-size: 9px;
 }
 
 body.pos-page .hold-btn {
@@ -2849,7 +2878,7 @@ body.pos-page .complete-sale-btn:hover {
     }
 
     body.pos-page .pos-layout {
-        grid-template-columns: minmax(0, 1.15fr) minmax(360px, .95fr);
+        grid-template-columns: minmax(0, 1fr) 350px;
         gap: 14px;
     }
 

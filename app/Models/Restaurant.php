@@ -61,6 +61,26 @@ class Restaurant extends Model
         return $this->hasMany(RestaurantMenuItem::class)->orderBy('sort_order')->orderBy('name');
     }
 
+    public function floors(): HasMany
+    {
+        return $this->hasMany(RestaurantFloor::class)->orderBy('display_order')->orderBy('name');
+    }
+
+    public function diningSections(): HasMany
+    {
+        return $this->hasMany(RestaurantSection::class);
+    }
+
+    public function diningTables(): HasMany
+    {
+        return $this->hasMany(RestaurantTable::class);
+    }
+
+    public function tableReservations(): HasMany
+    {
+        return $this->hasMany(RestaurantTableReservation::class);
+    }
+
     public function vendors(): HasMany
     {
         return $this->hasMany(Vendor::class);
@@ -143,7 +163,10 @@ class Restaurant extends Model
             return null;
         }
 
-        return asset('storage/'.$path);
+        return route('public.uploads.show', [
+            'directory' => 'restaurant-branding',
+            'restaurantId' => $this->getKey(),
+            'filename' => basename($path),
+        ]);
     }
-
 }

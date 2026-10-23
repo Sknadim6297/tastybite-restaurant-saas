@@ -246,12 +246,20 @@ class RestaurantMenuCategoryManagementTest extends TestCase
             ->assertOk()
             ->assertSee('menu-category-thumbnail', false)
             ->assertSee('bi bi-water', false)
-            ->assertSee(asset('storage/'.$path), false);
+            ->assertSee(route('public.uploads.show', [
+                'directory' => 'restaurant-menu-categories',
+                'restaurantId' => $this->restaurant->id,
+                'filename' => basename($path),
+            ]), false);
         $this->get(route('pos.index'))
             ->assertOk()
             ->assertSee('category-btn-image', false)
             ->assertSee('bi bi-water', false)
-            ->assertSee(asset('storage/'.$path), false);
+            ->assertSee(route('public.uploads.show', [
+                'directory' => 'restaurant-menu-categories',
+                'restaurantId' => $this->restaurant->id,
+                'filename' => basename($path),
+            ]), false);
     }
 
     public function test_category_image_display_is_isolated_to_its_restaurant(): void
@@ -266,11 +274,19 @@ class RestaurantMenuCategoryManagementTest extends TestCase
         $this->get(route('restaurant.menu.categories.index'))
             ->assertOk()
             ->assertSee(asset('assets/menu-item-placeholder.svg'), false)
-            ->assertDontSee(asset('storage/'.$foreignPath), false);
+            ->assertDontSee(route('public.uploads.show', [
+                'directory' => 'restaurant-menu-categories',
+                'restaurantId' => $this->otherRestaurant->id,
+                'filename' => basename($foreignPath),
+            ]), false);
         $this->get(route('pos.index'))
             ->assertOk()
             ->assertSee(asset('assets/menu-item-placeholder.svg'), false)
-            ->assertDontSee(asset('storage/'.$foreignPath), false);
+            ->assertDontSee(route('public.uploads.show', [
+                'directory' => 'restaurant-menu-categories',
+                'restaurantId' => $this->otherRestaurant->id,
+                'filename' => basename($foreignPath),
+            ]), false);
     }
 
     public function test_category_icon_must_be_from_the_available_icon_set(): void

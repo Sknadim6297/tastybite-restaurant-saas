@@ -113,20 +113,34 @@
                   </div>
                 </div>
                 <div class="pos-order-selects">
+                  <div id="floorField">
+                    <label for="posFloor">Floor</label>
+                    <select id="posFloor">
+                      <option value="">Choose floor</option>
+                      @foreach($tableFloors as $floor)<option value="{{ $floor->id }}">{{ $floor->name }}</option>@endforeach
+                    </select>
+                  </div>
+                  <div id="sectionField">
+                    <label for="posSection">Section</label>
+                    <select id="posSection">
+                      <option value="">All sections</option>
+                      @foreach($tableFloors as $floor)@foreach($floor->sections as $section)<option value="{{ $section->id }}" data-floor="{{ $floor->id }}">{{ $section->name }}</option>@endforeach @endforeach
+                    </select>
+                  </div>
                   <div id="tableField">
                     <label for="tableNo">Table</label>
                     <select id="tableNo">
-                      <option>1</option><option>2</option><option>3</option>
-                      <option>4</option><option selected>5</option>
-                      <option>6</option><option>7</option><option>8</option>
+                      <option value="">Choose a floor first</option>
+                      @foreach($posTables as $table)
+                        <option value="{{ $table->id }}" data-floor="{{ $table->floor_id }}" data-section="{{ $table->section_id }}" data-capacity="{{ $table->capacity }}" @if($table->activeOccupancy?->group_id) data-group="{{ $table->activeOccupancy->group_id }}" @endif>{{ $table->table_number }} · {{ $table->capacity }} seats · {{ $table->floor?->name }}{{ $table->section ? ' · '.$table->section->name : '' }}{{ $table->activeOccupancy?->group_id ? ' · combined party' : ($table->status === 'occupied' ? ' · seated party' : '') }}</option>
+                      @endforeach
                     </select>
+                    @if($posTables->isEmpty())<small class="pos-table-empty">No available tables. Configure floors or resolve table availability.</small>@endif
                   </div>
                   <div>
                     <label for="guestNo">Guests</label>
                     <select id="guestNo">
-                      <option>1</option><option>2</option><option>3</option>
-                      <option selected>4</option><option>5</option>
-                      <option>6</option><option>7</option><option>8</option>
+                      @for($guest = 1; $guest <= 20; $guest++)<option value="{{ $guest }}" @selected($guest === 2)>{{ $guest }}</option>@endfor
                     </select>
                   </div>
                 </div>
@@ -279,8 +293,12 @@
                   </div>
                   <p class="payment-notice" id="paymentNotice" aria-live="polite">
                     <i class="bi bi-info-circle" aria-hidden="true"></i>
-                    <span>Cash selected. Payment is not recorded or processed by this POS.</span>
+                    <span>Choose a method, then confirm receipt only after the full payment has actually been received.</span>
                   </p>
+                  <label class="payment-confirmation" for="paymentReceivedConfirmed">
+                    <input id="paymentReceivedConfirmed" type="checkbox">
+                    <span>I confirm the full payment was received through the selected method.</span>
+                  </label>
                   <label for="orderNotes">Order Notes <span>(Optional)</span></label>
                   <textarea id="orderNotes" class="order-notes" placeholder="Add a note for the kitchen or cashier..." rows="2"></textarea>
                 </section>
@@ -329,6 +347,14 @@
       <input type="hidden" name="items_json" id="posItemsJson">
       <input type="hidden" name="discount_percent" id="posDiscountPercent">
       <input type="hidden" name="notes" id="posOrderNotes">
+      <input type="hidden" name="order_type" id="posOrderType">
+      <input type="hidden" name="table_number" id="posTableNumber">
+      <input type="hidden" name="table_id" id="posTableId">
+      <input type="hidden" name="floor_id" id="posFloorId">
+      <input type="hidden" name="section_id" id="posSectionId">
+      <input type="hidden" name="guest_count" id="posGuestCount">
+      <input type="hidden" name="payment_method" id="posPaymentMethod">
+      <input type="hidden" name="payment_confirmed" id="posPaymentConfirmed" value="0">
     </form>
 
 @endsection

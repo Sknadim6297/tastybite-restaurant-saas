@@ -7,6 +7,7 @@ use App\Models\RestaurantMenuCategory;
 use App\Models\RestaurantMenuItem;
 use App\Models\User;
 use App\Services\RestaurantAccessContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -17,7 +18,7 @@ use RuntimeException;
 
 class MenuProductController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request): View|JsonResponse
     {
         $owner = $this->owner();
         $validated = $request->validate([
@@ -45,6 +46,16 @@ class MenuProductController extends Controller
             ->orderBy('name')
             ->paginate(15)
             ->withQueryString();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'html' => view('restaurant.menu-products.partials.results', [
+                    'products' => $products,
+                    'search' => $search,
+                    'categoryId' => $categoryId,
+                ])->render(),
+            ]);
+        }
 
         return view('restaurant.menu-products.index', [
             'user' => $owner,

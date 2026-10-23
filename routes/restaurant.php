@@ -6,6 +6,9 @@ use App\Http\Controllers\Restaurant\DashboardController;
 use App\Http\Controllers\Restaurant\InventoryController;
 use App\Http\Controllers\Restaurant\MenuCategoryController;
 use App\Http\Controllers\Restaurant\MenuProductController;
+use App\Http\Controllers\Restaurant\PosController;
+use App\Http\Controllers\Restaurant\RestaurantOrderController;
+use App\Http\Controllers\Restaurant\TableManagementController;
 use App\Http\Controllers\Restaurant\SubscriptionStatusController;
 use App\Http\Controllers\Restaurant\SupportTicketController;
 use App\Http\Controllers\Restaurant\VendorController;
@@ -147,6 +150,58 @@ Route::prefix('restaurant')->name('restaurant.')->middleware('restaurant.headers
                 Route::get('/{product}/edit', 'edit')->whereNumber('product')->name('edit');
                 Route::put('/{product}', 'update')->whereNumber('product')->name('update');
                 Route::delete('/{product}', 'destroy')->whereNumber('product')->name('destroy');
+            });
+
+        Route::prefix('orders')->name('orders.')
+            ->middleware(['restaurant.subscription', 'restaurant.feature:pos'])
+            ->controller(RestaurantOrderController::class)
+            ->group(function (): void {
+                Route::get('/', 'overview')->name('overview');
+                Route::get('/all', 'all')->name('all');
+                Route::get('/dine-in', 'dineIn')->name('dine-in');
+                Route::get('/fulfillment', 'fulfillment')->name('fulfillment');
+                Route::get('/billing', 'billing')->name('billing');
+                Route::get('/reports', 'reports')->name('reports');
+                Route::get('/reports/export', 'export')->name('reports.export');
+                Route::get('/{order}/receipt', 'receipt')->whereNumber('order')->name('receipt');
+                Route::get('/{order}', 'show')->whereNumber('order')->name('show');
+                Route::patch('/{order}/status', 'updateStatus')->whereNumber('order')->name('status');
+                Route::post('/{order}/refund', 'recordRefund')->whereNumber('order')->name('refund');
+                Route::post('/{order}/payments/reconcile', [PosController::class, 'reconcilePayment'])->whereNumber('order')->name('payment.reconcile');
+                Route::post('/{order}/cancel', [PosController::class, 'cancel'])->whereNumber('order')->name('cancel');
+            });
+
+        Route::prefix('tables')->name('tables.')
+            ->middleware(['restaurant.subscription', 'restaurant.feature:pos'])
+            ->controller(TableManagementController::class)
+            ->group(function (): void {
+                Route::get('/', 'overview')->name('overview');
+                Route::get('/manage', 'manage')->name('manage');
+                Route::get('/list', 'index')->name('index');
+                Route::get('/floors', 'floors')->name('floors');
+                Route::get('/reservations', 'reservations')->name('reservations');
+                Route::get('/operations', 'operations')->name('operations');
+                Route::get('/reports', 'reports')->name('reports');
+                Route::get('/reports/export', 'exportReports')->name('reports.export');
+                Route::get('/status-feed', 'statusFeed')->name('status-feed');
+                Route::post('/floors', 'storeFloor')->name('floors.store');
+                Route::put('/floors/{floor}', 'updateFloor')->whereNumber('floor')->name('floors.update');
+                Route::delete('/floors/{floor}', 'archiveFloor')->whereNumber('floor')->name('floors.archive');
+                Route::post('/sections', 'storeSection')->name('sections.store');
+                Route::put('/sections/{section}', 'updateSection')->whereNumber('section')->name('sections.update');
+                Route::delete('/sections/{section}', 'archiveSection')->whereNumber('section')->name('sections.archive');
+                Route::post('/list', 'storeTable')->name('store');
+                Route::post('/list/bulk', 'bulkTables')->name('bulk');
+                Route::put('/list/{table}', 'updateTable')->whereNumber('table')->name('update');
+                Route::delete('/list/{table}', 'archiveTable')->whereNumber('table')->name('archive');
+                Route::patch('/{table}/status', 'status')->whereNumber('table')->name('status');
+                Route::post('/operations/transfer', 'transfer')->name('transfer');
+                Route::post('/operations/merge', 'merge')->name('merge');
+                Route::post('/operations/split', 'split')->name('split');
+                Route::post('/reservations', 'storeReservation')->name('reservations.store');
+                Route::put('/reservations/{reservation}', 'updateReservation')->whereNumber('reservation')->name('reservations.update');
+                Route::patch('/reservations/{reservation}/status', 'reservationStatus')->whereNumber('reservation')->name('reservations.status');
+                Route::get('/{table}', 'show')->whereNumber('table')->name('show');
             });
 
         Route::prefix('vendors')->name('vendors.')

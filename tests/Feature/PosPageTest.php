@@ -157,6 +157,8 @@ class PosPageTest extends TestCase
             ->assertSee('data-payment-method="Card"', false)
             ->assertSee('data-payment-method="UPI"', false)
             ->assertSee('id="paymentNotice"', false)
+            ->assertSee('id="paymentReceivedConfirmed"', false)
+            ->assertSee('id="posPaymentConfirmed"', false)
             ->assertSee('id="tableNo"', false)
             ->assertSee('id="guestNo"', false)
             ->assertSee('id="orderNotes"', false)
@@ -177,7 +179,8 @@ class PosPageTest extends TestCase
         $this->assertIsString($script);
         $this->assertStringContainsString('[...cart.values()].reduce((total, item) => total + item.qty, 0)', $script);
         $this->assertStringContainsString('paymentMethodNotices', $script);
-        $this->assertStringContainsString('no card details are collected here', $script);
+        $this->assertStringContainsString('external card terminal reports the full payment received', $script);
+        $this->assertStringContainsString('paymentConfirmedField.value', $script);
         $this->assertStringContainsString('function holdOrder()', $script);
         $this->assertStringContainsString('function resumeHeldOrder(id)', $script);
         $this->assertStringContainsString('window.print();', $script);
@@ -189,7 +192,7 @@ class PosPageTest extends TestCase
         $this->assertStringContainsString('body.pos-page .pos-layout', $style);
         $this->assertStringContainsString('position: sticky;', $style);
         $this->assertStringContainsString('body.pos-page.pos-printing', $style);
-        $this->assertStringContainsString('grid-template-columns: minmax(0, 1.5fr) minmax(380px, 0.9fr);', $style);
+        $this->assertStringContainsString('grid-template-columns: minmax(0, 1fr) minmax(350px, 360px);', $style);
         $this->assertStringContainsString('@media (max-width: 767.98px)', $style);
         $this->assertStringContainsString('prefers-reduced-motion: reduce', $style);
     }

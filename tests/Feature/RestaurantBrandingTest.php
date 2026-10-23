@@ -102,7 +102,7 @@ class RestaurantBrandingTest extends TestCase
             ->assertSee('Bluebird Owner')
             ->assertSee('Owner')
             ->assertSee('brand-logo-image', false)
-            ->assertSee(asset('storage/'.$this->restaurant->logo_path), false)
+            ->assertSee($this->restaurant->logo_url, false)
             ->assertDontSee('bi-cup-hot-fill', false);
 
         $this->assertNull($this->otherRestaurant->fresh()->logo_path);
@@ -202,7 +202,11 @@ class RestaurantBrandingTest extends TestCase
         $this->get(route('pos.index'))
             ->assertOk()
             ->assertSee('bi-cup-hot-fill', false)
-            ->assertDontSee(asset('storage/'.$foreignPath), false);
+            ->assertDontSee(route('public.uploads.show', [
+                'directory' => 'restaurant-branding',
+                'restaurantId' => $this->otherRestaurant->id,
+                'filename' => basename($foreignPath),
+            ]), false);
     }
 
     private function createRestaurant(string $name, string $slug): Restaurant
