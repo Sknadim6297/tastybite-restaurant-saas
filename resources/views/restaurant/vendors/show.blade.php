@@ -5,12 +5,12 @@
 
 @section('content')
     <div class="page-heading">
-        <div><span class="eyebrow">{{ $vendor->vendor_code }}</span><h1>{{ $vendor->name }}</h1><p>{{ $vendor->business_name ?: 'Vendor profile' }} · {{ $vendor->category ?: 'Uncategorized' }}</p></div>
+        <div><span class="eyebrow">{{ $vendor->vendor_code }}</span><h1>{{ $vendor->name }}</h1><p>Vendor profile · {{ $vendor->category ?: 'Uncategorized' }}</p></div>
         <div class="toolbar-actions"><a class="button button-secondary" href="{{ route('restaurant.vendors.index') }}">All vendors</a><a class="button button-primary" href="{{ route('restaurant.vendors.edit', $vendor) }}">Edit vendor</a></div>
     </div>
     <nav class="report-tabs vendor-detail-tabs" aria-label="Vendor details">
         <a class="is-active" href="#vendor-overview">Overview</a>
-        <a href="#vendor-contact">Contact &amp; Business Details</a>
+        <a href="#vendor-contact">Contact &amp; Address Details</a>
         <a href="#vendor-orders">Purchase Orders</a>
         <a href="#vendor-receipts">Goods Receipts</a>
         <a href="#vendor-bills">Bills</a>
@@ -28,7 +28,7 @@
     </section>
 
     <section id="vendor-contact" class="panel-card">
-        <div class="section-heading"><div><h2>Contact &amp; Business Details</h2></div><span class="status-pill status-{{ $vendor->status === 'active' ? 'active' : 'disabled' }}">{{ ucfirst($vendor->status) }}</span></div>
+        <div class="section-heading"><div><h2>Contact &amp; Address Details</h2></div><span class="status-pill status-{{ $vendor->status === 'active' ? 'active' : 'disabled' }}">{{ ucfirst($vendor->status) }}</span></div>
         <div class="detail-grid">
             <div class="detail-item"><span>Vendor code</span><strong>{{ $vendor->vendor_code }}</strong></div>
             <div class="detail-item"><span>Contact person</span><strong>{{ $vendor->contact_person ?: '—' }}</strong></div>
@@ -36,18 +36,14 @@
             <div class="detail-item"><span>Alternate mobile</span><strong>{{ $vendor->alternate_mobile ?: '—' }}</strong></div>
             <div class="detail-item"><span>Email</span><strong>{{ $vendor->email ?: '—' }}</strong></div>
             <div class="detail-item"><span>Category</span><strong>{{ $vendor->category ?: '—' }}</strong></div>
-            <div class="detail-item"><span>Business name</span><strong>{{ $vendor->business_name ?: '—' }}</strong></div>
-            <div class="detail-item"><span>GSTIN</span><strong>{{ $vendor->gstin ?: '—' }}</strong></div>
             <div class="detail-item"><span>PAN</span><strong>{{ $vendor->pan_number ?: '—' }}</strong></div>
-            <div class="detail-item"><span>Registration number</span><strong>{{ $vendor->registration_number ?: '—' }}</strong></div>
             <div class="detail-item"><span>Payment terms</span><strong>{{ $vendor->payment_terms_days }} days</strong></div>
-            <div class="detail-item"><span>Credit limit</span><strong>{{ $vendor->credit_limit ? 'INR '.number_format((float) $vendor->credit_limit, 2) : '—' }}</strong></div>
             <div class="detail-item"><span>Address</span><strong>{{ collect([$vendor->address_line_1, $vendor->address_line_2, $vendor->city, $vendor->state, $vendor->postal_code, $vendor->country])->filter()->join(', ') ?: '—' }}</strong></div>
             <div class="detail-item"><span>Account holder</span><strong>{{ $vendor->account_holder_name ?: '—' }}</strong></div>
             <div class="detail-item"><span>Bank</span><strong>{{ $vendor->bank_name ?: '—' }} · {{ $vendor->bank_branch ?: '—' }}</strong></div>
             <div class="detail-item"><span>Account number</span><strong>{{ $maskedAccountNumber }}</strong></div>
             <div class="detail-item"><span>IFSC</span><strong>{{ $vendor->ifsc_code ?: '—' }}</strong></div>
-            <div class="detail-item"><span>UPI ID</span><strong>{{ $vendor->upi_id ?: '—' }}</strong></div>
+            <div class="detail-item"><span>UPI ID</span><strong>{{ $vendor->upi_id ?: 'Not Provided' }}</strong></div>
             <div class="detail-item"><span>Created by</span><strong>{{ $vendor->creator?->name ?? '—' }}</strong></div>
             <div class="detail-item"><span>Created</span><strong>{{ $vendor->created_at?->timezone(config('app.timezone'))->format('M j, Y H:i') ?? '—' }}</strong></div>
             <div class="detail-item"><span>Updated</span><strong>{{ $vendor->updated_at?->timezone(config('app.timezone'))->format('M j, Y H:i') ?? '—' }}</strong></div>

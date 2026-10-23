@@ -58,6 +58,8 @@ class PosController extends Controller
             'categories' => $categories,
             'products' => $products,
             'currentUser' => $user,
+            'hasActiveTables' => RestaurantTable::query()->where('restaurant_id', $restaurant->id)
+                ->where('is_active', true)->whereNull('archived_at')->exists(),
             'tableFloors' => \App\Models\RestaurantFloor::query()->where('restaurant_id', $restaurant->id)
                 ->where('is_active', true)->whereNull('archived_at')->whereHas('tables', fn ($query) => $query->where('is_active', true)->whereNull('archived_at')
                     ->whereHas('floor', fn ($floor) => $floor->where('restaurant_id', $restaurant->id)->where('is_active', true)->whereNull('archived_at'))
@@ -70,7 +72,11 @@ class PosController extends Controller
                 ->whereHas('floor', fn ($floor) => $floor->where('restaurant_id', $restaurant->id)->where('is_active', true)->whereNull('archived_at'))
                 ->where(fn ($table) => $table->whereNull('section_id')->orWhereHas('section', fn ($section) => $section->where('restaurant_id', $restaurant->id)->where('is_active', true)->whereNull('archived_at')))
                 ->where(fn ($available) => $available->where('status', 'available')->orWhereHas('activeOccupancy', fn ($occupancy) => $occupancy->whereNull('pos_order_id')->where(fn ($session) => $session->whereNull('group_id')->orWhereHas('group', fn ($group) => $group->whereNull('ended_at')))))
-                ->with(['floor', 'section', 'activeOccupancy'])->orderBy('floor_id')->orderBy('sort_order')->orderBy('table_number')->get(),
+                ->with([
+                    'floor', 'section', 'activeOccupancy',
+                    'reservations' => fn ($query) => $query->whereIn('status', ['pending', 'confirmed'])
+                        ->where('starts_at', '>=', now(config('app.timezone'))->utc()),
+                ])->orderBy('floor_id')->orderBy('sort_order')->orderBy('table_number')->get(),
             'posIdempotencyKey' => (string) Str::uuid(),
         ]);
     }

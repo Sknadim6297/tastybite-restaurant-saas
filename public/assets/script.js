@@ -395,6 +395,120 @@ const posFloor = document.getElementById("posFloor");
 const posSection = document.getElementById("posSection");
 const posTable = document.getElementById("tableNo");
 const posGuests = document.getElementById("guestNo");
+const posTableCards = [...document.querySelectorAll("[data-pos-table-card]")];
+const tablePickerDialog = document.getElementById("tablePickerDialog");
+const openTablePickerButton = document.getElementById("openTablePicker");
+const confirmTableSelectionButton = document.getElementById("confirmTableSelection");
+const posTableAvailability = document.getElementById("posTableAvailability");
+const posTableEmptyState = document.getElementById("posTableEmptyState");
+let committedTableSelection = {
+    floorId: "",
+    sectionId: "",
+    tableId: "",
+    guestCount: posGuests?.value || "2"
+};
+
+function updatePosSectionOptions() {
+    if (!posSection || !posFloor) return;
+    [...posSection.options].forEach(option => {
+        if (option.value) option.hidden = option.dataset.floor !== posFloor.value;
+    });
+}
+
+function updatePosTableCards() {
+    const floorId = posFloor?.value || "";
+    const sectionId = posSection?.value || "";
+    let visibleCount = 0;
+    let selectableCount = 0;
+
+    posTableCards.forEach(card => {
+        const matches = Boolean(floorId) && card.dataset.floor === floorId &&
+            (!sectionId || card.dataset.section === sectionId);
+        card.hidden = !matches;
+        if (!matches) return;
+
+        visibleCount++;
+        if (!card.disabled) selectableCount++;
+        const selected = card.dataset.tableId === posTable?.value;
+        card.classList.toggle("is-selected", selected);
+        card.setAttribute("aria-pressed", String(selected));
+        const statusLabel = card.querySelector("[data-table-status-label]");
+        if (statusLabel) {
+            statusLabel.textContent = selected
+                ? "Selected"
+                : (card.dataset.status || "available").replace(/^./, letter => letter.toUpperCase());
+        }
+    });
+
+    if (posTableAvailability) {
+        posTableAvailability.textContent = floorId
+            ? `${visibleCount} ${visibleCount === 1 ? "table" : "tables"} · ${selectableCount} selectable`
+            : "Choose a floor to view tables.";
+    }
+
+    if (posTableEmptyState) {
+        posTableEmptyState.hidden = visibleCount > 0;
+        if (!floorId && posFloor?.options.length <= 1) {
+            document.getElementById("posTableEmptyTitle").textContent = "No tables available";
+            document.getElementById("posTableEmptyMessage").textContent = "There are no tables available for POS service right now.";
+        } else if (!floorId) {
+            document.getElementById("posTableEmptyTitle").textContent = "Choose a floor";
+            document.getElementById("posTableEmptyMessage").textContent = "Select a floor to see the tables available for service.";
+        } else {
+            document.getElementById("posTableEmptyTitle").textContent = "No tables in this view";
+            document.getElementById("posTableEmptyMessage").textContent = "Try another section or check table availability.";
+        }
+    }
+
+    if (confirmTableSelectionButton) {
+        const selectedOption = posTable?.selectedOptions[0];
+        confirmTableSelectionButton.disabled = !(selectedOption?.value && !selectedOption.disabled);
+    }
+}
+
+function updateCommittedTableSummary() {
+    const selectedOption = posTable?.selectedOptions[0];
+    const title = document.getElementById("posTableSelectionTitle");
+    const details = document.getElementById("posTableSelectionDetails");
+    const selectionButton = openTablePickerButton;
+    const floorName = posFloor?.selectedOptions[0]?.textContent?.trim() || "";
+    const sectionName = posSection?.value ? posSection.selectedOptions[0]?.textContent?.trim() : "";
+
+    if (!selectedOption?.value) {
+        if (title) title.textContent = "Select a table";
+        if (details) details.textContent = "Choose a floor and guest count";
+        selectionButton?.classList.remove("has-selection");
+        return;
+    }
+
+    if (title) title.textContent = `Table ${selectedOption.textContent.split("·")[0].trim()}`;
+    if (details) {
+        details.textContent = [floorName, sectionName, `${posGuests?.value || committedTableSelection.guestCount} guests`]
+            .filter(Boolean).join(" · ");
+    }
+    selectionButton?.classList.add("has-selection");
+}
+
+function captureCommittedTableSelection() {
+    committedTableSelection = {
+        floorId: posFloor?.value || "",
+        sectionId: posSection?.value || "",
+        tableId: posTable?.value || "",
+        guestCount: posGuests?.value || "2"
+    };
+    updateCommittedTableSummary();
+}
+
+function restoreCommittedTableSelection() {
+    if (posFloor) posFloor.value = committedTableSelection.floorId;
+    if (posSection) posSection.value = committedTableSelection.sectionId;
+    if (posTable) posTable.value = committedTableSelection.tableId;
+    if (posGuests) posGuests.value = committedTableSelection.guestCount;
+    updatePosSectionOptions();
+    filterPosTables();
+    updateCommittedTableSummary();
+}
+
 function filterPosTables() {
     if (!posTable) return;
     const floorId = posFloor?.value || "";
@@ -413,13 +527,12 @@ function filterPosTables() {
         });
         if (Number(posGuests.value) > capacity) posGuests.value = String(capacity);
     }
+    updatePosTableCards();
 }
 posFloor?.addEventListener("change", () => {
     if (posSection) {
         posSection.value = "";
-        [...posSection.options].forEach(option => {
-            if (option.value) option.hidden = option.dataset.floor !== posFloor.value;
-        });
+        updatePosSectionOptions();
     }
     filterPosTables();
 });
@@ -437,6 +550,56 @@ posTable?.addEventListener("change", () => {
     }
     filterPosTables();
 });
+
+posTableCards.forEach(card => {
+    card.addEventListener("click", () => {
+        if (card.disabled || !posTable) return;
+        posTable.value = card.dataset.tableId || "";
+        posTable.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+});
+
+posGuests?.addEventListener("change", updatePosTableCards);
+
+openTablePickerButton?.addEventListener("click", () => {
+    if (!tablePickerDialog?.showModal) return;
+    restoreCommittedTableSelection();
+    tablePickerDialog.classList.remove("is-closing");
+    tablePickerDialog.showModal();
+    posFloor?.focus();
+});
+
+function closeTablePicker() {
+    if (!tablePickerDialog?.open || tablePickerDialog.classList.contains("is-closing")) return;
+    tablePickerDialog.classList.add("is-closing");
+    window.setTimeout(() => {
+        if (tablePickerDialog.open) tablePickerDialog.close();
+    }, 160);
+}
+
+tablePickerDialog?.addEventListener("cancel", event => {
+    event.preventDefault();
+    closeTablePicker();
+});
+
+tablePickerDialog?.addEventListener("click", event => {
+    if (event.target === tablePickerDialog) closeTablePicker();
+});
+
+tablePickerDialog?.addEventListener("close", () => {
+    tablePickerDialog.classList.remove("is-closing");
+    restoreCommittedTableSelection();
+    openTablePickerButton?.focus();
+});
+
+document.querySelector("[data-close-table-picker]")?.addEventListener("click", closeTablePicker);
+
+confirmTableSelectionButton?.addEventListener("click", () => {
+    if (confirmTableSelectionButton.disabled) return;
+    captureCommittedTableSelection();
+    closeTablePicker();
+});
+
 filterPosTables();
 
 // Clear cart
@@ -588,11 +751,10 @@ function resumeHeldOrder(id) {
         if (el) el.value = value ?? "";
     });
     if (posSection && posFloor) {
-        [...posSection.options].forEach(section => {
-            if (section.value) section.hidden = section.dataset.floor !== posFloor.value;
-        });
+        updatePosSectionOptions();
     }
     filterPosTables();
+    captureCommittedTableSelection();
 
     heldOrders.splice(index, 1);
 
@@ -621,6 +783,10 @@ if (completeSaleButton) {
     completeSaleButton.addEventListener("click", () => {
         if (cart.size === 0) {
             alert("Add at least one menu item before completing the sale.");
+            return;
+        }
+        if (orderType === "Dine In" && tablePickerDialog?.dataset.tableRequired === "true" && !posTable?.value) {
+            openTablePickerButton?.click();
             return;
         }
         const form = document.getElementById("completeSaleForm");

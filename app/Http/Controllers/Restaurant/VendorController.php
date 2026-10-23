@@ -20,6 +20,16 @@ use Illuminate\View\View;
 
 class VendorController extends Controller
 {
+    private const INDIAN_STATES = [
+        'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
+        'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh',
+        'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+        'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand',
+        'West Bengal', 'Andaman and Nicobar Islands', 'Chandigarh',
+        'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Jammu and Kashmir', 'Ladakh',
+        'Lakshadweep', 'Puducherry',
+    ];
+
     public function __construct(
         private readonly VendorManagementService $vendors,
         private readonly VendorAccountingService $accounting,
@@ -128,7 +138,7 @@ class VendorController extends Controller
             'user' => $owner,
             'restaurant' => $owner->restaurant,
             'vendor' => new Vendor(),
-            'openingBalance' => '0.00',
+            'states' => self::INDIAN_STATES,
         ]);
     }
 
@@ -191,7 +201,7 @@ class VendorController extends Controller
             'user' => $owner,
             'restaurant' => $owner->restaurant,
             'vendor' => $vendor,
-            'openingBalance' => null,
+            'states' => self::INDIAN_STATES,
         ]);
     }
 
@@ -234,6 +244,7 @@ class VendorController extends Controller
             'name' => trim((string) $request->input('name')),
             'mobile' => trim((string) $request->input('mobile')),
             'email' => filled($request->input('email')) ? mb_strtolower(trim((string) $request->input('email'))) : null,
+            'upi_id' => filled($request->input('upi_id')) ? trim((string) $request->input('upi_id')) : null,
         ]);
 
         $restaurantId = (int) $owner->restaurant_id;
@@ -248,16 +259,12 @@ class VendorController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'category' => ['nullable', 'string', 'max:80'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
-            'business_name' => ['nullable', 'string', 'max:180'],
-            'gstin' => ['nullable', 'string', 'max:32', 'regex:/^[A-Za-z0-9]{5,32}$/'],
             'pan_number' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]{5,20}$/'],
-            'registration_number' => ['nullable', 'string', 'max:80'],
             'payment_terms_days' => ['required', 'integer', 'min:0', 'max:365'],
-            'credit_limit' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999.99'],
             'address_line_1' => ['nullable', 'string', 'max:180'],
             'address_line_2' => ['nullable', 'string', 'max:180'],
             'city' => ['nullable', 'string', 'max:100'],
-            'state' => ['nullable', 'string', 'max:100'],
+            'state' => ['nullable', 'string', 'max:100', Rule::in([...self::INDIAN_STATES, ...array_filter([$vendor?->state])])],
             'postal_code' => ['nullable', 'string', 'max:20'],
             'country' => ['required', 'string', 'max:100'],
             'account_holder_name' => ['nullable', 'string', 'max:180'],
@@ -268,11 +275,9 @@ class VendorController extends Controller
             'upi_id' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ];
-        if ($vendor === null) {
-            $validation['opening_balance'] = ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999.99'];
-        }
-
-        return $request->validate($validation);
+        return $request->validate($validation, [
+            'state.in' => 'Select a valid Indian state or union territory.',
+        ]);
     }
 
     private function owner(): User

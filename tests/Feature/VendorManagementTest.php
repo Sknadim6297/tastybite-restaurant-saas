@@ -88,24 +88,20 @@ class VendorManagementTest extends TestCase
             ->assertSee('data-auto-filter', false);
     }
 
-    public function test_vendor_creation_generates_scoped_code_and_audited_opening_payable(): void
+    public function test_vendor_creation_generates_scoped_code_without_upi_or_removed_fields(): void
     {
         $this->post(route('restaurant.vendors.store'), $this->vendorData([
-            'opening_balance' => '125.50',
+            'upi_id' => '',
             'account_number' => '123456789012',
         ]))->assertRedirect();
 
         $vendor = Vendor::query()->where('restaurant_id', $this->restaurant->id)->firstOrFail();
         $this->assertSame('VND000001', $vendor->vendor_code);
+        $this->assertNull($vendor->upi_id);
         $this->assertSame('123456789012', $vendor->account_number);
         $this->assertDatabaseMissing('vendors', ['id' => $vendor->id, 'account_number' => '123456789012']);
-        $this->assertDatabaseHas('vendor_financial_adjustments', [
-            'restaurant_id' => $this->restaurant->id,
-            'vendor_id' => $vendor->id,
-            'entry_type' => 'opening_payable',
-            'amount' => '125.50',
-        ]);
-        $this->assertSame(12550, app(VendorAccountingService::class)->balancesForRestaurant($this->restaurant->id)[$vendor->id]);
+        $this->assertDatabaseMissing('vendor_financial_adjustments', ['vendor_id' => $vendor->id]);
+        $this->assertSame(0, app(VendorAccountingService::class)->balancesForRestaurant($this->restaurant->id)[$vendor->id]);
         $this->assertDatabaseHas('restaurant_audit_logs', [
             'restaurant_id' => $this->restaurant->id,
             'target_type' => 'vendor',
@@ -116,7 +112,93 @@ class VendorManagementTest extends TestCase
         $this->get(route('restaurant.vendors.show', $vendor))
             ->assertOk()
             ->assertSee('****9012')
+            ->assertSee('Not Provided')
             ->assertDontSee('123456789012');
+    }
+
+    public function test_vendor_form_omits_removed_fields_and_includes_all_indian_states(): void
+    {
+        $this->get(route('restaurant.vendors.create'))
+            ->assertOk()
+            ->assertSee('Basic Information')
+            ->assertSee('Contact Information')
+            ->assertSee('Address Details')
+            ->assertSee('Bank &amp; Payment Details', false)
+            ->assertSee('placeholder="Select State"', false)
+            ->assertSee('value="Maharashtra"', false)
+            ->assertSee('value="Dadra and Nagar Haveli and Daman and Diu"', false)
+            ->assertDontSee('name="business_name"', false)
+            ->assertDontSee('name="gstin"', false)
+            ->assertDontSee('name="registration_number"', false)
+            ->assertDontSee('name="credit_limit"', false)
+            ->assertDontSee('name="opening_balance"', false);
+    }
+
+    public function test_vendor_state_validation_shows_a_clear_error_for_unknown_values(): void
+    {
+        $this->from(route('restaurant.vendors.create'))
+            ->post(route('restaurant.vendors.store'), $this->vendorData(['state' => 'Atlantis']))
+            ->assertRedirect(route('restaurant.vendors.create'))
+            ->assertSessionHasErrors('state');
+
+        $this->get(route('restaurant.vendors.create'))
+            ->assertSee('Select a valid Indian state or union territory.')
+            ->assertSee('aria-invalid="true"', false);
+    }
+
+    public function test_legacy_vendor_profile_values_are_preserved_and_state_can_be_updated(): void
+    {
+        $vendor = $this->restaurant->vendors()->create(array_merge($this->vendorData([
+            'state' => 'Legacy State Name',
+            'upi_id' => 'fresh@upi',
+        ]), [
+            'business_name' => 'Historic Business Name',
+            'gstin' => '29ABCDE1234F1Z5',
+            'registration_number' => 'REG-12345',
+            'credit_limit' => '2500.00',
+        ]));
+
+        $this->get(route('restaurant.vendors.edit', $vendor))
+            ->assertOk()
+            ->assertSee('value="Legacy State Name"', false)
+            ->assertSee('value="fresh@upi"', false)
+            ->assertDontSee('Historic Business Name');
+        $this->get(route('restaurant.vendors.show', $vendor))
+            ->assertOk()
+            ->assertSee('Legacy State Name')
+            ->assertSee('fresh@upi')
+            ->assertDontSee('Historic Business Name')
+            ->assertDontSee('29ABCDE1234F1Z5')
+            ->assertDontSee('REG-12345')
+            ->assertDontSee('2500.00');
+
+        $this->put(route('restaurant.vendors.update', $vendor), $this->vendorData([
+            'state' => 'Maharashtra',
+            'upi_id' => '',
+        ]))->assertRedirect(route('restaurant.vendors.show', $vendor));
+
+        $updated = $vendor->fresh();
+        $this->assertSame('Maharashtra', $updated->state);
+        $this->assertNull($updated->upi_id);
+        $this->assertSame('Historic Business Name', $updated->business_name);
+        $this->assertSame('29ABCDE1234F1Z5', $updated->gstin);
+        $this->assertSame('REG-12345', $updated->registration_number);
+        $this->assertSame('2500.00', $updated->credit_limit);
+    }
+
+    public function test_existing_opening_payable_ledger_remains_independent_of_vendor_form(): void
+    {
+        $vendor = app(\App\Services\VendorManagementService::class)->create($this->owner, $this->vendorData([
+            'opening_balance' => '125.50',
+        ]));
+
+        $this->assertDatabaseHas('vendor_financial_adjustments', [
+            'restaurant_id' => $this->restaurant->id,
+            'vendor_id' => $vendor->id,
+            'entry_type' => 'opening_payable',
+            'amount' => '125.50',
+        ]);
+        $this->assertSame(12550, app(VendorAccountingService::class)->balancesForRestaurant($this->restaurant->id)[$vendor->id]);
     }
 
     public function test_vendor_search_status_filter_and_duplicate_mobile_are_restaurant_scoped(): void
@@ -204,12 +286,8 @@ class VendorManagementTest extends TestCase
             'email' => 'fresh@example.test',
             'category' => 'Produce',
             'status' => 'active',
-            'business_name' => 'Fresh Foods Private Limited',
-            'gstin' => '29ABCDE1234F1Z5',
             'pan_number' => 'ABCDE1234F',
-            'registration_number' => '',
             'payment_terms_days' => 15,
-            'credit_limit' => '10000.00',
             'address_line_1' => '10 Market Road',
             'address_line_2' => '',
             'city' => 'Bengaluru',

@@ -112,37 +112,15 @@
                     </button>
                   </div>
                 </div>
-                <div class="pos-order-selects">
-                  <div id="floorField">
-                    <label for="posFloor">Floor</label>
-                    <select id="posFloor">
-                      <option value="">Choose floor</option>
-                      @foreach($tableFloors as $floor)<option value="{{ $floor->id }}">{{ $floor->name }}</option>@endforeach
-                    </select>
-                  </div>
-                  <div id="sectionField">
-                    <label for="posSection">Section</label>
-                    <select id="posSection">
-                      <option value="">All sections</option>
-                      @foreach($tableFloors as $floor)@foreach($floor->sections as $section)<option value="{{ $section->id }}" data-floor="{{ $floor->id }}">{{ $section->name }}</option>@endforeach @endforeach
-                    </select>
-                  </div>
-                  <div id="tableField">
-                    <label for="tableNo">Table</label>
-                    <select id="tableNo">
-                      <option value="">Choose a floor first</option>
-                      @foreach($posTables as $table)
-                        <option value="{{ $table->id }}" data-floor="{{ $table->floor_id }}" data-section="{{ $table->section_id }}" data-capacity="{{ $table->capacity }}" @if($table->activeOccupancy?->group_id) data-group="{{ $table->activeOccupancy->group_id }}" @endif>{{ $table->table_number }} · {{ $table->capacity }} seats · {{ $table->floor?->name }}{{ $table->section ? ' · '.$table->section->name : '' }}{{ $table->activeOccupancy?->group_id ? ' · combined party' : ($table->status === 'occupied' ? ' · seated party' : '') }}</option>
-                      @endforeach
-                    </select>
-                    @if($posTables->isEmpty())<small class="pos-table-empty">No available tables. Configure floors or resolve table availability.</small>@endif
-                  </div>
-                  <div>
-                    <label for="guestNo">Guests</label>
-                    <select id="guestNo">
-                      @for($guest = 1; $guest <= 20; $guest++)<option value="{{ $guest }}" @selected($guest === 2)>{{ $guest }}</option>@endfor
-                    </select>
-                  </div>
+                <div class="pos-table-selection" id="tableField">
+                  <button class="pos-table-selection-button" id="openTablePicker" type="button" aria-haspopup="dialog" aria-controls="tablePickerDialog">
+                    <span class="pos-table-selection-icon"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i></span>
+                    <span class="pos-table-selection-copy">
+                      <strong id="posTableSelectionTitle">Select a table</strong>
+                      <small id="posTableSelectionDetails">Choose a floor and guest count</small>
+                    </span>
+                    <i class="bi bi-chevron-right pos-table-selection-arrow" aria-hidden="true"></i>
+                  </button>
                 </div>
               </div>
             </section>
@@ -340,6 +318,97 @@
     @if(session('status'))
       <div class="pos-status-message" role="status">{{ session('status') }}</div>
     @endif
+
+    <dialog class="pos-table-dialog" id="tablePickerDialog" aria-labelledby="tablePickerTitle" aria-describedby="tablePickerDescription" data-table-required="{{ $hasActiveTables ? 'true' : 'false' }}">
+      <div class="pos-table-dialog-shell">
+        <header class="pos-table-dialog-header">
+          <div>
+            <span class="pos-table-dialog-eyebrow">DINE IN</span>
+            <h2 id="tablePickerTitle">Select Table &amp; Guests</h2>
+            <p id="tablePickerDescription">Choose a floor, then select a table for this order.</p>
+          </div>
+          <button class="pos-table-dialog-close" type="button" data-close-table-picker aria-label="Close table selection">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </header>
+
+        <div class="pos-table-dialog-content">
+          <div class="pos-table-picker-controls">
+            <div id="floorField">
+              <label for="posFloor">Floor</label>
+              <select id="posFloor">
+                <option value="">Choose floor</option>
+                @foreach($tableFloors as $floor)<option value="{{ $floor->id }}">{{ $floor->name }}</option>@endforeach
+              </select>
+            </div>
+            <div id="sectionField">
+              <label for="posSection">Section</label>
+              <select id="posSection">
+                <option value="">All sections</option>
+                @foreach($tableFloors as $floor)@foreach($floor->sections as $section)<option value="{{ $section->id }}" data-floor="{{ $floor->id }}">{{ $section->name }}</option>@endforeach @endforeach
+              </select>
+            </div>
+          </div>
+
+          <div class="pos-table-grid-heading">
+            <div>
+              <h3>Tables</h3>
+              <p id="posTableAvailability" aria-live="polite">Choose a floor to view tables.</p>
+            </div>
+            <div class="pos-table-legend" aria-label="Table availability legend">
+              <span class="is-available"><i></i> Available</span>
+              <span class="is-occupied"><i></i> Occupied</span>
+              <span class="is-reserved"><i></i> Reserved</span>
+            </div>
+          </div>
+
+          <div class="pos-table-card-grid" id="posTableCardGrid">
+            @foreach($posTables as $table)
+              @php
+                $tableReserved = $table->reservations->isNotEmpty();
+                $tableStatus = $tableReserved ? 'reserved' : ($table->status === 'occupied' ? 'occupied' : 'available');
+              @endphp
+              <button class="pos-table-card" type="button" data-pos-table-card data-table-id="{{ $table->id }}" data-floor="{{ $table->floor_id }}" data-section="{{ $table->section_id }}" data-capacity="{{ $table->capacity }}" data-status="{{ $tableStatus }}" aria-pressed="false" @disabled($tableReserved)>
+                <span class="pos-table-card-top">
+                  <strong>Table {{ $table->table_number }}</strong>
+                  <span class="pos-table-status" data-table-status-label>{{ ucfirst($tableStatus) }}</span>
+                </span>
+                <span class="pos-table-card-capacity"><i class="bi bi-people" aria-hidden="true"></i> {{ $table->capacity }} seats</span>
+                @if($table->activeOccupancy?->group_id)<span class="pos-table-card-note">Combined party</span>@elseif($table->status === 'occupied')<span class="pos-table-card-note">Seated party</span>@endif
+                <i class="bi bi-check-circle-fill pos-table-card-check" aria-hidden="true"></i>
+              </button>
+            @endforeach
+            <div class="pos-table-empty-state" id="posTableEmptyState" role="status" hidden>
+              <span class="pos-table-empty-icon"><i class="bi bi-layout-three-columns" aria-hidden="true"></i></span>
+              <strong id="posTableEmptyTitle">No tables available</strong>
+              <span id="posTableEmptyMessage">Choose another floor or section, or review table availability.</span>
+            </div>
+          </div>
+
+          <div class="pos-table-dialog-footer">
+            <div class="pos-table-guest-control">
+              <label for="guestNo">Guests</label>
+              <select id="guestNo">
+                @for($guest = 1; $guest <= 20; $guest++)<option value="{{ $guest }}" @selected($guest === 2)>{{ $guest }}</option>@endfor
+              </select>
+            </div>
+            <button class="pos-table-confirm-button" id="confirmTableSelection" type="button" disabled>
+              Confirm Table Selection <i class="bi bi-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="pos-table-select-source" aria-hidden="true">
+          <select id="tableNo" tabindex="-1">
+            <option value="">Choose a floor first</option>
+            @foreach($posTables as $table)
+              @php($tableReserved = $table->reservations->isNotEmpty())
+              <option value="{{ $table->id }}" data-floor="{{ $table->floor_id }}" data-section="{{ $table->section_id }}" data-capacity="{{ $table->capacity }}" data-status="{{ $tableReserved ? 'reserved' : ($table->status === 'occupied' ? 'occupied' : 'available') }}" @if($table->activeOccupancy?->group_id) data-group="{{ $table->activeOccupancy->group_id }}" @endif @disabled($tableReserved)>{{ $table->table_number }} · {{ $table->capacity }} seats · {{ $table->floor?->name }}{{ $table->section ? ' · '.$table->section->name : '' }}{{ $table->activeOccupancy?->group_id ? ' · combined party' : ($table->status === 'occupied' ? ' · seated party' : '') }}</option>
+            @endforeach
+          </select>
+        </div>
+      </div>
+    </dialog>
 
     <form id="completeSaleForm" method="POST" action="{{ route('pos.orders.store') }}" hidden>
       @csrf

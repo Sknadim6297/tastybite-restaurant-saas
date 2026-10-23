@@ -189,7 +189,24 @@ class RestaurantTableManagementTest extends TestCase
     public function test_pos_uses_configured_table_and_starts_an_occupancy_only_after_order_creation(): void
     {
         $table = $this->createTable('G01', 4);
-        $this->get(route('pos.index'))->assertOk()->assertSee('G01')->assertDontSee('<option>8</option>', false);
+        $reservedTable = $this->createTable('G02', 4);
+        RestaurantTableReservation::create([
+            'restaurant_id' => $this->restaurant->id, 'floor_id' => $this->floor->id,
+            'section_id' => $this->section->id, 'table_id' => $reservedTable->id,
+            'created_by' => $this->owner->id, 'reference' => 'POS-RESERVED-TABLE',
+            'customer_name' => 'Reserved Guest', 'phone' => '5550102',
+            'starts_at' => now()->addHour()->utc(), 'duration_minutes' => 120,
+            'party_size' => 2, 'status' => 'confirmed',
+        ]);
+        $response = $this->get(route('pos.index'))->assertOk();
+        $response->assertSee('Select Table &amp; Guests', false)
+            ->assertSee('data-table-id="'.$table->id.'"', false)
+            ->assertSee('data-status="available"', false)
+            ->assertSee('data-table-id="'.$reservedTable->id.'"', false)
+            ->assertSee('data-status="reserved"', false)
+            ->assertSee('data-table-required="true"', false)
+            ->assertDontSee('<option>8</option>', false)
+            ->assertSee('data-pos-table-card', false);
         $product = RestaurantMenuItem::create([
             'restaurant_id' => $this->restaurant->id, 'name' => 'Table Test Dish',
             'price' => '100.00', 'food_type' => 'veg', 'is_available' => true,
