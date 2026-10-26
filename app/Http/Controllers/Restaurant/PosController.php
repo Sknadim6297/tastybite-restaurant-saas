@@ -87,7 +87,7 @@ class PosController extends Controller
         $owner = app(RestaurantAccessContext::class)->owner();
         $orders = RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
             ->where('status', 'draft')->where('fulfillment_status', 'held')
-            ->with('items.menuItem')->latest('created_at')->get();
+            ->with('items.menuItem')->latest('updated_at')->get();
         $bills = [];
         foreach ($orders as $heldOrder) {
             $bills[] = $this->heldBillPayload($heldOrder);
@@ -193,7 +193,7 @@ class PosController extends Controller
             $order->update([
                 'restaurant_id' => $restaurantId,
                 'updated_by' => $owner->id,
-                'order_number' => $resumedOrder?->order_number ?? ('HB-'.now()->format('Ymd').'-'.Str::upper(Str::random(6))),
+                'order_number' => $resumedOrder?->order_number ?? sprintf('HB%s%06d', now()->format('Ymd'), $order->id),
                 'idempotency_key' => $data['idempotency_key'],
                 'status' => 'draft',
                 'order_type' => $data['order_type'],
@@ -367,6 +367,7 @@ class PosController extends Controller
                     'floor_id' => $table?->floor_id,
                     'section_id' => $table?->section_id,
                     'table_id' => $table?->id,
+                    'original_table_id' => $resumedOrder->original_table_id ?? $table?->id,
                     'guest_count' => $data['guest_count'] ?? null,
                     'fulfillment_status' => 'pending',
                     'payment_method' => $data['payment_method'],
@@ -670,7 +671,7 @@ class PosController extends Controller
         return [
             'id' => $order->id,
             'reference' => $order->order_number,
-            'created_at' => $order->created_at?->timezone(config('app.timezone'))->toIso8601String(),
+            'created_at' => $order->updated_at?->timezone(config('app.timezone'))->toIso8601String(),
             'order_type' => $order->order_type,
             'table_number' => $order->table_number,
             'table_id' => $order->table_id,

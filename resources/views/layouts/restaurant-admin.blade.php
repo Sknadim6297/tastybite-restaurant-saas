@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · TastyBite Restaurant</title>
+    @include('components.app-fonts')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ asset('assets/super-admin.css') }}?v={{ filemtime(public_path('assets/super-admin.css')) }}">
     <link rel="stylesheet" href="{{ asset('assets/restaurant-panel.css') }}?v={{ filemtime(public_path('assets/restaurant-panel.css')) }}">

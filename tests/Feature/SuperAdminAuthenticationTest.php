@@ -27,7 +27,10 @@ class SuperAdminAuthenticationTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('Welcome back')
+            ->assertSee('assets/app-font.css', false)
+            ->assertSee('fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap', false)
             ->assertHeader('Referrer-Policy', 'no-referrer');
+        $this->assertSame(1, substr_count($response->getContent(), 'fonts.googleapis.com/css2?family=Inter'));
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
     }
 

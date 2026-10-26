@@ -7,6 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · {{ $platformSettings['platform_name'] ?? 'TastyBite' }} Super Admin</title>
     @if($platformSettings['favicon_path'] ?? null)<link rel="icon" href="{{ route('super-admin.settings.branding.show', 'favicon') }}">@endif
+    @include('components.app-fonts')
     <link rel="stylesheet" href="{{ asset('assets/super-admin.css') }}?v={{ filemtime(public_path('assets/super-admin.css')) }}-{{ filesize(public_path('assets/super-admin.css')) }}">
 </head>
 

@@ -17,7 +17,7 @@ body {
 }
 
 body {
-    font-family: "Inter", sans-serif;
+    font-family: var(--app-font);
     background: #08091b;
     color: #fff;
 }
@@ -203,7 +203,6 @@ a {
 }
 
 .brand-slogan span {
-    font-family: Georgia, serif;
     font-style: italic;
     color: #ff9d00;
 }
@@ -2449,7 +2448,7 @@ body.pos-page .checkout-header {
 
 body.pos-page .billing-panel,
 body.pos-page .held-bills-dialog {
-    font-family: Inter, "Segoe UI", sans-serif;
+    font-family: var(--app-font);
 }
 
 body.pos-page .checkout-header > div:first-child {

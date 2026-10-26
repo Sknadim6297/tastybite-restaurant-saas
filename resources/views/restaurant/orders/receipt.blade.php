@@ -4,8 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Receipt {{ $order->order_number }}</title>
+    @include('components.app-fonts')
     <style>
-        body{margin:0;background:#f5f6f8;color:#182230;font:13px/1.5 Arial,sans-serif}
+        body{margin:0;background:#f5f6f8;color:#182230;font:13px/1.5 var(--app-font)}
         .receipt{width:min(100%,420px);margin:24px auto;padding:24px;background:#fff}
         h1,h2,p{margin:0 0 8px}h1{font-size:20px}h2{font-size:15px}
         .muted{color:#667085}.center{text-align:center}.rule{border:0;border-top:1px dashed #98a2b3;margin:14px 0}

@@ -197,7 +197,7 @@
             <section class="checkout-dialog" aria-labelledby="checkoutTitle">
               <header class="checkout-header">
                 <div>
-                  <h2 id="checkoutTitle"><i class="bi bi-receipt" aria-hidden="true"></i> Current Order</h2>
+                  <h2 id="checkoutTitle"><i class="bi bi-receipt" aria-hidden="true"></i>Orders</h2>
                   <p>Review items and complete billing</p>
                 </div>
                 <div class="checkout-header-actions">

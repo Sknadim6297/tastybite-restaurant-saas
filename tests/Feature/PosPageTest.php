@@ -150,7 +150,15 @@ class PosPageTest extends TestCase
             ->assertSee('data-category-name="Items"', false)
             ->assertSee('id="billingPanel"', false)
             ->assertSee('id="checkoutTitle"', false)
-            ->assertSee('Current Order')
+            ->assertSee('assets/app-font.css', false)
+            ->assertSee('fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap', false)
+            ->assertSee('id="openHeldBills"', false)
+            ->assertSee('id="heldBillsDialog"', false)
+            ->assertSee('id="heldBillsCount"', false)
+            ->assertSee('No held bills')
+            ->assertSee('Orders you put on hold will appear here.')
+            ->assertSee('fonts.googleapis.com/css2?family=Inter', false)
+            ->assertSee('Orders')
             ->assertDontSee('New Order')
             ->assertDontSee('Choose order type and table details')
             ->assertDontSee('Live order')
@@ -182,6 +190,8 @@ class PosPageTest extends TestCase
             ->assertDontSee('nextBilling"')
             ->assertDontSee('generateBill');
 
+        $this->assertSame(1, substr_count($response->getContent(), 'fonts.googleapis.com/css2?family=Inter'));
+
         $script = file_get_contents(public_path('assets/script.js'));
         $this->assertIsString($script);
         $this->assertStringContainsString('[...cart.values()].reduce((total, item) => total + item.qty, 0)', $script);
@@ -189,7 +199,9 @@ class PosPageTest extends TestCase
         $this->assertStringNotContainsString('paymentConfirmedField', $script);
         $this->assertStringNotContainsString('posOrderNotes', $script);
         $this->assertStringContainsString('function holdOrder()', $script);
-        $this->assertStringContainsString('function resumeHeldOrder(id)', $script);
+        $this->assertStringContainsString('async function resumeHeldBill(order, button)', $script);
+        $this->assertStringContainsString('async function deleteHeldBill(order, button)', $script);
+        $this->assertStringContainsString('heldBillsRequest', $script);
         $this->assertStringContainsString('window.print();', $script);
         $this->assertStringContainsString('form.submit();', $script);
         $this->assertStringNotContainsString('DEMO BILL', $script);

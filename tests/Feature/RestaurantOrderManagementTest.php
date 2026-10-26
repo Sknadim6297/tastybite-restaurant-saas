@@ -522,8 +522,8 @@ class RestaurantOrderManagementTest extends TestCase
             'discount' => '20.00',
             'tax' => '9.00',
             'total' => '189.00',
-            'created_at' => '2026-10-23 00:00:00',
         ]);
+        DB::table('restaurant_pos_orders')->where('id', $paidOrder->id)->update(['created_at' => '2026-10-23 00:00:00']);
         $unpaidOrder = $this->createOrder($this->owner, 'ORDER-REPORT-UNPAID-ACCURATE');
         $unpaidOrder->update([
             'order_type' => 'takeaway',
@@ -531,8 +531,8 @@ class RestaurantOrderManagementTest extends TestCase
             'discount' => '5.00',
             'tax' => '4.75',
             'total' => '99.75',
-            'created_at' => '2026-10-23 23:59:59',
         ]);
+        DB::table('restaurant_pos_orders')->where('id', $unpaidOrder->id)->update(['created_at' => '2026-10-23 23:59:59']);
         $cancelledOrder = $this->createOrder($this->owner, 'ORDER-REPORT-CANCELLED');
         $cancelledOrder->update([
             'status' => 'cancelled',
@@ -541,8 +541,8 @@ class RestaurantOrderManagementTest extends TestCase
             'discount' => '0.00',
             'tax' => '2.50',
             'total' => '52.50',
-            'created_at' => '2026-10-24 00:00:00',
         ]);
+        DB::table('restaurant_pos_orders')->where('id', $cancelledOrder->id)->update(['created_at' => '2026-10-23 23:59:59']);
         $this->createOrder($this->otherOwner(), 'ORDER-REPORT-OTHER-TENANT');
 
         $payment = RestaurantPosPayment::create([

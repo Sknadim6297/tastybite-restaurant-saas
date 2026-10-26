@@ -25,10 +25,14 @@ class RestaurantAuthenticationTest extends TestCase
 
     public function test_guest_can_view_the_restaurant_login_page(): void
     {
-        $this->get(route('restaurant.login'))
+        $response = $this->get(route('restaurant.login'));
+        $response
             ->assertOk()
             ->assertSee('Welcome back')
+            ->assertSee('assets/app-font.css', false)
+            ->assertSee('fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap', false)
             ->assertHeader('Referrer-Policy', 'no-referrer');
+        $this->assertSame(1, substr_count($response->getContent(), 'fonts.googleapis.com/css2?family=Inter'));
     }
 
     public function test_homepage_redirects_guests_to_the_existing_restaurant_login(): void
