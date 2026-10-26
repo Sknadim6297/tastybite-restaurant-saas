@@ -20,6 +20,9 @@ Route::middleware(['restaurant.headers', 'restaurant', 'restaurant.subscription'
     Route::post('/pos/orders', [PosController::class, 'complete'])
         ->middleware('restaurant.feature:pos')
         ->name('pos.orders.store');
+    Route::post('/pos/kot', [PosController::class, 'storeKot'])
+        ->middleware('restaurant.feature:pos')
+        ->name('pos.kot.store');
     Route::get('/pos/held-bills', [PosController::class, 'heldBills'])
         ->middleware('restaurant.feature:pos')
         ->name('pos.held-bills.index');

@@ -29,8 +29,8 @@
             <input type="hidden" name="type" value="{{ request('type', 'takeaway') }}">
         @endif
         <div class="form-field order-search-field">
-            <label for="order-search">Search order number</label>
-            <input id="order-search" type="search" name="search" value="{{ $filters['search'] ?? '' }}" maxlength="120" placeholder="Search order number">
+            <label for="order-search">Search order or invoice</label>
+            <input id="order-search" type="search" name="search" value="{{ $filters['search'] ?? '' }}" maxlength="120" placeholder="Order or invoice number">
         </div>
         <div class="form-field">
             <label for="order-status">Order status</label>

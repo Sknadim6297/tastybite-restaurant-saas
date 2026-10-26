@@ -285,11 +285,11 @@
                   <button class="action-btn hold-btn" type="button" id="holdOrderButton" aria-label="Hold current bill or restore the most recent held bill when empty" title="Hold current bill or restore the most recent held bill when empty">
                     <i class="bi bi-pause-fill" aria-hidden="true"></i> Hold Bill
                   </button>
-                  <button class="action-btn print-btn" type="button" id="printBillButton">
-                    <i class="bi bi-printer" aria-hidden="true"></i> Print Bill
+                  <button class="action-btn print-btn" type="button" id="printBillButton" data-kot-url="{{ route('pos.kot.store') }}" aria-label="Print kitchen order ticket">
+                    <i class="bi bi-printer" aria-hidden="true"></i> Print KOT
                   </button>
-                  <button class="action-btn complete-sale-btn" id="completeSale" type="button">
-                    <i class="bi bi-check2-circle" aria-hidden="true"></i> Complete Sale
+                  <button class="action-btn complete-sale-btn" id="completeSale" type="button" aria-label="Generate invoice">
+                    <i class="bi bi-receipt" aria-hidden="true"></i> Generate Invoice
                   </button>
                 </div>
               </footer>
@@ -425,6 +425,85 @@
       </div>
     </dialog>
 
+    <!-- POS payment confirmation -->
+    <dialog id="posPaymentDialog" class="pos-payment-dialog" aria-labelledby="posPaymentTitle" aria-describedby="posPaymentMessage">
+      <form id="posPaymentConfirmForm" class="pos-payment-sheet">
+        <header class="pos-payment-header">
+          <div><small>OPERATOR CONFIRMATION</small><h2 id="posPaymentTitle">Confirm Payment</h2></div>
+          <button type="button" id="closePosPayment" aria-label="Close payment confirmation">&times;</button>
+        </header>
+        <div class="pos-payment-body">
+          <p id="posPaymentMessage">Confirm this payment before generating the invoice.</p>
+          <div class="pos-payment-meta"><span>Order number</span><strong id="confirmOrderNumber">Assigned when the invoice is generated</strong></div>
+          <div class="pos-payment-total"><span>Grand total</span><strong id="confirmPaymentTotal">₹0.00</strong></div>
+          <p class="pos-payment-method-label">Payment method: <strong id="confirmPaymentMethod">Cash</strong></p>
+          <div id="cashPaymentFields" class="pos-payment-fields">
+            <label for="cashReceived">Amount received (optional)</label>
+            <input type="number" id="cashReceived" min="0" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Leave blank for the exact total">
+            <div class="pos-payment-change">Change to return <strong id="cashChange">₹0.00</strong></div>
+          </div>
+          <div id="upiPaymentFields" class="pos-payment-fields" hidden>
+            <label for="upiReference">UPI Transaction ID / UTR Number</label>
+            <input type="text" id="upiReference" maxlength="100" autocomplete="off" placeholder="Enter the UTR after you have verified it" required>
+            <p class="pos-payment-note">Payment amount is the grand total above. Entering an ID does not mark the payment successful.</p>
+          </div>
+          <div id="cardPaymentFields" class="pos-payment-fields" hidden>
+            <label for="cardLastFour">Card last 4 digits</label>
+            <input type="text" id="cardLastFour" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="off" placeholder="1234" required>
+            <label for="cardReference">Card transaction/reference number</label>
+            <input type="text" id="cardReference" maxlength="100" autocomplete="off" placeholder="Terminal reference" required>
+            <p class="pos-payment-note">Only the last 4 digits and the terminal reference are saved. Do not enter the full card number, CVV, or PIN.</p>
+          </div>
+          <label class="pos-payment-verified"><input type="checkbox" id="posPaymentVerified" required> <span id="posPaymentVerifiedLabel">I have verified that this payment was received.</span></label>
+          <p id="posPaymentError" class="pos-payment-error" role="alert" hidden></p>
+        </div>
+        <footer class="pos-payment-footer">
+          <button type="button" id="cancelPosPayment">Cancel</button>
+          <button type="submit" id="confirmPosPayment">Confirm &amp; Generate Invoice</button>
+        </footer>
+      </form>
+    </dialog>
+    <dialog id="posInvoiceDialog" class="pos-payment-dialog" aria-labelledby="posInvoiceTitle">
+      <div class="pos-payment-sheet">
+        <header class="pos-payment-header">
+          <div><small>INVOICE READY</small><h2 id="posInvoiceTitle">Invoice generated</h2></div>
+          <button type="button" id="closePosInvoice" aria-label="Close invoice confirmation">&times;</button>
+        </header>
+        <div class="pos-payment-body">
+          <p id="posInvoiceSummary"></p>
+          <div class="pos-invoice-actions">
+            <a id="posInvoiceView" href="#" target="_blank" rel="noopener">View Invoice</a>
+            <a id="posInvoicePrint" href="#" target="_blank" rel="noopener">Print</a>
+            <a id="posInvoicePdf" href="#">Download</a>
+          </div>
+        </div>
+        <footer class="pos-payment-footer">
+          <button type="button" id="posInvoiceClose">New order</button>
+        </footer>
+      </div>
+    </dialog>
+    <style>
+      .pos-payment-dialog{border:0;padding:0;border-radius:18px;width:min(440px,calc(100% - 28px));max-height:90dvh;box-shadow:0 22px 75px #15223855;color:#1f2937;overflow:auto}
+      .pos-payment-dialog::backdrop{background:rgba(15,23,42,.62)}
+      .pos-payment-sheet{margin:0}.pos-payment-header{padding:20px 24px;display:flex;justify-content:space-between;align-items:center;background:#fff7ed;border-bottom:1px solid #ffedd5}
+      .pos-payment-header small{font-size:10px;font-weight:800;letter-spacing:1.5px;color:#ea580c}.pos-payment-header h2{font-size:22px;margin:3px 0 0}
+      .pos-payment-header button{border:0;background:transparent;font-size:28px;cursor:pointer;color:#64748b}.pos-payment-body{padding:22px 24px}
+      .pos-payment-total{display:flex;align-items:center;justify-content:space-between;padding:16px;background:#fff7ed;border-radius:12px;gap:12px}
+      .pos-payment-total strong{font-size:24px;color:#c2410c}
+      .pos-payment-meta,.pos-payment-method-label{margin:12px 0;font-size:14px}
+      .pos-payment-meta{display:flex;justify-content:space-between;gap:12px}
+      .pos-payment-note{margin:4px 0 0;color:#9a3412;font-size:12px}
+      .pos-invoice-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+      .pos-invoice-actions a{flex:1;min-width:120px;text-align:center;padding:11px 8px;border-radius:9px;background:#ea580c;color:#fff;font-weight:700;text-decoration:none}
+      .pos-payment-fields{display:grid;gap:9px}.pos-payment-fields[hidden]{display:none!important}.pos-payment-fields label{font-weight:650;font-size:13px}
+      .pos-payment-fields input{width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:11px;font-size:15px;min-height:43px}
+      .pos-payment-change{display:flex;justify-content:space-between;font-size:14px;margin:8px 0 0}.pos-payment-verified{display:flex;align-items:flex-start;gap:9px;font-size:13px;margin:20px 0 4px}
+      .pos-payment-verified input{margin-top:3px;accent-color:#ea580c}.pos-payment-error{color:#b91c1c;font-size:13px;margin-top:12px}
+      .pos-payment-footer{display:flex;gap:10px;padding:16px 24px;border-top:1px solid #e2e8f0}.pos-payment-footer button{padding:12px;border-radius:9px;cursor:pointer;font-weight:700;border:1px solid #cbd5e1;background:white;flex:1}
+      .pos-payment-footer button[type=submit],#posInvoiceClose{background:#ea580c;border-color:#ea580c;color:white;flex:2}.pos-payment-footer button:disabled{opacity:.65;cursor:wait}
+      @media(max-width:480px){.pos-payment-header,.pos-payment-body{padding:16px}.pos-payment-footer{padding:12px;flex-wrap:wrap}}
+    </style>
+
     <form id="completeSaleForm" method="POST" action="{{ route('pos.orders.store') }}" hidden>
       @csrf
       <input type="hidden" name="idempotency_key" value="{{ $posIdempotencyKey }}">
@@ -438,6 +517,11 @@
       <input type="hidden" name="guest_count" id="posGuestCount">
       <input type="hidden" name="payment_method" id="posPaymentMethod">
       <input type="hidden" name="resumed_order_id" id="posResumedOrderId">
+      <input type="hidden" name="cash_received" id="posCashReceived">
+      <input type="hidden" name="upi_reference" id="posUpiReference">
+      <input type="hidden" name="card_last_four" id="posCardLastFour">
+      <input type="hidden" name="card_reference" id="posCardReference">
+      <input type="hidden" name="payment_verified" id="posPaymentVerifiedField">
     </form>
 
 @endsection

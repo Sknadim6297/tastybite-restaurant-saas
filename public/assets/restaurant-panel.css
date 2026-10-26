@@ -1720,6 +1720,24 @@
     font-size: 12px;
 }
 
+.order-invoice-actions {
+    justify-content: flex-start;
+    gap: 6px;
+}
+
+.order-invoice-actions form {
+    margin: 0;
+}
+
+.order-payment-reference {
+    color: #667085;
+    font-size: 12px;
+}
+
+.orders-heading-actions form {
+    margin: 0;
+}
+
 .pos-order-cancel-form {
     display: grid;
     gap: 6px;

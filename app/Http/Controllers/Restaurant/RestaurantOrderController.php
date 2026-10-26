@@ -7,12 +7,14 @@ use App\Models\RestaurantAuditLog;
 use App\Models\RestaurantPosOrder;
 use App\Models\RestaurantPosOrderStatusHistory;
 use App\Models\RestaurantPosRefund;
+use App\Services\PosTicketService;
 use App\Models\RestaurantTable;
 use App\Models\RestaurantTableOccupancy;
 use App\Models\RestaurantTableStatusHistory;
 use App\Models\SuperAdmin;
 use App\Models\User;
 use App\Services\RestaurantAccessContext;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,6 +26,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response as BaseResponse;
 
 class RestaurantOrderController extends Controller
 {
@@ -170,6 +173,8 @@ class RestaurantOrderController extends Controller
                 'diningSection',
                 'diningTable',
                 'originalDiningTable',
+                'invoice',
+                'kot',
             ]),
             'nextStatuses' => $nextStatuses,
             'adminMode' => app(RestaurantAccessContext::class)->isSuperAdminAccess(),
@@ -178,14 +183,73 @@ class RestaurantOrderController extends Controller
 
     public function receipt(int $order): View
     {
-        $owner = $this->owner();
+        return $this->billView($order, false);
+    }
 
-        return view('restaurant.orders.receipt', [
-            'restaurant' => $owner->restaurant,
-            'order' => $this->tenantOrder($owner, $order)->load(['items', 'payments']),
+    public function invoice(Request $request, int $order): View
+    {
+        return $this->billView($order, $request->boolean('print'));
+    }
+
+    public function invoicePdf(int $order): BaseResponse
+    {
+        $sale = $this->billOrder($order);
+        abort_unless($sale->invoice, 404);
+
+        return Pdf::loadView('pos.pos_print', [
+            'restaurant' => $sale->restaurant,
+            'order' => $sale,
+            'pdf' => true,
+            'autoprint' => false,
+        ])->setPaper([0, 0, 226.77, 841.89], 'portrait')
+            ->download($sale->invoice->invoice_number.'.pdf');
+    }
+
+    public function showKot(Request $request, int $order): View
+    {
+        $sale = $this->billOrder($order);
+        abort_unless($sale->kot, 404);
+
+        return view('pos.kot', [
+            'restaurant' => $sale->restaurant,
+            'order' => $sale,
+            'kot' => $sale->kot,
+            'autoprint' => $request->boolean('print'),
         ]);
     }
 
+    public function reprintKot(int $order): RedirectResponse
+    {
+        $owner = $this->owner();
+        DB::transaction(function () use ($owner, $order): void {
+            abort_unless(DB::table('restaurants')->where('id', $owner->restaurant_id)->lockForUpdate()->exists(), 404);
+            $sale = RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
+                ->where('status', '!=', 'draft')
+                ->lockForUpdate()
+                ->findOrFail($order);
+            abort_if($sale->status === 'cancelled', 409, 'Cancelled orders do not have a kitchen ticket to reprint.');
+            app(PosTicketService::class)->issue($owner, $sale, false);
+        });
+
+        return redirect()->route('restaurant.orders.kot', ['order' => $order, 'print' => 1]);
+    }
+
+    private function billView(int $order, bool $autoprint): View
+    {
+        $sale = $this->billOrder($order);
+
+        return view('pos.pos_print', [
+            'restaurant' => $sale->restaurant,
+            'order' => $sale,
+            'pdf' => false,
+            'autoprint' => $autoprint,
+        ]);
+    }
+
+    private function billOrder(int $order): RestaurantPosOrder
+    {
+        return $this->tenantOrder($this->owner(), $order)->load(['items', 'payments', 'invoice', 'kot', 'restaurant']);
+    }
     public function updateStatus(Request $request, int $order): RedirectResponse
     {
         abort_unless(! app(RestaurantAccessContext::class)->isSuperAdminAccess(), 403);
@@ -327,11 +391,17 @@ class RestaurantOrderController extends Controller
         };
         $query = RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
             ->where('status', '!=', 'draft')
-            ->with(['items', 'creator', 'payments', 'refunds', 'diningFloor', 'diningSection', 'diningTable'])
+            ->with(['items', 'creator', 'payments', 'refunds', 'diningFloor', 'diningSection', 'diningTable', 'invoice', 'kot'])
             ->withCount('items')
             ->when($kind === 'dine_in', fn (Builder $builder) => $builder->where('order_type', 'dine_in'))
             ->when(in_array($kind, ['takeaway', 'delivery'], true), fn (Builder $builder) => $builder->where('order_type', $kind))
-            ->when(($filters['search'] ?? '') !== '', fn (Builder $builder) => $builder->where('order_number', 'like', '%'.trim($filters['search']).'%'))
+            ->when(($filters['search'] ?? '') !== '', function (Builder $builder) use ($filters): void {
+                $search = trim((string) $filters['search']);
+                $builder->where(function (Builder $inner) use ($search): void {
+                    $inner->where('order_number', 'like', '%'.$search.'%')
+                        ->orWhereHas('invoice', fn (Builder $invoice) => $invoice->where('invoice_number', 'like', '%'.$search.'%'));
+                });
+            })
             ->when($filters['status'] ?? null, fn (Builder $builder, string $value) => $builder->where('fulfillment_status', $value))
             ->when($filters['payment_status'] ?? null, fn (Builder $builder, string $value) => $builder->where('payment_status', $value))
             ->when(($filters['order_type'] ?? null) && ! in_array($kind, ['dine_in', 'takeaway', 'delivery'], true), fn (Builder $builder) => $builder->where('order_type', $filters['order_type']))

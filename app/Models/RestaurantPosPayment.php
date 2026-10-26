@@ -15,7 +15,11 @@ class RestaurantPosPayment extends Model
         'payment_reference',
         'idempotency_key',
         'amount',
+        'cash_received',
+        'change_amount',
         'method',
+        'external_reference',
+        'card_last_four',
         'status',
         'recorded_at',
         'notes',
@@ -25,6 +29,8 @@ class RestaurantPosPayment extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'cash_received' => 'decimal:2',
+            'change_amount' => 'decimal:2',
             'recorded_at' => 'immutable_datetime',
         ];
     }

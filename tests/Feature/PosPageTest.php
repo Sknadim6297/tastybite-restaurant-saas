@@ -202,8 +202,11 @@ class PosPageTest extends TestCase
         $this->assertStringContainsString('async function resumeHeldBill(order, button)', $script);
         $this->assertStringContainsString('async function deleteHeldBill(order, button)', $script);
         $this->assertStringContainsString('heldBillsRequest', $script);
-        $this->assertStringContainsString('window.print();', $script);
-        $this->assertStringContainsString('form.submit();', $script);
+        $this->assertStringContainsString('async function printKitchenTicket()', $script);
+        $this->assertStringContainsString('fetch(form.action', $script);
+        $this->assertStringContainsString('Confirm Cash Payment', $script);
+        $this->assertStringContainsString('Confirm UPI Payment', $script);
+        $this->assertStringContainsString('Confirm Card Payment', $script);
         $this->assertStringNotContainsString('DEMO BILL', $script);
 
         $style = file_get_contents(public_path('assets/style.css'));

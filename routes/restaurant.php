@@ -164,6 +164,10 @@ Route::prefix('restaurant')->name('restaurant.')->middleware('restaurant.headers
                 Route::get('/reports', 'reports')->name('reports');
                 Route::get('/reports/export', 'export')->name('reports.export');
                 Route::get('/{order}/receipt', 'receipt')->whereNumber('order')->name('receipt');
+                Route::get('/{order}/invoice/pdf', 'invoicePdf')->whereNumber('order')->name('invoice.pdf');
+                Route::get('/{order}/invoice', 'invoice')->whereNumber('order')->name('invoice');
+                Route::get('/{order}/kot', 'showKot')->whereNumber('order')->name('kot');
+                Route::post('/{order}/kot', 'reprintKot')->whereNumber('order')->name('kot.reprint');
                 Route::get('/{order}', 'show')->whereNumber('order')->name('show');
                 Route::patch('/{order}/status', 'updateStatus')->whereNumber('order')->name('status');
                 Route::post('/{order}/refund', 'recordRefund')->whereNumber('order')->name('refund');

@@ -217,6 +217,7 @@ class RestaurantTableManagementTest extends TestCase
             'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
             'discount_percent' => '0.00', 'order_type' => 'dine_in',
             'payment_method' => 'cash',
+            'payment_verified' => '1',
             'table_id' => $table->id, 'floor_id' => $this->floor->id,
             'section_id' => $this->section->id, 'guest_count' => 3,
         ])->assertRedirect();
@@ -247,6 +248,7 @@ class RestaurantTableManagementTest extends TestCase
             'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
             'discount_percent' => '0.00', 'order_type' => 'dine_in',
             'payment_method' => 'cash',
+            'payment_verified' => '1',
             'table_id' => $table->id, 'floor_id' => $this->floor->id,
             'section_id' => $this->section->id, 'guest_count' => 2,
         ])->assertStatus(409);
@@ -328,6 +330,7 @@ class RestaurantTableManagementTest extends TestCase
             'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
             'discount_percent' => '0.00', 'order_type' => 'dine_in',
             'payment_method' => 'cash',
+            'payment_verified' => '1',
             'table_id' => $first->id, 'floor_id' => $this->floor->id,
             'section_id' => $this->section->id, 'guest_count' => 6,
         ])->assertRedirect();
@@ -428,6 +431,7 @@ class RestaurantTableManagementTest extends TestCase
             'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
             'discount_percent' => '0.00', 'order_type' => 'dine_in',
             'payment_method' => 'cash',
+            'payment_verified' => '1',
             'table_id' => $table->id, 'floor_id' => $this->floor->id,
             'section_id' => $this->section->id, 'guest_count' => 3,
         ])->assertRedirect();

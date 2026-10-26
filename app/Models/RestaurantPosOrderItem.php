@@ -10,7 +10,7 @@ class RestaurantPosOrderItem extends Model
 {
     protected $fillable = [
         'restaurant_id', 'pos_order_id', 'menu_item_id', 'menu_recipe_id', 'recipe_version',
-        'item_name', 'quantity', 'unit_price',
+        'item_name', 'quantity', 'unit_price', 'special_instructions',
     ];
 
     protected function casts(): array

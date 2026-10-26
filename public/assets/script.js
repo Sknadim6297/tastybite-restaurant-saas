@@ -6,6 +6,7 @@ let activeCategory = "all";
 let orderType = "Dine In";
 let heldOrders = [];
 let resumedOrderId = null;
+let activeOrderReference = "";
 let holdRequestPending = false;
 let heldBillsCloseTimer = null;
 let heldBillsReturnFocus = null;
@@ -262,7 +263,21 @@ function renderCart() {
             const name = document.createElement("strong");
             name.textContent = item.name;
 
-            product.append(img, name);
+            const note = document.createElement("input");
+            note.type = "text";
+            note.className = "cart-note";
+            note.maxLength = 200;
+            note.placeholder = "Note for kitchen";
+            note.value = item.instructions || "";
+            note.setAttribute("aria-label", "Special instructions for " + item.name);
+            note.addEventListener("input", () => {
+                item.instructions = note.value;
+            });
+            note.addEventListener("keydown", event => event.stopPropagation());
+
+            const productText = document.createElement("div");
+            productText.append(name, note);
+            product.append(img, productText);
 
             const qty = document.createElement("div");
             qty.className = "qty-control";
@@ -603,6 +618,8 @@ function clearCart() {
 
     if (discount) discount.value = "0";
 
+    resumedOrderId = null;
+    rotateCheckoutKey();
     renderCart();
 }
 
@@ -791,14 +808,32 @@ heldBillsDialog?.addEventListener("close", () => {
     heldBillsReturnFocus?.focus?.();
 });
 
+function freshIdempotencyKey() {
+    return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function rotateCheckoutKey() {
+    const keyField = document.querySelector('#completeSaleForm input[name="idempotency_key"]');
+    if (keyField) keyField.value = freshIdempotencyKey();
+    activeOrderReference = "";
+}
+
+function cartItemsPayload() {
+    return [...cart.values()].map(item => ({
+        menu_item_id: item.id,
+        quantity: item.qty,
+        instructions: (item.instructions || "").trim()
+    }));
+}
+
 function holdPayload() {
     const tableSelect = document.getElementById("tableNo");
     const selectedTable = tableSelect?.selectedOptions[0];
     const selectedPaymentMethod = document.querySelector("[data-payment-method].active")?.dataset.paymentMethod;
     return {
-        idempotency_key: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        idempotency_key: freshIdempotencyKey(),
         resumed_order_id: resumedOrderId,
-        items_json: JSON.stringify([...cart.values()].map(item => ({ menu_item_id: item.id, quantity: item.qty }))),
+        items_json: JSON.stringify(cartItemsPayload()),
         discount_percent: String(Math.max(0, Math.min(100, Number(document.getElementById("discount")?.value) || 0))),
         order_type: ({ "Dine In": "dine_in", "Take Away": "takeaway", Delivery: "delivery" })[orderType] || "dine_in",
         table_number: orderType === "Dine In" && tableSelect?.value
@@ -830,6 +865,7 @@ async function holdOrder() {
         cart.clear();
         document.getElementById("discount").value = "0";
         resumedOrderId = null;
+        rotateCheckoutKey();
         renderCart();
         if (heldBillsDialog.open) renderHeldBills();
     } catch (error) {
@@ -857,13 +893,15 @@ async function resumeHeldBill(order, button) {
                     name: item.name,
                     price: Number(item.price) || 0,
                     qty: item.quantity,
-                    img: item.image || ""
+                    img: item.image || "",
+                    instructions: item.instructions || ""
                 });
             }
         });
 
         orderType = ({ dine_in: "Dine In", takeaway: "Take Away", delivery: "Delivery" })[bill.order_type] || "Dine In";
         resumedOrderId = bill.id;
+        activeOrderReference = bill.reference || "";
 
     document.querySelectorAll(".order-type button").forEach(btn => {
         const isSelected = btn.dataset.type === orderType;
@@ -928,68 +966,279 @@ async function deleteHeldBill(order, button) {
 
 document.getElementById("holdOrderButton")?.addEventListener("click", holdOrder);
 
+let kotRequestPending = false;
 document.getElementById("printBillButton")?.addEventListener("click", () => {
+    printKitchenTicket();
+});
+
+async function printKitchenTicket() {
+    const button = document.getElementById("printBillButton");
+    if (kotRequestPending || !button) return;
     if (cart.size === 0) {
-        alert("Add at least one menu item before printing this bill.");
+        alert("Add at least one menu item before printing the kitchen ticket.");
+        return;
+    }
+    if (orderType === "Dine In" && tablePickerDialog?.dataset.tableRequired === "true" && !posTable?.value) {
+        openTablePickerButton?.click();
         return;
     }
 
-    document.body.classList.add("pos-printing");
-    window.addEventListener("afterprint", () => {
-        document.body.classList.remove("pos-printing");
-    }, { once: true });
-    window.print();
-});
+    kotRequestPending = true;
+    button.disabled = true;
+    const originalLabel = button.innerHTML;
+    button.textContent = "Printing...";
+    try {
+        const payload = holdPayload();
+        payload.idempotency_key = document.querySelector('#completeSaleForm input[name="idempotency_key"]')?.value || payload.idempotency_key;
+        const result = await heldBillsRequest(button.dataset.kotUrl, "POST", payload);
+        resumedOrderId = result.order_id;
+        activeOrderReference = result.order_number || "";
+        window.open(result.print_url, "pos-kot");
+    } catch (error) {
+        window.alert(error.message);
+    } finally {
+        kotRequestPending = false;
+        button.disabled = false;
+        button.innerHTML = originalLabel;
+    }
+}
 
 const completeSaleButton = document.getElementById("completeSale");
-if (completeSaleButton) {
-    completeSaleButton.addEventListener("click", () => {
-        if (cart.size === 0) {
-            alert("Add at least one menu item before completing the sale.");
-            return;
-        }
-        if (orderType === "Dine In" && tablePickerDialog?.dataset.tableRequired === "true" && !posTable?.value) {
-            openTablePickerButton?.click();
-            return;
-        }
-        const form = document.getElementById("completeSaleForm");
-        const itemsField = document.getElementById("posItemsJson");
-        const discountField = document.getElementById("posDiscountPercent");
-        const orderTypeField = document.getElementById("posOrderType");
-        const tableField = document.getElementById("posTableNumber");
-        const tableIdField = document.getElementById("posTableId");
-        const floorIdField = document.getElementById("posFloorId");
-        const sectionIdField = document.getElementById("posSectionId");
-        const guestField = document.getElementById("posGuestCount");
-        const paymentField = document.getElementById("posPaymentMethod");
-        const resumedOrderField = document.getElementById("posResumedOrderId");
-        if (!form || !itemsField || !discountField || !orderTypeField || !tableField || !guestField || !paymentField || !resumedOrderField) return;
+const paymentDialog = document.getElementById("posPaymentDialog");
+const paymentConfirmForm = document.getElementById("posPaymentConfirmForm");
+let paymentSubmitting = false;
+let paymentTotalPaise = 0;
+let confirmedPaymentMethod = "cash";
 
-        itemsField.value = JSON.stringify([...cart.values()].map(item => ({
-            menu_item_id: item.id,
-            quantity: item.qty
-        })));
-        discountField.value = String(Math.max(0, Math.min(100, Number(document.getElementById("discount")?.value) || 0)));
-        orderTypeField.value = ({
-            "Dine In": "dine_in",
-            "Take Away": "takeaway",
-            Delivery: "delivery"
-        })[orderType] || "dine_in";
-        const tableSelect = document.getElementById("tableNo");
-        const selectedTable = tableSelect?.selectedOptions[0];
-        tableIdField.value = orderType === "Dine In" ? (tableSelect?.value || "") : "";
-        floorIdField.value = orderType === "Dine In" ? (document.getElementById("posFloor")?.value || "") : "";
-        sectionIdField.value = orderType === "Dine In" ? (document.getElementById("posSection")?.value || "") : "";
-        tableField.value = orderType === "Dine In" ? (selectedTable?.textContent?.split("·")[0]?.trim() || "") : "";
-        guestField.value = document.getElementById("guestNo")?.value || "";
-        const selectedPaymentMethod = document.querySelector("[data-payment-method].active")?.dataset.paymentMethod;
-        paymentField.value = selectedPaymentMethod?.toLowerCase() || "";
-        resumedOrderField.value = resumedOrderId ? String(resumedOrderId) : "";
-        completeSaleButton.disabled = true;
-        completeSaleButton.textContent = "Completing...";
-        form.submit();
-    });
+function updateCashChange() {
+    const raw = document.getElementById("cashReceived")?.value.trim() ?? "";
+    const change = document.getElementById("cashChange");
+    if (!change) return;
+    if (raw === "") {
+        change.textContent = money(0);
+        return;
+    }
+    const receivedPaise = Math.round(Number(raw) * 100);
+    if (!Number.isFinite(receivedPaise)) {
+        change.textContent = money(0);
+        return;
+    }
+    const difference = receivedPaise - paymentTotalPaise;
+    change.textContent = difference < 0 ? "Short " + money(Math.abs(difference) / 100) : money(difference / 100);
 }
+document.getElementById("cashReceived")?.addEventListener("input", updateCashChange);
+document.getElementById("cardLastFour")?.addEventListener("input", event => {
+    event.target.value = event.target.value.replace(/\D/g, "").slice(0, 4);
+});
+
+function closePaymentDialog() {
+    if (!paymentSubmitting && paymentDialog?.open) paymentDialog.close();
+}
+document.getElementById("closePosPayment")?.addEventListener("click", closePaymentDialog);
+document.getElementById("cancelPosPayment")?.addEventListener("click", closePaymentDialog);
+paymentDialog?.addEventListener("cancel", event => {
+    if (paymentSubmitting) event.preventDefault();
+});
+
+const paymentCopy = {
+    cash: {
+        title: "Confirm Cash Payment",
+        message: "Are you sure you want to accept this cash payment and generate the invoice?",
+        verify: "I confirm this cash was received."
+    },
+    upi: {
+        title: "Confirm UPI Payment",
+        message: "Please confirm that the UPI payment has been received before generating the invoice.",
+        verify: "I verified this UPI payment was received. The transaction ID alone does not confirm it."
+    },
+    card: {
+        title: "Confirm Card Payment",
+        message: "Are you sure the card payment has been successfully received?",
+        verify: "I confirm this card payment was received. Only the last 4 digits are stored."
+    }
+};
+
+let paymentReturnFocus = null;
+completeSaleButton?.addEventListener("click", () => {
+    if (paymentSubmitting || !paymentDialog) return;
+    if (cart.size === 0) {
+        alert("Add at least one menu item before generating the invoice.");
+        return;
+    }
+    if (orderType === "Dine In" && tablePickerDialog?.dataset.tableRequired === "true" && !posTable?.value) {
+        openTablePickerButton?.click();
+        return;
+    }
+    confirmedPaymentMethod = (document.querySelector("[data-payment-method].active")?.dataset.paymentMethod || "Cash").toLowerCase();
+    const copy = paymentCopy[confirmedPaymentMethod] || paymentCopy.cash;
+    paymentTotalPaise = Math.round(calculateTotals().grandTotal * 100);
+    document.getElementById("posPaymentTitle").textContent = copy.title;
+    document.getElementById("posPaymentMessage").textContent = copy.message;
+    document.getElementById("posPaymentVerifiedLabel").textContent = copy.verify;
+    document.getElementById("confirmOrderNumber").textContent = activeOrderReference || "Assigned when the invoice is generated";
+    document.getElementById("confirmPaymentMethod").textContent = confirmedPaymentMethod.toUpperCase();
+    document.getElementById("confirmPaymentTotal").textContent = money(paymentTotalPaise / 100);
+    document.getElementById("cashPaymentFields").hidden = confirmedPaymentMethod !== "cash";
+    document.getElementById("upiPaymentFields").hidden = confirmedPaymentMethod !== "upi";
+    document.getElementById("cardPaymentFields").hidden = confirmedPaymentMethod !== "card";
+    document.getElementById("cashReceived").required = false;
+    document.getElementById("upiReference").required = confirmedPaymentMethod === "upi";
+    document.getElementById("cardLastFour").required = confirmedPaymentMethod === "card";
+    document.getElementById("cardReference").required = confirmedPaymentMethod === "card";
+    document.getElementById("posPaymentVerified").checked = false;
+    document.getElementById("posPaymentError").hidden = true;
+    document.getElementById("cashReceived").value = "";
+    document.getElementById("upiReference").value = "";
+    document.getElementById("cardLastFour").value = "";
+    document.getElementById("cardReference").value = "";
+    updateCashChange();
+    paymentReturnFocus = document.activeElement;
+    paymentDialog.showModal();
+    const firstField = confirmedPaymentMethod === "upi"
+        ? document.getElementById("upiReference")
+        : confirmedPaymentMethod === "card"
+            ? document.getElementById("cardLastFour")
+            : document.getElementById("cashReceived");
+    firstField?.focus();
+});
+paymentDialog?.addEventListener("close", () => {
+    if (!paymentSubmitting) paymentReturnFocus?.focus?.();
+});
+
+function showInvoiceResult(result) {
+    const dialog = document.getElementById("posInvoiceDialog");
+    if (!dialog) return;
+    document.getElementById("posInvoiceSummary").textContent = `${result.message} Total ${money(Number(result.total) || 0)}.`;
+    document.getElementById("posInvoiceView").href = result.invoice_url;
+    document.getElementById("posInvoicePrint").href = result.print_url;
+    document.getElementById("posInvoicePdf").href = result.pdf_url;
+    if (!dialog.open) dialog.showModal();
+    document.getElementById("posInvoicePrint")?.focus();
+}
+
+function closeInvoiceDialog() {
+    document.getElementById("posInvoiceDialog")?.close();
+}
+document.getElementById("closePosInvoice")?.addEventListener("click", closeInvoiceDialog);
+document.getElementById("posInvoiceClose")?.addEventListener("click", closeInvoiceDialog);
+
+function resetPosBill() {
+    cart.clear();
+    const discount = document.getElementById("discount");
+    if (discount) discount.value = "0";
+    resumedOrderId = null;
+    rotateCheckoutKey();
+    renderCart();
+}
+
+paymentConfirmForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (paymentSubmitting) return;
+    const error = document.getElementById("posPaymentError");
+    error.hidden = true;
+    const cashRaw = document.getElementById("cashReceived").value.trim();
+    const received = Number(cashRaw);
+    if (confirmedPaymentMethod === "cash" && cashRaw !== "" && (!Number.isFinite(received) || Math.round(received * 100) < paymentTotalPaise)) {
+        error.textContent = "Cash received must be at least the total amount.";
+        error.hidden = false;
+        document.getElementById("cashReceived").focus();
+        return;
+    }
+    const upiReference = document.getElementById("upiReference").value.trim();
+    if (confirmedPaymentMethod === "upi" && upiReference === "") {
+        error.textContent = "Enter the UPI transaction ID or UTR.";
+        error.hidden = false;
+        document.getElementById("upiReference").focus();
+        return;
+    }
+    const cardLastFour = document.getElementById("cardLastFour").value.trim();
+    const cardReference = document.getElementById("cardReference").value.trim();
+    const cardDigits = cardReference.replace(/\D/g, "");
+    if (confirmedPaymentMethod === "card" && !/^\d{4}$/.test(cardLastFour)) {
+        error.textContent = "Enter only the last 4 digits of the card.";
+        error.hidden = false;
+        document.getElementById("cardLastFour").focus();
+        return;
+    }
+    if (confirmedPaymentMethod === "card" && cardReference === "") {
+        error.textContent = "Enter the card transaction reference.";
+        error.hidden = false;
+        document.getElementById("cardReference").focus();
+        return;
+    }
+    if (confirmedPaymentMethod === "card" && cardDigits.length >= 13 && cardDigits.length <= 19) {
+        error.textContent = "Enter the terminal reference, not the full card number.";
+        error.hidden = false;
+        document.getElementById("cardReference").focus();
+        return;
+    }
+    if (!document.getElementById("posPaymentVerified").checked) {
+        error.textContent = "Confirm that you have verified this payment before generating the invoice.";
+        error.hidden = false;
+        document.getElementById("posPaymentVerified").focus();
+        return;
+    }
+    if (!paymentConfirmForm.reportValidity()) return;
+    const form = document.getElementById("completeSaleForm");
+    if (!form) return;
+    const tableSelect = document.getElementById("tableNo");
+    const selectedTable = tableSelect?.selectedOptions[0];
+    document.getElementById("posItemsJson").value = JSON.stringify(cartItemsPayload());
+    document.getElementById("posDiscountPercent").value = String(Math.max(0, Math.min(100, Number(document.getElementById("discount")?.value) || 0)));
+    document.getElementById("posOrderType").value = ({ "Dine In": "dine_in", "Take Away": "takeaway", Delivery: "delivery" })[orderType] || "dine_in";
+    document.getElementById("posTableId").value = orderType === "Dine In" ? (tableSelect?.value || "") : "";
+    document.getElementById("posFloorId").value = orderType === "Dine In" ? (document.getElementById("posFloor")?.value || "") : "";
+    document.getElementById("posSectionId").value = orderType === "Dine In" ? (document.getElementById("posSection")?.value || "") : "";
+    document.getElementById("posTableNumber").value = orderType === "Dine In" ? (selectedTable?.textContent?.split("·")[0]?.trim() || "") : "";
+    document.getElementById("posGuestCount").value = document.getElementById("guestNo")?.value || "";
+    document.getElementById("posPaymentMethod").value = confirmedPaymentMethod;
+    document.getElementById("posResumedOrderId").value = resumedOrderId ? String(resumedOrderId) : "";
+    document.getElementById("posCashReceived").value = confirmedPaymentMethod === "cash" && cashRaw !== "" ? received.toFixed(2) : "";
+    document.getElementById("posUpiReference").value = confirmedPaymentMethod === "upi" ? upiReference : "";
+    document.getElementById("posCardLastFour").value = confirmedPaymentMethod === "card" ? cardLastFour : "";
+    document.getElementById("posCardReference").value = confirmedPaymentMethod === "card" ? cardReference : "";
+    document.getElementById("posPaymentVerifiedField").value = "1";
+    paymentSubmitting = true;
+    completeSaleButton.disabled = true;
+    const confirmButton = document.getElementById("confirmPosPayment");
+    confirmButton.disabled = true;
+    confirmButton.setAttribute("aria-busy", "true");
+    confirmButton.textContent = "Generating...";
+    try {
+        const response = await fetch(form.action, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                Accept: "application/json",
+                "X-CSRF-TOKEN": form.querySelector('input[name="_token"]')?.value || "",
+                "X-Requested-With": "XMLHttpRequest"
+            },
+            body: new FormData(form)
+        });
+        let result = {};
+        try {
+            result = await response.json();
+        } catch {
+            throw new Error("Your session may have expired. Refresh the POS and sign in again. The current order is still on this screen.");
+        }
+        if (!response.ok) {
+            const validationMessage = result.errors ? Object.values(result.errors).flat()[0] : null;
+            throw new Error(validationMessage || result.message || "The invoice could not be generated. The current order was not cleared.");
+        }
+        paymentDialog.close();
+        resetPosBill();
+        showInvoiceResult(result);
+    } catch (submitError) {
+        error.textContent = submitError.message;
+        error.hidden = false;
+    } finally {
+        paymentSubmitting = false;
+        completeSaleButton.disabled = false;
+        confirmButton.disabled = false;
+        confirmButton.removeAttribute("aria-busy");
+        confirmButton.textContent = "Confirm & Generate Invoice";
+    }
+});
 
 // Sidebar active state
 document.querySelectorAll(".side-link").forEach(link => {

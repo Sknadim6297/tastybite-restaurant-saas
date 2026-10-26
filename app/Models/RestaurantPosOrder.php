@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class RestaurantPosOrder extends Model
 {
@@ -51,6 +52,16 @@ class RestaurantPosOrder extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(RestaurantPosPayment::class, 'pos_order_id');
+    }
+
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(RestaurantPosInvoice::class, 'pos_order_id');
+    }
+
+    public function kot(): HasOne
+    {
+        return $this->hasOne(RestaurantPosKot::class, 'pos_order_id');
     }
 
     public function refunds(): HasMany

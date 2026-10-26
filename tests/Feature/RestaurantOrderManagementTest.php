@@ -231,6 +231,9 @@ class RestaurantOrderManagementTest extends TestCase
             'discount_percent' => '10.00',
             'order_type' => 'takeaway',
             'payment_method' => 'card',
+            'payment_verified' => '1',
+            'card_last_four' => '4242',
+            'card_reference' => 'HELD-TERM-1',
         ];
 
         $this->post(route('pos.orders.store'), $completionPayload)->assertRedirect(route('pos.orders.index'));
@@ -737,13 +740,26 @@ class RestaurantOrderManagementTest extends TestCase
 
     private function posPayload(RestaurantMenuItem $product, string $key, string $method): array
     {
-        return [
+        $payload = [
             'idempotency_key' => $key,
             'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
             'discount_percent' => '0',
             'order_type' => 'takeaway',
             'payment_method' => $method,
+            'payment_verified' => '1',
         ];
+        if ($method === 'cash') {
+            $payload['cash_received'] = '105.00';
+        }
+        if ($method === 'upi') {
+            $payload['upi_reference'] = 'UTR-TEST-123456';
+        }
+        if ($method === 'card') {
+            $payload['card_last_four'] = '4242';
+            $payload['card_reference'] = 'TERM-TEST-1';
+        }
+
+        return $payload;
     }
 
     private function reportMetric(string $html, string $key): ?string

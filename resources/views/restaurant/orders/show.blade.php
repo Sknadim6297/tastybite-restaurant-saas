@@ -8,7 +8,19 @@
         <div><span class="eyebrow">ORDER DETAILS</span><h1>{{ $order->order_number }}</h1><p>{{ $order->created_at?->format('M j, Y H:i') }} · {{ str($order->order_type)->replace('_', ' ')->title() }}</p></div>
         <div class="orders-heading-actions">
             <a class="button button-secondary" href="{{ url()->previous() }}">Back to orders</a>
-            <a class="button button-primary" href="{{ route('restaurant.orders.receipt', $order) }}" target="_blank" rel="noopener"><i class="bi bi-printer" aria-hidden="true"></i> Print receipt</a>
+            @if($order->invoice)
+                <a class="button button-secondary" href="{{ route('restaurant.orders.invoice', $order) }}" target="_blank" rel="noopener">View Invoice</a>
+                <a class="button button-secondary" href="{{ route('restaurant.orders.invoice.pdf', $order) }}">Download Invoice</a>
+                <a class="button button-primary" href="{{ route('restaurant.orders.invoice', ['order' => $order, 'print' => 1]) }}" target="_blank" rel="noopener"><i class="bi bi-printer" aria-hidden="true"></i> Print Invoice</a>
+                @if($order->status !== 'cancelled')
+                    <form method="POST" action="{{ route('restaurant.orders.kot.reprint', $order) }}">
+                        @csrf
+                        <button class="button button-secondary" type="submit">Reprint KOT</button>
+                    </form>
+                @endif
+            @else
+                <a class="button button-primary" href="{{ route('restaurant.orders.receipt', $order) }}" target="_blank" rel="noopener"><i class="bi bi-printer" aria-hidden="true"></i> Print receipt</a>
+            @endif
         </div>
     </div>
     @if(session('status'))<div class="notice-card" role="status">{{ session('status') }}</div>@endif
@@ -20,6 +32,10 @@
             <dl class="order-detail-fields">
                 <div><dt>Restaurant</dt><dd>{{ $restaurant->name }}</dd></div>
                 <div><dt>Order number</dt><dd>{{ $order->order_number }}</dd></div>
+                @if($order->invoice)
+                    <div><dt>Invoice number</dt><dd>{{ $order->invoice->invoice_number }}</dd></div>
+                    <div><dt>Invoice issued</dt><dd>{{ $order->invoice->issued_at?->format('M j, Y H:i:s') }}</dd></div>
+                @endif
                 <div><dt>Order date</dt><dd>{{ $order->created_at?->format('M j, Y H:i:s') }}</dd></div>
                 <div><dt>Order type</dt><dd>{{ str($order->order_type)->replace('_', ' ')->title() }}</dd></div>
                 <div><dt>Table</dt><dd>{{ $order->table_number ?: '—' }}{{ $order->diningFloor ? ' · '.$order->diningFloor->name : '' }}{{ $order->diningSection ? ' · '.$order->diningSection->name : '' }}</dd></div>
@@ -33,6 +49,18 @@
                 <div><dt>Created by</dt><dd>{{ $order->creator?->name ?: '—' }}</dd></div>
                 <div><dt>Last updated by</dt><dd>{{ $order->updater?->name ?: '—' }}</dd></div>
                 <div><dt>Payment status</dt><dd><span class="order-status-badge order-status-{{ $order->payment_status }}">{{ str($order->payment_status)->replace('_', ' ')->title() }}</span>{{ $order->payment_method ? ' · '.strtoupper($order->payment_method) : '' }}</dd></div>
+                @php
+                    $paymentReference = $order->invoice?->upi_reference
+                        ?: $order->invoice?->card_reference
+                        ?: $order->payments->firstWhere('status', 'recorded')?->external_reference
+                        ?: $order->payments->firstWhere('status', 'recorded')?->payment_reference;
+                @endphp
+                @if($paymentReference)
+                    <div><dt>Payment reference</dt><dd>{{ $paymentReference }}</dd></div>
+                @endif
+                @if($order->invoice?->card_last_four)
+                    <div><dt>Card</dt><dd>**** {{ $order->invoice->card_last_four }}</dd></div>
+                @endif
                 @if($order->notes)<div class="order-detail-wide"><dt>Notes</dt><dd>{{ $order->notes }}</dd></div>@endif
             </dl>
         </article>
