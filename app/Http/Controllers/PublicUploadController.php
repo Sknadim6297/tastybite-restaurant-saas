@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Contracts\Filesystem\Filesystem;
+use finfo;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -38,25 +39,20 @@ class PublicUploadController extends Controller
         );
 
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        $path = "{$directory}/{$restaurantId}/{$filename}";
         $disk = Storage::disk('public');
+        abort_unless($disk instanceof FilesystemAdapter, Response::HTTP_NOT_FOUND);
 
-        abort_unless($disk->exists($path), Response::HTTP_NOT_FOUND);
+        $absolutePath = $this->resolvedPublicImagePath($disk, $directory, $restaurantId, $filename);
+        abort_unless(is_string($absolutePath), Response::HTTP_NOT_FOUND);
 
         $mimeType = self::ALLOWED_IMAGES[$extension];
-        $detectedMime = $this->detectedMimeType($disk, $path);
-        abort_unless($this->isAllowedDetectedMime($detectedMime), Response::HTTP_NOT_FOUND);
+        abort_unless($this->isAllowedDetectedMime($this->detectedMimeType($absolutePath)), Response::HTTP_NOT_FOUND);
 
-        try {
-            $fileSize = $disk->size($path);
-        } catch (Throwable) {
-            abort(Response::HTTP_NOT_FOUND);
-        }
-
+        $fileSize = @filesize($absolutePath);
         abort_unless(is_int($fileSize) && $fileSize >= 0, Response::HTTP_NOT_FOUND);
 
-        return response()->stream(function () use ($disk, $path, $fileSize): void {
-            $stream = $disk->readStream($path);
+        return response()->stream(function () use ($absolutePath, $fileSize): void {
+            $stream = @fopen($absolutePath, 'rb');
 
             if (! is_resource($stream)) {
                 return;
@@ -93,10 +89,53 @@ class PublicUploadController extends Controller
         ]);
     }
 
-    private function detectedMimeType(Filesystem $disk, string $path): ?string
-    {
+    private function resolvedPublicImagePath(
+        FilesystemAdapter $disk,
+        string $directory,
+        int $restaurantId,
+        string $filename,
+    ): ?string {
         try {
-            $detectedMime = $disk->mimeType($path);
+            $relativeDirectory = $directory.'/'.$restaurantId;
+            $relativePath = $relativeDirectory.'/'.$filename;
+
+            if (! $disk->exists($relativePath)) {
+                return null;
+            }
+
+            $directoryRoot = realpath($disk->path($relativeDirectory));
+            $realFile = realpath($disk->path($relativePath));
+        } catch (Throwable) {
+            return null;
+        }
+
+        if ($directoryRoot === false || $realFile === false || ! is_file($realFile) || ! is_readable($realFile)) {
+            return null;
+        }
+
+        $normalizedRoot = $this->normalizePath($directoryRoot);
+        $normalizedFile = $this->normalizePath($realFile);
+
+        if ($normalizedFile !== $normalizedRoot && ! str_starts_with($normalizedFile, $normalizedRoot.'/')) {
+            return null;
+        }
+
+        return $realFile;
+    }
+
+    private function normalizePath(string $path): string
+    {
+        return strtolower(str_replace('\\', '/', $path));
+    }
+
+    private function detectedMimeType(string $absolutePath): ?string
+    {
+        if (! class_exists(finfo::class)) {
+            return null;
+        }
+
+        try {
+            $detectedMime = (new finfo(FILEINFO_MIME_TYPE))->file($absolutePath);
         } catch (Throwable) {
             return null;
         }

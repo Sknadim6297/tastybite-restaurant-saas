@@ -94,4 +94,19 @@ class PublicUploadServingTest extends TestCase
         $this->get('/uploads/restaurant-menu/17/missing.png')->assertNotFound();
         $this->get('/uploads/restaurant-menu/0/image.png')->assertNotFound();
     }
+
+    public function test_public_upload_route_keeps_restaurant_files_tenant_isolated(): void
+    {
+        Storage::fake('public');
+
+        $owned = UploadedFile::fake()->image('owned.png', 24, 24);
+        $owned->storeAs('restaurant-menu/2', 'owned.png', 'public');
+        $foreign = UploadedFile::fake()->image('owned.png', 24, 24);
+        $foreign->storeAs('restaurant-menu/3', 'owned.png', 'public');
+
+        $this->get('/uploads/restaurant-menu/2/owned.png')->assertOk();
+        $this->get('/uploads/restaurant-menu/3/owned.png')->assertOk();
+        $this->get('/uploads/restaurant-menu/2/missing-from-tenant.png')->assertNotFound();
+        $this->get('/uploads/restaurant-menu/1/owned.png')->assertNotFound();
+    }
 }

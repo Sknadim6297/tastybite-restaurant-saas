@@ -131,7 +131,39 @@ class RestaurantMenuProductManagementTest extends TestCase
             $this->assertStringStartsWith('restaurant-menu/'.$this->restaurant->id.'/', $product->image_path);
             Storage::disk('public')->assertExists($product->image_path);
             $this->assertStringContainsString('/uploads/restaurant-menu/'.$this->restaurant->id.'/', $product->image_url);
+
+            $imageResponse = $this->get($product->image_url);
+            $imageResponse->assertOk();
+            $this->assertSame(
+                Storage::disk('public')->get($product->image_path),
+                $imageResponse->streamedContent(),
+            );
         }
+    }
+
+    public function test_new_product_upload_is_visible_on_pos_through_the_uploads_route(): void
+    {
+        $this->post(route('restaurant.menu.products.store'), $this->validProductData([
+            'name' => 'POS Upload Chicken',
+            'image' => UploadedFile::fake()->image('pos-upload-chicken.webp', 64, 64),
+        ]))->assertRedirect(route('restaurant.menu.products.index'));
+
+        $product = RestaurantMenuItem::query()->where('name', 'POS Upload Chicken')->firstOrFail();
+        $imageUrl = $product->image_url;
+
+        $this->assertStringContainsString('/uploads/restaurant-menu/'.$this->restaurant->id.'/', $imageUrl);
+        $this->get($imageUrl)
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/webp');
+
+        $this->get(route('pos.index'))
+            ->assertOk()
+            ->assertSee('src="'.$imageUrl.'"', false)
+            ->assertSee('data-img="'.$imageUrl.'"', false);
+
+        $this->get(route('restaurant.menu.products.index'))
+            ->assertOk()
+            ->assertSee('src="'.$imageUrl.'"', false);
     }
 
     public function test_owner_can_edit_product_fields_and_keep_existing_image(): void
