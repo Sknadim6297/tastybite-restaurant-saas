@@ -945,9 +945,10 @@ class PosController extends Controller
     {
         $method = $data['payment_method'];
         if ($method === 'cash') {
-            $received = $data['cash_received'] === null || $data['cash_received'] === ''
+            $receivedInput = $data['cash_received'] ?? null;
+            $received = $receivedInput === null || $receivedInput === ''
                 ? $total
-                : BigDecimal::of((string) $data['cash_received'])->toScale(2, RoundingMode::HALF_UP);
+                : BigDecimal::of((string) $receivedInput)->toScale(2, RoundingMode::HALF_UP);
             if ($received->isLessThan($total)) {
                 throw ValidationException::withMessages([
                     'cash_received' => 'Cash received must cover the grand total.',

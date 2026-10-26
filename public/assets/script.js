@@ -993,7 +993,7 @@ async function printKitchenTicket() {
         const result = await heldBillsRequest(button.dataset.kotUrl, "POST", payload);
         resumedOrderId = result.order_id;
         activeOrderReference = result.order_number || "";
-        window.open(result.print_url, "pos-kot");
+        window.open(result.print_url, "pos-kot", "noopener");
     } catch (error) {
         window.alert(error.message);
     } finally {
