@@ -200,9 +200,25 @@
                   <h2 id="checkoutTitle"><i class="bi bi-receipt" aria-hidden="true"></i> Current Order</h2>
                   <p>Review items and complete billing</p>
                 </div>
-                <button class="clear-order-button" type="button" onclick="clearCart()">
-                  <i class="bi bi-trash3" aria-hidden="true"></i> Clear
-                </button>
+                <div class="checkout-header-actions">
+                  <button
+                    class="held-bills-trigger"
+                    id="openHeldBills"
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-controls="heldBillsDialog"
+                    data-held-bills-url="{{ route('pos.held-bills.index') }}"
+                    data-held-bills-store-url="{{ route('pos.held-bills.store') }}"
+                    data-held-bills-base-url="{{ url('/pos/held-bills') }}"
+                  >
+                    <i class="bi bi-receipt-cutoff" aria-hidden="true"></i>
+                    <span>Hold Bills</span>
+                    <span class="held-bills-badge" id="heldBillsCount">{{ $heldBillsCount }}</span>
+                  </button>
+                  <button class="clear-order-button" type="button" onclick="clearCart()">
+                    <i class="bi bi-trash3" aria-hidden="true"></i> Clear
+                  </button>
+                </div>
               </header>
 
               <div class="checkout-body">
@@ -285,6 +301,38 @@
         <div class="pos-status-message" role="status">{{ session('status') }}</div>
       @endif
     </main>
+
+    <dialog class="held-bills-dialog" id="heldBillsDialog" aria-labelledby="heldBillsTitle" aria-describedby="heldBillsDescription">
+      <section class="held-bills-sheet">
+        <header class="held-bills-header">
+          <div class="held-bills-heading">
+            <span class="held-bills-heading-icon" aria-hidden="true"><i class="bi bi-receipt"></i></span>
+            <div>
+              <div class="held-bills-title-row">
+                <h2 id="heldBillsTitle">Hold Bills</h2>
+                <span class="held-bills-modal-count" id="heldBillsModalCount">{{ $heldBillsCount }}</span>
+              </div>
+              <p id="heldBillsDescription">Select a held bill to resume or delete</p>
+            </div>
+          </div>
+          <button class="held-bills-close" type="button" data-close-held-bills aria-label="Close held bills">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </header>
+        <div class="held-bills-status" id="heldBillsStatus" role="alert" hidden></div>
+        <div class="held-bills-list" id="heldBillsList" role="list" aria-label="Held bills" aria-live="polite">
+          @if($heldBillsCount === 0)
+            <div class="held-bills-empty">
+              <span class="held-bills-empty-icon" aria-hidden="true"><i class="bi bi-receipt"></i></span>
+              <strong>No held bills</strong>
+              <span>Orders you put on hold will appear here.</span>
+            </div>
+          @else
+            <div class="held-bills-loading" role="status">Loading held bills...</div>
+          @endif
+        </div>
+      </section>
+    </dialog>
 
     <dialog class="pos-table-dialog" id="tablePickerDialog" aria-labelledby="tablePickerTitle" aria-describedby="tablePickerDescription" data-table-required="{{ $hasActiveTables ? 'true' : 'false' }}">
       <div class="pos-table-dialog-shell">
@@ -389,6 +437,7 @@
       <input type="hidden" name="section_id" id="posSectionId">
       <input type="hidden" name="guest_count" id="posGuestCount">
       <input type="hidden" name="payment_method" id="posPaymentMethod">
+      <input type="hidden" name="resumed_order_id" id="posResumedOrderId">
     </form>
 
 @endsection

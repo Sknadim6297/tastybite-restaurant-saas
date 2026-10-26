@@ -20,6 +20,18 @@ Route::middleware(['restaurant.headers', 'restaurant', 'restaurant.subscription'
     Route::post('/pos/orders', [PosController::class, 'complete'])
         ->middleware('restaurant.feature:pos')
         ->name('pos.orders.store');
+    Route::get('/pos/held-bills', [PosController::class, 'heldBills'])
+        ->middleware('restaurant.feature:pos')
+        ->name('pos.held-bills.index');
+    Route::post('/pos/held-bills', [PosController::class, 'storeHeldBill'])
+        ->middleware('restaurant.feature:pos')
+        ->name('pos.held-bills.store');
+    Route::post('/pos/held-bills/{order}/resume', [PosController::class, 'resumeHeldBill'])
+        ->whereNumber('order')->middleware('restaurant.feature:pos')
+        ->name('pos.held-bills.resume');
+    Route::delete('/pos/held-bills/{order}', [PosController::class, 'deleteHeldBill'])
+        ->whereNumber('order')->middleware('restaurant.feature:pos')
+        ->name('pos.held-bills.destroy');
     Route::get('/pos/orders', [PosController::class, 'orders'])
         ->middleware('restaurant.feature:pos')
         ->name('pos.orders.index');

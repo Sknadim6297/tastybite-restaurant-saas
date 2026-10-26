@@ -173,6 +173,158 @@ class RestaurantOrderManagementTest extends TestCase
         }
     }
 
+    public function test_held_bill_persists_resumes_and_completes_the_same_order_with_saved_pricing(): void
+    {
+        $product = $this->createMenuItem();
+        $heldPayload = [
+            'idempotency_key' => 'hold-save-resume-1',
+            'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 2]], JSON_THROW_ON_ERROR),
+            'discount_percent' => '10.00',
+            'order_type' => 'takeaway',
+            'payment_method' => 'card',
+        ];
+
+        $heldResponse = $this->postJson(route('pos.held-bills.store'), $heldPayload)
+            ->assertCreated()
+            ->assertJsonPath('count', 1)
+            ->assertJsonPath('bill.item_count', 2)
+            ->assertJsonPath('bill.subtotal', '200.00')
+            ->assertJsonPath('bill.discount', '20.00')
+            ->assertJsonPath('bill.tax', '9.00')
+            ->assertJsonPath('bill.total', '189.00')
+            ->assertJsonPath('bill.payment_method', 'card');
+        $heldId = (int) $heldResponse->json('bill.id');
+        $heldReference = $heldResponse->json('bill.reference');
+
+        $this->assertDatabaseHas('restaurant_pos_orders', [
+            'id' => $heldId,
+            'restaurant_id' => $this->restaurant->id,
+            'status' => 'draft',
+            'fulfillment_status' => 'held',
+            'order_number' => $heldReference,
+        ]);
+        $this->assertDatabaseHas('restaurant_pos_order_items', [
+            'restaurant_id' => $this->restaurant->id,
+            'pos_order_id' => $heldId,
+            'menu_item_id' => $product->id,
+            'quantity' => 2,
+            'unit_price' => '100.00',
+        ]);
+        $this->getJson(route('pos.held-bills.index'))
+            ->assertOk()->assertJsonPath('count', 1)->assertJsonPath('bills.0.id', $heldId);
+        $this->get(route('pos.orders.index'))->assertOk()->assertDontSee($heldReference);
+        $this->get(route('restaurant.orders.all'))->assertOk()->assertDontSee($heldReference);
+
+        $this->postJson(route('pos.held-bills.resume', $heldId))
+            ->assertOk()->assertJsonPath('count', 0)->assertJsonPath('bill.discount_percent', '10.00')
+            ->assertJsonPath('bill.items.0.quantity', 2);
+        $this->assertDatabaseHas('restaurant_pos_orders', [
+            'id' => $heldId,
+            'fulfillment_status' => 'resumed',
+        ]);
+
+        $product->update(['price' => '150.00']);
+        $completionPayload = [
+            'idempotency_key' => 'hold-save-resume-complete-1',
+            'resumed_order_id' => $heldId,
+            'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 2]], JSON_THROW_ON_ERROR),
+            'discount_percent' => '10.00',
+            'order_type' => 'takeaway',
+            'payment_method' => 'card',
+        ];
+
+        $this->post(route('pos.orders.store'), $completionPayload)->assertRedirect(route('pos.orders.index'));
+
+        $this->assertSame(1, RestaurantPosOrder::query()->where('restaurant_id', $this->restaurant->id)
+            ->where('id', $heldId)->count());
+        $this->assertDatabaseHas('restaurant_pos_orders', [
+            'id' => $heldId,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'subtotal' => '200.00',
+            'discount' => '20.00',
+            'tax' => '9.00',
+            'total' => '189.00',
+        ]);
+        $this->assertDatabaseHas('restaurant_pos_order_items', [
+            'pos_order_id' => $heldId,
+            'menu_item_id' => $product->id,
+            'quantity' => 2,
+            'unit_price' => '100.00',
+        ]);
+        $this->assertDatabaseCount('restaurant_pos_payments', 1);
+        $this->post(route('pos.orders.store'), $completionPayload)->assertRedirect(route('pos.orders.index'));
+        $this->assertDatabaseCount('restaurant_pos_orders', 2);
+    }
+
+    public function test_held_bill_listing_resume_and_delete_are_tenant_scoped_and_never_delete_completed_sales(): void
+    {
+        $product = $this->createMenuItem();
+        $payload = [
+            'idempotency_key' => 'tenant-held-bill',
+            'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 1]], JSON_THROW_ON_ERROR),
+            'discount_percent' => '0',
+            'order_type' => 'takeaway',
+            'payment_method' => 'cash',
+        ];
+        $heldId = (int) $this->postJson(route('pos.held-bills.store'), $payload)->assertCreated()->json('bill.id');
+        $otherHeldBill = RestaurantPosOrder::create([
+            'restaurant_id' => $this->otherRestaurant->id,
+            'order_number' => 'OTHER-HELD-1',
+            'idempotency_key' => 'other-held-bill-1',
+            'status' => 'draft',
+            'fulfillment_status' => 'held',
+            'subtotal' => '50.00', 'discount' => '0.00', 'tax' => '2.50', 'total' => '52.50',
+            'order_type' => 'takeaway',
+        ]);
+        $completed = $this->createOrder($this->owner, 'ORDER-KEEP-COMPLETED');
+
+        $this->getJson(route('pos.held-bills.index'))->assertOk()
+            ->assertJsonPath('count', 1)
+            ->assertJsonCount(1, 'bills')
+            ->assertJsonMissing(['id' => $otherHeldBill->id]);
+        $this->postJson(route('pos.held-bills.resume', $otherHeldBill->id))->assertNotFound();
+        $this->deleteJson(route('pos.held-bills.destroy', $otherHeldBill->id))->assertNotFound();
+        $this->deleteJson(route('pos.held-bills.destroy', $completed->id))->assertNotFound();
+        $this->assertDatabaseHas('restaurant_pos_orders', ['id' => $completed->id, 'status' => 'completed']);
+
+        $this->deleteJson(route('pos.held-bills.destroy', $heldId))->assertOk()->assertJsonPath('count', 0);
+        $this->assertDatabaseMissing('restaurant_pos_orders', ['id' => $heldId]);
+        $this->assertDatabaseHas('restaurant_pos_orders', ['id' => $otherHeldBill->id, 'status' => 'draft']);
+    }
+
+    public function test_reholding_a_resumed_bill_updates_the_same_draft_and_duplicate_resume_is_idempotent(): void
+    {
+        $product = $this->createMenuItem();
+        $payload = [
+            'idempotency_key' => 'hold-reuse-first',
+            'items_json' => json_encode([['menu_item_id' => $product->id, 'quantity' => 2]], JSON_THROW_ON_ERROR),
+            'discount_percent' => '5.00',
+            'order_type' => 'takeaway',
+            'payment_method' => 'upi',
+        ];
+        $held = $this->postJson(route('pos.held-bills.store'), $payload)->assertCreated()->json('bill');
+        $heldId = (int) $held['id'];
+
+        $this->postJson(route('pos.held-bills.resume', $heldId))->assertOk()->assertJsonPath('count', 0);
+        $this->postJson(route('pos.held-bills.resume', $heldId))->assertOk()->assertJsonPath('bill.id', $heldId);
+
+        $payload['idempotency_key'] = 'hold-reuse-second';
+        $payload['resumed_order_id'] = $heldId;
+        $payload['items_json'] = json_encode([['menu_item_id' => $product->id, 'quantity' => 3]], JSON_THROW_ON_ERROR);
+        $reheld = $this->postJson(route('pos.held-bills.store'), $payload)
+            ->assertCreated()->assertJsonPath('count', 1)->json('bill');
+
+        $this->assertSame($heldId, (int) $reheld['id']);
+        $this->assertSame($held['reference'], $reheld['reference']);
+        $this->assertDatabaseCount('restaurant_pos_orders', 2);
+        $this->assertDatabaseHas('restaurant_pos_order_items', [
+            'pos_order_id' => $heldId,
+            'menu_item_id' => $product->id,
+            'quantity' => 3,
+        ]);
+    }
+
     public function test_legacy_payment_confirmation_and_order_notes_are_ignored(): void
     {
         $product = $this->createMenuItem();

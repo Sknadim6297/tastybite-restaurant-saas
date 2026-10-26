@@ -5,7 +5,10 @@ const cart = new Map();
 let activeCategory = "all";
 let orderType = "Dine In";
 let heldOrders = [];
-let holdOrderCounter = 1;
+let resumedOrderId = null;
+let holdRequestPending = false;
+let heldBillsCloseTimer = null;
+let heldBillsReturnFocus = null;
 
 // Currency formatting
 const money = value => "₹" + (Number(value) || 0).toLocaleString("en-IN", {
@@ -603,57 +606,264 @@ function clearCart() {
     renderCart();
 }
 
-// Hold current order
-function holdOrder() {
-    if (cart.size === 0) {
-        const mostRecentOrder = heldOrders.at(-1);
-        if (mostRecentOrder) {
-            resumeHeldOrder(mostRecentOrder.id);
-            return;
-        }
-        alert("Add at least one menu item before holding this bill.");
-        return;
-    }
+const heldBillsButton = document.getElementById("openHeldBills");
+const heldBillsDialog = document.getElementById("heldBillsDialog");
+const heldBillsList = document.getElementById("heldBillsList");
+const heldBillsStatus = document.getElementById("heldBillsStatus");
 
-    heldOrders.push({
-        id: holdOrderCounter++,
-        orderType,
-        tableNo: document.getElementById("tableNo")?.selectedOptions[0]?.textContent?.split("·")[0]?.trim() || "",
-        tableId: document.getElementById("tableNo")?.value || "",
-        floorId: document.getElementById("posFloor")?.value || "",
-        sectionId: document.getElementById("posSection")?.value || "",
-        guestNo: document.getElementById("guestNo")?.value || "",
-        discount: document.getElementById("discount")?.value || "0",
-        items: [...cart.values()].map(item => ({ ...item }))
-    });
-
-    cart.clear();
-    document.getElementById("discount").value = "0";
-    renderCart();
+function updateHeldBillsCount(count) {
+    const safeCount = Math.max(0, Number(count) || 0);
+    document.getElementById("heldBillsCount").textContent = String(safeCount);
+    document.getElementById("heldBillsModalCount").textContent = String(safeCount);
 }
 
-// Restore selected held order
-function resumeHeldOrder(id) {
-    if (cart.size > 0) {
-        alert("This bill already has items. Hold or clear it before restoring another bill.");
+async function heldBillsRequest(url, method = "GET", payload = null) {
+    const csrfToken = document.querySelector('#completeSaleForm input[name="_token"]')?.value || "";
+    const response = await fetch(url, {
+        method,
+        credentials: "same-origin",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "X-CSRF-TOKEN": csrfToken
+        },
+        body: payload ? JSON.stringify(payload) : undefined
+    });
+
+    let result;
+    try {
+        result = await response.json();
+    } catch {
+        throw new Error("Your session may have expired. Refresh the POS and sign in again.");
+    }
+
+    if (!response.ok) {
+        const validationMessage = result.errors ? Object.values(result.errors).flat()[0] : null;
+        throw new Error(validationMessage || result.message || "The held bill request could not be completed.");
+    }
+
+    return result;
+}
+
+function setHeldBillsError(message) {
+    if (!heldBillsStatus) return;
+    heldBillsStatus.textContent = message;
+    heldBillsStatus.hidden = false;
+}
+
+function formatHeldBillDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Date unavailable";
+    return new Intl.DateTimeFormat("en-IN", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+    }).format(date);
+}
+
+function renderHeldBills() {
+    if (!heldBillsList) return;
+    heldBillsList.replaceChildren();
+    heldBillsStatus.hidden = true;
+
+    if (heldOrders.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "held-bills-empty";
+        const icon = document.createElement("span");
+        icon.className = "held-bills-empty-icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.innerHTML = '<i class="bi bi-receipt"></i>';
+        const title = document.createElement("strong");
+        title.textContent = "No held bills";
+        const description = document.createElement("span");
+        description.textContent = "Orders you put on hold will appear here.";
+        empty.append(icon, title, description);
+        heldBillsList.append(empty);
         return;
     }
 
-    const index = heldOrders.findIndex(
-        order => order.id === Number(id)
-    );
+    heldOrders.forEach(order => {
+        const card = document.createElement("article");
+        card.className = "held-bill-card";
+        card.setAttribute("role", "listitem");
+        const thumbnail = document.createElement("div");
+        thumbnail.className = "held-bill-thumbnail";
+        if (order.thumbnail) {
+            const image = document.createElement("img");
+            image.src = order.thumbnail;
+            image.alt = "";
+            image.loading = "lazy";
+            thumbnail.append(image);
+        } else {
+            thumbnail.innerHTML = '<i class="bi bi-receipt" aria-hidden="true"></i>';
+        }
 
-    if (index < 0) return;
+        const details = document.createElement("div");
+        details.className = "held-bill-details";
+        const reference = document.createElement("strong");
+        reference.className = "held-bill-reference";
+        reference.textContent = order.reference;
+        const date = document.createElement("span");
+        date.className = "held-bill-date";
+        date.innerHTML = '<i class="bi bi-clock" aria-hidden="true"></i>';
+        const dateText = document.createElement("span");
+        dateText.textContent = formatHeldBillDate(order.created_at);
+        date.append(dateText);
+        const metadata = document.createElement("div");
+        metadata.className = "held-bill-metadata";
+        const itemCount = document.createElement("span");
+        itemCount.textContent = `${order.item_count} ${order.item_count === 1 ? "item" : "items"}`;
+        const typeLabel = ({ dine_in: "Dine In", takeaway: "Take Away", delivery: "Delivery" })[order.order_type] || "Dine In";
+        const orderTypeLabel = document.createElement("span");
+        orderTypeLabel.textContent = order.table_number ? `${typeLabel} · Table ${order.table_number}` : typeLabel;
+        metadata.append(itemCount, orderTypeLabel);
+        details.append(reference, date, metadata);
 
-    const order = heldOrders[index];
-
-    cart.clear();
-
-    order.items.forEach(item => {
-        cart.set(item.id, { ...item });
+        const side = document.createElement("div");
+        side.className = "held-bill-side";
+        const total = document.createElement("strong");
+        total.className = "held-bill-total";
+        total.textContent = money(order.total);
+        const actions = document.createElement("div");
+        actions.className = "held-bill-actions";
+        const resume = document.createElement("button");
+        resume.type = "button";
+        resume.className = "held-bill-resume";
+        resume.innerHTML = '<i class="bi bi-play-fill" aria-hidden="true"></i><span>Resume</span>';
+        resume.addEventListener("click", () => resumeHeldBill(order, resume));
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "held-bill-delete";
+        remove.innerHTML = '<i class="bi bi-trash3" aria-hidden="true"></i><span>Delete</span>';
+        remove.addEventListener("click", () => deleteHeldBill(order, remove));
+        actions.append(resume, remove);
+        side.append(total, actions);
+        card.append(thumbnail, details, side);
+        heldBillsList.append(card);
     });
+}
 
-    orderType = order.orderType || "Dine In";
+async function loadHeldBills() {
+    try {
+        const result = await heldBillsRequest(heldBillsButton.dataset.heldBillsUrl);
+        heldOrders = result.bills || [];
+        updateHeldBillsCount(result.count);
+        renderHeldBills();
+    } catch (error) {
+        setHeldBillsError(error.message);
+    }
+}
+
+function openHeldBills() {
+    if (!heldBillsDialog.open) {
+        heldBillsReturnFocus = document.activeElement;
+        heldBillsDialog.showModal();
+        document.body.classList.add("held-bills-open");
+    }
+    heldBillsDialog.classList.remove("is-closing");
+    window.clearTimeout(heldBillsCloseTimer);
+    heldBillsList.querySelector("button")?.focus();
+    loadHeldBills();
+}
+
+function closeHeldBills() {
+    if (!heldBillsDialog.open || heldBillsDialog.classList.contains("is-closing")) return;
+    heldBillsDialog.classList.add("is-closing");
+    heldBillsCloseTimer = window.setTimeout(() => {
+        heldBillsDialog.close();
+    }, 280);
+}
+
+heldBillsButton?.addEventListener("click", openHeldBills);
+document.querySelector("[data-close-held-bills]")?.addEventListener("click", closeHeldBills);
+heldBillsDialog?.addEventListener("cancel", event => {
+    event.preventDefault();
+    closeHeldBills();
+});
+heldBillsDialog?.addEventListener("click", event => {
+    if (event.target === heldBillsDialog) closeHeldBills();
+});
+heldBillsDialog?.addEventListener("close", () => {
+    heldBillsDialog.classList.remove("is-closing");
+    document.body.classList.remove("held-bills-open");
+    heldBillsReturnFocus?.focus?.();
+});
+
+function holdPayload() {
+    const tableSelect = document.getElementById("tableNo");
+    const selectedTable = tableSelect?.selectedOptions[0];
+    const selectedPaymentMethod = document.querySelector("[data-payment-method].active")?.dataset.paymentMethod;
+    return {
+        idempotency_key: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        resumed_order_id: resumedOrderId,
+        items_json: JSON.stringify([...cart.values()].map(item => ({ menu_item_id: item.id, quantity: item.qty }))),
+        discount_percent: String(Math.max(0, Math.min(100, Number(document.getElementById("discount")?.value) || 0))),
+        order_type: ({ "Dine In": "dine_in", "Take Away": "takeaway", Delivery: "delivery" })[orderType] || "dine_in",
+        table_number: orderType === "Dine In" && tableSelect?.value
+            ? (selectedTable?.textContent?.split("·")[0]?.trim() || "")
+            : "",
+        table_id: orderType === "Dine In" ? (tableSelect?.value || "") : "",
+        floor_id: orderType === "Dine In" ? (document.getElementById("posFloor")?.value || "") : "",
+        section_id: orderType === "Dine In" ? (document.getElementById("posSection")?.value || "") : "",
+        guest_count: document.getElementById("guestNo")?.value || "",
+        payment_method: selectedPaymentMethod?.toLowerCase() || "cash"
+    };
+}
+
+// Hold the active order in the restaurant-scoped POS draft store.
+async function holdOrder() {
+    if (cart.size === 0) {
+        openHeldBills();
+        return;
+    }
+    if (holdRequestPending) return;
+
+    holdRequestPending = true;
+    const holdButton = document.getElementById("holdOrderButton");
+    holdButton.disabled = true;
+    try {
+        const result = await heldBillsRequest(heldBillsButton.dataset.heldBillsStoreUrl, "POST", holdPayload());
+        heldOrders = [result.bill, ...heldOrders.filter(order => order.id !== result.bill.id)];
+        updateHeldBillsCount(result.count);
+        cart.clear();
+        document.getElementById("discount").value = "0";
+        resumedOrderId = null;
+        renderCart();
+        if (heldBillsDialog.open) renderHeldBills();
+    } catch (error) {
+        window.alert(error.message);
+    } finally {
+        holdRequestPending = false;
+        holdButton.disabled = false;
+    }
+}
+
+async function resumeHeldBill(order, button) {
+    if (cart.size > 0) {
+        const replaceCart = window.confirm("Resuming this bill will replace the items currently in your order. Continue?");
+        if (!replaceCart) return;
+    }
+    button.disabled = true;
+    try {
+        const result = await heldBillsRequest(`${heldBillsButton.dataset.heldBillsBaseUrl}/${order.id}/resume`, "POST", {});
+        const bill = result.bill;
+        cart.clear();
+        bill.items.forEach(item => {
+            if (item.menu_item_id) {
+                cart.set(item.menu_item_id, {
+                    id: item.menu_item_id,
+                    name: item.name,
+                    price: Number(item.price) || 0,
+                    qty: item.quantity,
+                    img: item.image || ""
+                });
+            }
+        });
+
+        orderType = ({ dine_in: "Dine In", takeaway: "Take Away", delivery: "Delivery" })[bill.order_type] || "Dine In";
+        resumedOrderId = bill.id;
 
     document.querySelectorAll(".order-type button").forEach(btn => {
         const isSelected = btn.dataset.type === orderType;
@@ -672,29 +882,48 @@ function resumeHeldOrder(id) {
         if (field) field.style.display = orderType === "Dine In" ? "" : "none";
     });
 
-    const fields = {
-        posFloor: order.floorId,
-        posSection: order.sectionId,
-        tableNo: order.tableId,
-        guestNo: order.guestNo,
-        customerMobile: order.mobile,
-        discount: order.discount
-    };
+        const fields = {
+            posFloor: bill.floor_id,
+            posSection: bill.section_id,
+            tableNo: bill.table_id,
+            guestNo: bill.guest_count,
+            discount: bill.discount_percent
+        };
 
-    Object.entries(fields).forEach(([fieldId, value]) => {
-        const el = document.getElementById(fieldId);
-        if (el) el.value = value ?? "";
-    });
-    if (posSection && posFloor) {
-        updatePosSectionOptions();
+        Object.entries(fields).forEach(([fieldId, value]) => {
+            const element = document.getElementById(fieldId);
+            if (element) element.value = value ?? "";
+        });
+        if (posSection && posFloor) updatePosSectionOptions();
+        filterPosTables();
+        captureCommittedTableSelection();
+        document.querySelectorAll("[data-payment-method]").forEach(method => {
+            const selected = method.dataset.paymentMethod.toLowerCase() === (bill.payment_method || "cash");
+            method.classList.toggle("active", selected);
+            method.setAttribute("aria-pressed", String(selected));
+        });
+        updateHeldBillsCount(result.count);
+        heldOrders = heldOrders.filter(held => held.id !== bill.id);
+        renderCart();
+        closeHeldBills();
+    } catch (error) {
+        setHeldBillsError(error.message);
+        button.disabled = false;
     }
-    filterPosTables();
-    captureCommittedTableSelection();
+}
 
-    heldOrders.splice(index, 1);
-
-    renderCart();
-
+async function deleteHeldBill(order, button) {
+    if (!window.confirm(`Delete held bill ${order.reference}? This cannot be undone.`)) return;
+    button.disabled = true;
+    try {
+        const result = await heldBillsRequest(`${heldBillsButton.dataset.heldBillsBaseUrl}/${order.id}`, "DELETE");
+        heldOrders = heldOrders.filter(held => held.id !== order.id);
+        updateHeldBillsCount(result.count);
+        renderHeldBills();
+    } catch (error) {
+        setHeldBillsError(error.message);
+        button.disabled = false;
+    }
 }
 
 document.getElementById("holdOrderButton")?.addEventListener("click", holdOrder);
@@ -733,7 +962,8 @@ if (completeSaleButton) {
         const sectionIdField = document.getElementById("posSectionId");
         const guestField = document.getElementById("posGuestCount");
         const paymentField = document.getElementById("posPaymentMethod");
-        if (!form || !itemsField || !discountField || !orderTypeField || !tableField || !guestField || !paymentField) return;
+        const resumedOrderField = document.getElementById("posResumedOrderId");
+        if (!form || !itemsField || !discountField || !orderTypeField || !tableField || !guestField || !paymentField || !resumedOrderField) return;
 
         itemsField.value = JSON.stringify([...cart.values()].map(item => ({
             menu_item_id: item.id,
@@ -754,6 +984,7 @@ if (completeSaleButton) {
         guestField.value = document.getElementById("guestNo")?.value || "";
         const selectedPaymentMethod = document.querySelector("[data-payment-method].active")?.dataset.paymentMethod;
         paymentField.value = selectedPaymentMethod?.toLowerCase() || "";
+        resumedOrderField.value = resumedOrderId ? String(resumedOrderId) : "";
         completeSaleButton.disabled = true;
         completeSaleButton.textContent = "Completing...";
         form.submit();

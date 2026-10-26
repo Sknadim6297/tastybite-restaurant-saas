@@ -326,6 +326,7 @@ class RestaurantOrderController extends Controller
             default => 'All Orders',
         };
         $query = RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
+            ->where('status', '!=', 'draft')
             ->with(['items', 'creator', 'payments', 'refunds', 'diningFloor', 'diningSection', 'diningTable'])
             ->withCount('items')
             ->when($kind === 'dine_in', fn (Builder $builder) => $builder->where('order_type', 'dine_in'))
@@ -393,6 +394,7 @@ class RestaurantOrderController extends Controller
     private function dateScopedOrders(int $restaurantId, string $start, string $end): Builder
     {
         return RestaurantPosOrder::query()->where('restaurant_id', $restaurantId)
+            ->where('status', '!=', 'draft')
             ->whereBetween('created_at', $this->localDateBounds($start, $end));
     }
 

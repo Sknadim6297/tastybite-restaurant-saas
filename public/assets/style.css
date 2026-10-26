@@ -1,5 +1,4 @@
-﻿@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap");
-:root {
+﻿:root {
     --primary: #9333ea;
     --blue: #3b4df5;
     --pink: #ec3bba;
@@ -9,7 +8,6 @@
 
 * {
     box-sizing: border-box;
-    font-family: "poppins", sans-serif;
 }
 
 html,
@@ -746,7 +744,6 @@ body {
     margin: 0;
     color: var(--pos-text);
     background: var(--pos-page);
-    font-family: Inter, Poppins, "Segoe UI", Arial, sans-serif;
 }
 
 a {
@@ -2444,9 +2441,529 @@ body.pos-page .checkout-dialog {
 }
 
 body.pos-page .checkout-header {
+    gap: 8px;
     min-height: 66px;
     padding: 14px 16px;
     border-bottom: 1px solid #eceef1;
+}
+
+body.pos-page .billing-panel,
+body.pos-page .held-bills-dialog {
+    font-family: Inter, "Segoe UI", sans-serif;
+}
+
+body.pos-page .checkout-header > div:first-child {
+    min-width: 0;
+}
+
+.checkout-header-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+}
+
+.held-bills-trigger {
+    display: inline-flex;
+    min-width: 0;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 8px;
+    border: 1px solid #ffc58a;
+    border-radius: 9px;
+    background: #fff8f0;
+    color: #873f0b;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.held-bills-trigger:hover {
+    transform: translateY(-1px);
+    border-color: #ff9a36;
+    background: #fff0df;
+}
+
+.held-bills-trigger > i {
+    font-size: 14px;
+}
+
+.held-bills-badge,
+.held-bills-modal-count {
+    display: inline-grid;
+    min-width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    place-items: center;
+    padding-inline: 4px;
+    border-radius: 999px;
+    background: #ff7900;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.held-bills-dialog {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    background: transparent;
+    color: #192330;
+}
+
+.held-bills-dialog::backdrop {
+    background: rgb(18 27 38 / 48%);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    transition: opacity 280ms ease;
+}
+
+.held-bills-dialog[open]::backdrop {
+    opacity: 1;
+}
+
+.held-bills-sheet {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    display: flex;
+    width: min(760px, calc(100vw - 32px));
+    height: min(820px, 88dvh);
+    max-height: 88dvh;
+    min-height: 240px;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translate(-50%, 100%);
+    border: 1px solid #e5e9ef;
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    background: #fff;
+    box-shadow: 0 -18px 70px rgb(12 22 34 / 24%);
+}
+
+.held-bills-dialog[open] .held-bills-sheet {
+    animation: held-bills-slide-up 320ms cubic-bezier(.2,.75,.25,1) forwards;
+}
+
+.held-bills-dialog.is-closing .held-bills-sheet {
+    animation: held-bills-slide-down 260ms cubic-bezier(.4,0,.8,.3) forwards;
+}
+
+@keyframes held-bills-slide-up {
+    to { transform: translate(-50%, 0); }
+}
+
+@keyframes held-bills-slide-down {
+    to { transform: translate(-50%, 100%); }
+}
+
+.held-bills-header {
+    display: flex;
+    min-height: 82px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e9edf2;
+    background: #fff;
+}
+
+.held-bills-heading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 12px;
+}
+
+.held-bills-heading-icon {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    place-items: center;
+    border-radius: 11px;
+    background: #fff0df;
+    color: #f47700;
+    font-size: 20px;
+}
+
+.held-bills-title-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.held-bills-title-row h2 {
+    margin: 0;
+    color: #17212d;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.held-bills-modal-count {
+    min-width: 22px;
+    height: 22px;
+    font-size: 11px;
+}
+
+.held-bills-header p {
+    margin: 4px 0 0;
+    color: #687588;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.held-bills-close {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: #536174;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease;
+}
+
+.held-bills-close:hover {
+    background: #f1f4f7;
+    color: #17212d;
+}
+
+.held-bills-status {
+    flex: 0 0 auto;
+    margin: 12px 20px 0;
+    padding: 10px 12px;
+    border: 1px solid #f2b9b9;
+    border-radius: 9px;
+    background: #fff5f5;
+    color: #a52626;
+    font-size: 12px;
+}
+
+.held-bills-list {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 18px 20px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+}
+
+.held-bill-card {
+    display: grid;
+    min-width: 0;
+    flex: 0 0 auto;
+    grid-template-columns: 62px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    border: 1px solid #e2e7ed;
+    border-radius: 11px;
+    background: #fff;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.held-bill-card:hover {
+    border-color: #ffc58a;
+    box-shadow: 0 4px 14px rgb(34 45 58 / 7%);
+}
+
+.held-bill-thumbnail {
+    display: grid;
+    width: 62px;
+    height: 62px;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 9px;
+    background: #fff2e4;
+    color: #ed7600;
+    font-size: 22px;
+}
+
+.held-bill-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.held-bill-details {
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+}
+
+.held-bill-reference {
+    overflow: hidden;
+    color: #17212d;
+    font-size: 13px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.held-bill-date,
+.held-bill-metadata {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 7px;
+    color: #6c7a8c;
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.held-bill-date i {
+    color: #78879a;
+}
+
+.held-bill-metadata span + span::before {
+    margin-right: 7px;
+    color: #a3adba;
+    content: "·";
+}
+
+.held-bill-side {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+}
+
+.held-bill-total {
+    color: #17212d;
+    font-size: 16px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.held-bill-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.held-bill-actions button {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 10px;
+    border: 1px solid;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.held-bill-actions button:disabled {
+    opacity: .55;
+    cursor: wait;
+}
+
+.held-bill-resume {
+    border-color: #ff7900 !important;
+    background: #ff7900;
+    color: #fff;
+}
+
+.held-bill-resume:hover {
+    border-color: #e96d00 !important;
+    background: #e96d00;
+}
+
+.held-bill-delete {
+    border-color: #f0c7c7 !important;
+    background: #fff;
+    color: #c43e3e;
+}
+
+.held-bill-delete:hover {
+    border-color: #d85a5a !important;
+    background: #fff6f6;
+}
+
+.held-bills-empty {
+    display: grid;
+    min-height: 200px;
+    flex: 1 1 auto;
+    align-content: center;
+    justify-items: center;
+    gap: 8px;
+    padding: 24px;
+    color: #6e7b8d;
+    text-align: center;
+}
+
+.held-bills-empty-icon {
+    display: grid;
+    width: 52px;
+    height: 52px;
+    margin-bottom: 3px;
+    place-items: center;
+    border: 1px dashed #ccd4de;
+    border-radius: 14px;
+    color: #98a4b3;
+    font-size: 24px;
+}
+
+.held-bills-empty strong {
+    color: #263344;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.held-bills-empty > span:last-child {
+    font-size: 12px;
+}
+
+.held-bills-loading {
+    padding: 18px 8px;
+    color: #758194;
+    font-size: 12px;
+    text-align: center;
+}
+
+body.pos-page.held-bills-open,
+html:has(body.pos-page.held-bills-open) {
+    overflow: hidden;
+}
+
+@media (max-width: 700px) {
+    body.pos-page .checkout-header {
+        gap: 5px;
+        padding-inline: 9px;
+    }
+
+    .checkout-header-actions {
+        gap: 4px;
+    }
+
+    .held-bills-trigger {
+        min-height: 32px;
+        gap: 4px;
+        padding-inline: 6px;
+        font-size: 10px;
+    }
+
+    .held-bills-trigger > i {
+        font-size: 13px;
+    }
+
+    .held-bills-badge {
+        min-width: 18px;
+        height: 18px;
+        font-size: 9px;
+    }
+
+    .held-bills-sheet {
+        width: calc(100vw - 12px);
+        height: min(90dvh, 820px);
+        max-height: 90dvh;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .held-bills-header {
+        min-height: 72px;
+        padding: 12px 14px;
+    }
+
+    .held-bills-heading {
+        gap: 9px;
+    }
+
+    .held-bills-heading-icon {
+        width: 36px;
+        height: 36px;
+        flex-basis: 36px;
+        font-size: 18px;
+    }
+
+    .held-bills-title-row h2 {
+        font-size: 18px;
+    }
+
+    .held-bills-header p {
+        font-size: 11px;
+    }
+
+    .held-bills-list {
+        gap: 8px;
+        padding: 10px 10px 16px;
+    }
+
+    .held-bill-card {
+        grid-template-columns: 48px minmax(0, 1fr);
+        gap: 9px;
+        padding: 9px;
+    }
+
+    .held-bill-thumbnail {
+        width: 48px;
+        height: 48px;
+        font-size: 18px;
+    }
+
+    .held-bill-reference {
+        font-size: 12px;
+    }
+
+    .held-bill-side {
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .held-bill-total {
+        font-size: 14px;
+    }
+
+    .held-bill-actions button {
+        min-height: 32px;
+        padding-inline: 8px;
+        font-size: 10px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .held-bills-dialog::backdrop,
+    .held-bills-dialog[open] .held-bills-sheet,
+    .held-bills-dialog.is-closing .held-bills-sheet,
+    .held-bills-trigger,
+    .held-bill-card,
+    .held-bill-actions button {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+    }
+}
 }
 
 body.pos-page .checkout-header h2 {

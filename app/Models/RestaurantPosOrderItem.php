@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RestaurantPosOrderItem extends Model
@@ -20,5 +21,10 @@ class RestaurantPosOrderItem extends Model
     public function ingredients(): HasMany
     {
         return $this->hasMany(RestaurantPosOrderItemIngredient::class, 'order_item_id');
+    }
+
+    public function menuItem(): BelongsTo
+    {
+        return $this->belongsTo(RestaurantMenuItem::class, 'menu_item_id');
     }
 }

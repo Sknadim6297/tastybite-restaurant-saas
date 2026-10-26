@@ -21,6 +21,7 @@ use App\Services\InventoryStockService;
 use App\Services\RestaurantAccessContext;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,8 @@ class PosController extends Controller
             'categories' => $categories,
             'products' => $products,
             'currentUser' => $user,
+            'heldBillsCount' => RestaurantPosOrder::query()->where('restaurant_id', $restaurant->id)
+                ->where('status', 'draft')->where('fulfillment_status', 'held')->count(),
             'hasActiveTables' => RestaurantTable::query()->where('restaurant_id', $restaurant->id)
                 ->where('is_active', true)->whereNull('archived_at')->exists(),
             'tableFloors' => \App\Models\RestaurantFloor::query()->where('restaurant_id', $restaurant->id)
@@ -79,6 +82,190 @@ class PosController extends Controller
         ]);
     }
 
+    public function heldBills(): JsonResponse
+    {
+        $owner = app(RestaurantAccessContext::class)->owner();
+        $orders = RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
+            ->where('status', 'draft')->where('fulfillment_status', 'held')
+            ->with('items.menuItem')->latest('created_at')->get();
+        $bills = [];
+        foreach ($orders as $heldOrder) {
+            $bills[] = $this->heldBillPayload($heldOrder);
+        }
+
+        return response()->json([
+            'count' => $orders->count(),
+            'bills' => $bills,
+        ]);
+    }
+
+    public function storeHeldBill(Request $request): JsonResponse
+    {
+        $owner = app(RestaurantAccessContext::class)->owner();
+        $data = $request->validate([
+            'idempotency_key' => ['required', 'string', 'max:120'],
+            'resumed_order_id' => ['nullable', 'integer'],
+            'items_json' => ['required', 'json', 'max:30000'],
+            'discount_percent' => ['required', 'numeric', 'between:0,100', 'decimal:0,2'],
+            'order_type' => ['nullable', Rule::in(['dine_in', 'takeaway', 'delivery'])],
+            'table_number' => ['nullable', 'string', 'max:32'],
+            'table_id' => ['nullable', 'integer'],
+            'floor_id' => ['nullable', 'integer'],
+            'section_id' => ['nullable', 'integer'],
+            'guest_count' => ['nullable', 'integer', 'between:1,100'],
+            'payment_method' => ['required', Rule::in(['cash', 'card', 'upi'])],
+        ]);
+        $data['order_type'] = $data['order_type'] ?? 'dine_in';
+        if ($data['order_type'] !== 'dine_in') {
+            $data['table_number'] = null;
+            $data['table_id'] = null;
+            $data['floor_id'] = null;
+            $data['section_id'] = null;
+        }
+        $submitted = json_decode($data['items_json'], true, 512, JSON_THROW_ON_ERROR);
+        validator(['items' => $submitted], [
+            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.menu_item_id' => ['required', 'integer', 'distinct', Rule::exists('restaurant_menu_items', 'id')->where('restaurant_id', $owner->restaurant_id)],
+            'items.*.quantity' => ['required', 'integer', 'between:1,999'],
+        ])->validate();
+
+        $restaurantId = (int) $owner->restaurant_id;
+        $order = DB::transaction(function () use ($owner, $restaurantId, $submitted, $data): RestaurantPosOrder {
+            abort_unless(DB::table('restaurants')->where('id', $restaurantId)->lockForUpdate()->first() !== null, 404);
+            $duplicate = RestaurantPosOrder::query()->where('restaurant_id', $restaurantId)
+                ->where('idempotency_key', $data['idempotency_key'])->first();
+            if ($duplicate) {
+                abort_unless($duplicate->status === 'draft' && $duplicate->fulfillment_status === 'held', 409, 'This hold request was already used.');
+
+                return $duplicate;
+            }
+
+            $resumedOrder = null;
+            $savedItems = collect();
+            if (! empty($data['resumed_order_id'])) {
+                $resumedOrder = RestaurantPosOrder::query()->where('restaurant_id', $restaurantId)
+                    ->where('status', 'draft')->where('fulfillment_status', 'resumed')
+                    ->lockForUpdate()->findOrFail((int) $data['resumed_order_id']);
+                $savedItems = $resumedOrder->items()->get()->keyBy('menu_item_id');
+            }
+
+            $table = null;
+            if ($data['order_type'] === 'dine_in' && ! empty($data['table_id'])) {
+                $table = RestaurantTable::query()->where('restaurant_id', $restaurantId)
+                    ->where('is_active', true)->whereNull('archived_at')->findOrFail((int) $data['table_id']);
+                abort_unless($table->floor_id === (int) ($data['floor_id'] ?? $table->floor_id), 422, 'The selected floor does not match this table.');
+                abort_unless($table->section_id === (isset($data['section_id']) ? (int) $data['section_id'] : null), 422, 'The selected section does not match this table.');
+            }
+
+            $order = $resumedOrder ?? RestaurantPosOrder::create([
+                'restaurant_id' => $restaurantId,
+                'created_by' => $owner->id,
+                'order_number' => 'TMP-'.Str::random(20),
+                'idempotency_key' => $data['idempotency_key'],
+                'subtotal' => '0.00', 'discount' => '0.00', 'tax' => '0.00', 'total' => '0.00',
+            ]);
+            $order->items()->delete();
+            $subtotal = BigDecimal::zero();
+            foreach ($submitted as $line) {
+                $menuItemId = (int) $line['menu_item_id'];
+                $savedItem = $savedItems->get($menuItemId);
+                $productQuery = RestaurantMenuItem::query()->where('restaurant_id', $restaurantId)->lockForUpdate();
+                if (! $savedItem) {
+                    $productQuery->where('is_active', true)->where('is_available', true);
+                }
+                $product = $productQuery->findOrFail($menuItemId);
+                $quantity = (int) $line['quantity'];
+                $unitPrice = $savedItem?->unit_price ?? $product->price;
+                $itemName = $savedItem?->item_name ?? $product->name;
+                $subtotal = $subtotal->plus(BigDecimal::of((string) $unitPrice)->multipliedBy($quantity)->toScale(2, RoundingMode::HALF_UP));
+                RestaurantPosOrderItem::create([
+                    'restaurant_id' => $restaurantId,
+                    'pos_order_id' => $order->id,
+                    'menu_item_id' => $product->id,
+                    'item_name' => $itemName,
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                ]);
+            }
+            $discount = $subtotal->multipliedBy((string) $data['discount_percent'])->dividedBy('100', 2, RoundingMode::HALF_UP);
+            $tax = $subtotal->minus($discount)->multipliedBy('0.05')->toScale(2, RoundingMode::HALF_UP);
+            $total = $subtotal->minus($discount)->plus($tax)->toScale(2, RoundingMode::HALF_UP);
+            $order->update([
+                'restaurant_id' => $restaurantId,
+                'updated_by' => $owner->id,
+                'order_number' => $resumedOrder?->order_number ?? ('HB-'.now()->format('Ymd').'-'.Str::upper(Str::random(6))),
+                'idempotency_key' => $data['idempotency_key'],
+                'status' => 'draft',
+                'order_type' => $data['order_type'],
+                'table_number' => $table?->table_number ?? ($data['table_number'] ?? null),
+                'floor_id' => $table?->floor_id,
+                'section_id' => $table?->section_id,
+                'table_id' => $table?->id,
+                'original_table_id' => $order->original_table_id ?? $table?->id,
+                'guest_count' => $data['guest_count'] ?? null,
+                'fulfillment_status' => 'held',
+                'payment_status' => 'unpaid',
+                'payment_method' => $data['payment_method'],
+                'subtotal' => $subtotal->toScale(2, RoundingMode::HALF_UP)->__toString(),
+                'discount' => $discount->__toString(),
+                'tax' => $tax->__toString(),
+                'total' => $total->__toString(),
+                'completed_at' => null,
+                'cancelled_at' => null,
+            ]);
+
+            return $order;
+        });
+
+        return response()->json([
+            'bill' => $this->heldBillPayload($order->load('items.menuItem')),
+            'count' => RestaurantPosOrder::query()->where('restaurant_id', $restaurantId)
+                ->where('status', 'draft')->where('fulfillment_status', 'held')->count(),
+        ], 201);
+    }
+
+    public function resumeHeldBill(int $order): JsonResponse
+    {
+        $owner = app(RestaurantAccessContext::class)->owner();
+        $heldBill = DB::transaction(function () use ($owner, $order): RestaurantPosOrder {
+            $heldBill = RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
+                ->where('status', 'draft')->whereIn('fulfillment_status', ['held', 'resumed'])
+                ->with('items.menuItem')->lockForUpdate()->findOrFail($order);
+            if ($heldBill->fulfillment_status === 'held') {
+                $heldBill->update(['fulfillment_status' => 'resumed', 'updated_by' => $owner->id]);
+            }
+
+            return $heldBill;
+        });
+
+        return response()->json([
+            'bill' => $this->heldBillPayload($heldBill),
+            'count' => RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
+                ->where('status', 'draft')->where('fulfillment_status', 'held')->count(),
+        ]);
+    }
+
+    public function deleteHeldBill(int $order): JsonResponse
+    {
+        $owner = app(RestaurantAccessContext::class)->owner();
+        $count = DB::transaction(function () use ($owner, $order): int {
+            $heldBill = RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
+                ->where('status', 'draft')->where('fulfillment_status', 'held')
+                ->lockForUpdate()->findOrFail($order);
+            abort_unless($heldBill->completed_at === null && ! $heldBill->payments()->exists(), 409, 'Only unpaid held bills can be deleted.');
+            $this->audit($owner, 'pos_held_bill_deleted', 'pos_order', $heldBill->id, [
+                'order_number' => $heldBill->order_number,
+            ]);
+            $heldBill->items()->delete();
+            $heldBill->delete();
+
+            return RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
+                ->where('status', 'draft')->where('fulfillment_status', 'held')->count();
+        });
+
+        return response()->json(['count' => $count]);
+    }
+
     public function complete(Request $request): RedirectResponse
     {
         $owner = app(RestaurantAccessContext::class)->owner();
@@ -93,6 +280,7 @@ class PosController extends Controller
             'section_id' => ['nullable', 'integer'],
             'guest_count' => ['nullable', 'integer', 'between:1,100'],
             'payment_method' => ['required', Rule::in(['cash', 'card', 'upi'])],
+            'resumed_order_id' => ['nullable', 'integer'],
         ]);
         $data['order_type'] = $data['order_type'] ?? 'dine_in';
         if ($data['order_type'] !== 'dine_in') {
@@ -123,6 +311,15 @@ class PosController extends Controller
                 ->where('idempotency_key', $data['idempotency_key'])->first();
             if ($existing) {
                 return $existing;
+            }
+            $resumedOrder = null;
+            $savedItems = collect();
+            if (! empty($data['resumed_order_id'])) {
+                $resumedOrder = RestaurantPosOrder::query()->where('restaurant_id', $restaurantId)
+                    ->where('status', 'draft')->where('fulfillment_status', 'resumed')
+                    ->lockForUpdate()->findOrFail((int) $data['resumed_order_id']);
+                abort_if($resumedOrder->payments()->exists(), 409, 'A resumed held bill already has a payment record.');
+                $savedItems = $resumedOrder->items()->get()->keyBy('menu_item_id');
             }
             $table = null;
             $tableGroup = null;
@@ -160,38 +357,61 @@ class PosController extends Controller
                     ->whereIn('table_id', $reservationTableIds)->whereIn('status', ['pending', 'confirmed'])
                     ->where('starts_at', '>=', now(config('app.timezone'))->utc())->exists(), 409, 'This table is blocked by an upcoming reservation.');
             }
-            $order = RestaurantPosOrder::create([
-                'restaurant_id' => $restaurantId,
-                'created_by' => $owner->id,
-                'order_number' => 'TMP-'.Str::random(20),
-                'status' => 'draft',
-                'order_type' => $data['order_type'],
-                'table_number' => $table?->table_number ?? ($data['table_number'] ?? null),
-                'floor_id' => $table?->floor_id,
-                'section_id' => $table?->section_id,
-                'table_id' => $table?->id,
-                'original_table_id' => $table?->id,
-                'guest_count' => $data['guest_count'] ?? null,
-                'fulfillment_status' => 'pending',
-                'payment_method' => $data['payment_method'] ?? null,
-                'idempotency_key' => $data['idempotency_key'],
-                'subtotal' => '0.00', 'discount' => '0.00', 'tax' => '0.00', 'total' => '0.00',
-            ]);
+            if ($resumedOrder) {
+                $order = $resumedOrder;
+                $order->items()->delete();
+                $order->update([
+                    'updated_by' => $owner->id,
+                    'order_type' => $data['order_type'],
+                    'table_number' => $table?->table_number ?? ($data['table_number'] ?? null),
+                    'floor_id' => $table?->floor_id,
+                    'section_id' => $table?->section_id,
+                    'table_id' => $table?->id,
+                    'guest_count' => $data['guest_count'] ?? null,
+                    'fulfillment_status' => 'pending',
+                    'payment_method' => $data['payment_method'],
+                    'idempotency_key' => $data['idempotency_key'],
+                ]);
+            } else {
+                $order = RestaurantPosOrder::create([
+                    'restaurant_id' => $restaurantId,
+                    'created_by' => $owner->id,
+                    'order_number' => 'TMP-'.Str::random(20),
+                    'status' => 'draft',
+                    'order_type' => $data['order_type'],
+                    'table_number' => $table?->table_number ?? ($data['table_number'] ?? null),
+                    'floor_id' => $table?->floor_id,
+                    'section_id' => $table?->section_id,
+                    'table_id' => $table?->id,
+                    'original_table_id' => $table?->id,
+                    'guest_count' => $data['guest_count'] ?? null,
+                    'fulfillment_status' => 'pending',
+                    'payment_method' => $data['payment_method'],
+                    'idempotency_key' => $data['idempotency_key'],
+                    'subtotal' => '0.00', 'discount' => '0.00', 'tax' => '0.00', 'total' => '0.00',
+                ]);
+            }
             $subtotal = BigDecimal::zero();
             foreach ($submitted as $line) {
-                $product = RestaurantMenuItem::query()->where('restaurant_id', $restaurantId)
-                    ->where('is_active', true)->where('is_available', true)->lockForUpdate()
-                    ->findOrFail((int) $line['menu_item_id']);
+                $menuItemId = (int) $line['menu_item_id'];
+                $savedItem = $savedItems->get($menuItemId);
+                $productQuery = RestaurantMenuItem::query()->where('restaurant_id', $restaurantId)->lockForUpdate();
+                if (! $savedItem) {
+                    $productQuery->where('is_active', true)->where('is_available', true);
+                }
+                $product = $productQuery->findOrFail($menuItemId);
                 $quantity = (int) $line['quantity'];
-                $lineTotal = BigDecimal::of((string) $product->price)->multipliedBy($quantity)->toScale(2, RoundingMode::HALF_UP);
+                $unitPrice = $savedItem?->unit_price ?? $product->price;
+                $itemName = $savedItem?->item_name ?? $product->name;
+                $lineTotal = BigDecimal::of((string) $unitPrice)->multipliedBy($quantity)->toScale(2, RoundingMode::HALF_UP);
                 $subtotal = $subtotal->plus($lineTotal);
                 RestaurantPosOrderItem::create([
                     'restaurant_id' => $restaurantId,
                     'pos_order_id' => $order->id,
                     'menu_item_id' => $product->id,
-                    'item_name' => $product->name,
+                    'item_name' => $itemName,
                     'quantity' => $quantity,
-                    'unit_price' => $product->price,
+                    'unit_price' => $unitPrice,
                 ]);
             }
             $discount = $subtotal->multipliedBy((string) $data['discount_percent'])
@@ -204,6 +424,8 @@ class PosController extends Controller
                 'discount' => $discount->__toString(), 'tax' => $tax->__toString(),
                 'total' => $total->__toString(), 'status' => 'completed',
                 'completed_at' => now(),
+                'fulfillment_status' => 'pending',
+                'updated_by' => $owner->id,
             ]);
             if ($table && $tableGroup) {
                 foreach ($groupOccupancies as $index => $occupancy) {
@@ -235,7 +457,7 @@ class PosController extends Controller
                 'pos_order_id' => $order->id,
                 'actor_id' => $owner->id,
                 'actor_type' => 'restaurant_user',
-                'from_status' => null,
+                'from_status' => $resumedOrder ? 'resumed' : null,
                 'to_status' => 'pending',
                 'changed_at' => now(),
             ]);
@@ -278,7 +500,7 @@ class PosController extends Controller
             'currentUser' => $owner,
             'restaurant' => $owner->restaurant,
             'orders' => RestaurantPosOrder::query()->where('restaurant_id', $owner->restaurant_id)
-                ->with('items')->latest()->paginate(30),
+                ->where('status', '!=', 'draft')->with('items')->latest()->paginate(30),
         ]);
     }
 
@@ -428,5 +650,42 @@ class PosController extends Controller
             'target_id' => $targetId,
             'details' => $superAdmin ? $details + ['admin_id' => $superAdmin->id] : $details + ['owner_id' => $owner->id],
         ]);
+    }
+
+    private function heldBillPayload(RestaurantPosOrder $order): array
+    {
+        $discountPercent = BigDecimal::zero();
+        if (BigDecimal::of((string) $order->subtotal)->isGreaterThan('0')) {
+            $discountPercent = BigDecimal::of((string) $order->discount)->multipliedBy('100')
+                ->dividedBy((string) $order->subtotal, 2, RoundingMode::HALF_UP);
+        }
+        $items = $order->items->map(fn (RestaurantPosOrderItem $item): array => [
+            'menu_item_id' => $item->menu_item_id,
+            'name' => $item->item_name,
+            'price' => (string) $item->unit_price,
+            'quantity' => (int) $item->quantity,
+            'image' => $item->menuItem?->restaurant_id === $order->restaurant_id ? $item->menuItem->image_url : null,
+        ])->values();
+
+        return [
+            'id' => $order->id,
+            'reference' => $order->order_number,
+            'created_at' => $order->created_at?->timezone(config('app.timezone'))->toIso8601String(),
+            'order_type' => $order->order_type,
+            'table_number' => $order->table_number,
+            'table_id' => $order->table_id,
+            'floor_id' => $order->floor_id,
+            'section_id' => $order->section_id,
+            'guest_count' => $order->guest_count,
+            'subtotal' => (string) $order->subtotal,
+            'discount' => (string) $order->discount,
+            'discount_percent' => $discountPercent->__toString(),
+            'tax' => (string) $order->tax,
+            'total' => (string) $order->total,
+            'payment_method' => $order->payment_method,
+            'item_count' => (int) $order->items->sum('quantity'),
+            'thumbnail' => $items->firstWhere('image', '!=', null)['image'] ?? null,
+            'items' => $items,
+        ];
     }
 }
